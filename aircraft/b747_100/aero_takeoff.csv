@@ -1,0 +1,5 @@
+# TEMPLATE - Boeing 747-100 takeoff-flap aerodynamics, ground effect NOT included.
+# TODO: digitize CL and CD vs alpha (body/fuselage reference) from NASA CR-114494 Vol. II.
+# TODO: record flap setting, gear position, CG and the figure/table numbers in README.md.
+# One row per alpha, alpha strictly increasing, covering at least -5 to +20 deg.
+alpha_deg,CL,CD

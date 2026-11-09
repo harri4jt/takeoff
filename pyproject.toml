@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bfl"
+version = "0.1.0"
+description = "Balanced Field Length solver with hand-written RK / secant / interpolation (MATH 6006 project)"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "pandas",
+    "pydantic>=2",
+    "pyyaml",
+    "matplotlib",
+    "dash",
+    "plotly",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "scipy"]
+dev = ["ruff", "openap"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::pytest.PytestRemovedIn10Warning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E741", "UP047", "N802"]

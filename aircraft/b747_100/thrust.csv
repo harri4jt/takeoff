@@ -1,0 +1,4 @@
+# TEMPLATE - Boeing 747-100 per-engine takeoff thrust (JT9D family per the source).
+# TODO: digitize net thrust PER ENGINE vs airspeed (and temperature, if the source gives it).
+# 1-D form: airspeed_kts,thrust_lbf     2-D form: airspeed_kts,temperature_F,thrust_lbf
+airspeed_kts,thrust_lbf

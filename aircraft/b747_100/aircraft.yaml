@@ -1,0 +1,43 @@
+# =====================================================================================
+#  Boeing 747-100 - TEMPLATE ONLY. No values have been filled in.
+#  Every `null` / TODO must be digitized from the NASA reports listed in README.md.
+#  Do NOT fill these from memory or from un-cited sources.
+#  Until completed, loading this aircraft fails validation on purpose.
+# =====================================================================================
+name: Boeing 747-100
+synthetic: false
+description: TEMPLATE - data to be digitized from NASA CR-114494 / CR-1756.
+
+geometry:
+  wing_area_ft2: null           # TODO: reference wing area S [ft^2]  (source: ___ p.__)
+
+weight:
+  default_weight_lbf: null      # TODO: takeoff gross weight for the comparison case [lbf]
+
+engines:
+  n_engines: 4
+  thrust_mode: table            # TODO: 'constant' or 'table' depending on what the source gives
+  thrust_table: thrust.csv      # per-engine thrust vs airspeed (and temperature if available)
+  thrust_per_engine_lbf: null   # TODO: only if thrust_mode = constant
+  idle_thrust_per_engine_lbf: null   # TODO: ground idle thrust per engine [lbf]
+  thrust_incidence_deg: 0.0     # TODO: thrust-line angle relative to body axis, if given
+
+attitude:
+  theta_ground_deg: null        # TODO: ground attitude (fuselage reference) [deg]
+  theta_tailstrike_deg: null    # TODO: tail-strike pitch attitude [deg]
+
+aero:
+  configurations:
+    takeoff: aero_takeoff.csv   # TODO: which flap setting (10 or 20 deg)? record in README
+  takeoff_configuration: takeoff
+  delta_CD_engine_out: null     # TODO: windmilling + trim drag increment, one engine out
+
+spoilers:
+  delta_CL: null                # TODO: ground spoiler lift increment (negative)
+  delta_CD: null                # TODO: ground spoiler drag increment
+
+chute:
+  enabled: false                # transports do not use drag chutes
+
+speeds:
+  V_mcg_kts: null               # TODO (optional): minimum control speed on the ground [KCAS]
