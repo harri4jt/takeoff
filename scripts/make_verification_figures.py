@@ -5,7 +5,7 @@
 1. RK4 / RK45 vs exact solution          5. analytic ground roll vs simulated
 2. RK4 log-log error vs step size        6. BFL crossing chart (synthetic aircraft)
 3. secant error vs iteration             7. PASS/FAIL summary of every check
-4. our RK vs scipy DOP853 (Van der Pol)
+4. our RK vs scipy DOP853 (Van der Pol)  8. natural cubic spline vs scipy CubicSpline
 
 scipy is used here ONLY as an independent reference (it is a test-only dependency).
 """
@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from scipy.integrate import solve_ivp
+from scipy.interpolate import CubicSpline
 
 from bfl import compute_bfl, load_config, sweep_v1
 from bfl.dynamics import SegmentParams
@@ -28,6 +29,7 @@ from bfl.model import build_model
 from bfl.phases import airspeed_event, run_segment
 from bfl.plotting import AEO, GO, INK, MUTED, STOP, bfl_chart, style
 from bfl.rootfind import observed_order, safeguarded_secant, secant
+from bfl.tables import Interpolator1D, read_csv_table
 from bfl.units import G0_FTPS2
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -270,7 +272,7 @@ def fig5_ground_roll() -> None:
 def fig6_and_physics() -> None:
     cfg = load_config("generic_widebody_synthetic")
     res = compute_bfl(cfg)
-    sw = sweep_v1(cfg, n=21)
+    sw = sweep_v1(cfg, n=21, k_vr=res.k_VR)
     ax = bfl_chart(sw, res)
     ax.set_title("BFL crossing chart, generic widebody (SYNTHETIC data)")
     ax.figure.savefig(OUT / "6_bfl_crossing.png", bbox_inches="tight")
@@ -304,8 +306,9 @@ def fig6_and_physics() -> None:
         b = compute_bfl(cfg.with_updates(upd)).bfl_ft
         check(label, (b - base) * sign > 0, f"{base:,.0f} → {b:,.0f} ft")
     v1 = [res.v1_kts]
-    flat = sweep_v1(cfg, v1).iloc[0]
-    up = sweep_v1(cfg.with_updates({"environment.runway_slope_deg": 1.0}), v1).iloc[0]
+    flat = sweep_v1(cfg, v1, k_vr=res.k_VR).iloc[0]
+    up = sweep_v1(cfg.with_updates({"environment.runway_slope_deg": 1.0}), v1, k_vr=res.k_VR)
+    up = up.iloc[0]
     check(
         "1° uphill: longer go, shorter stop (V1→rest)",
         up.d_go_ft > flat.d_go_ft and up.stop_after_v1_ft < flat.stop_after_v1_ft,
@@ -319,6 +322,7 @@ def fig6_and_physics() -> None:
                 "aircraft.attitude.theta_tailstrike_deg": 14.0,
                 "multipliers.k_CD": 1.4,
                 "procedure.k_VR": 1.01,
+                "procedure.enforce_v2_min": False,
             }
         )
     )
@@ -327,6 +331,36 @@ def fig6_and_physics() -> None:
         len(tb.vr_adjustments) > 0,
         f"k_VR 1.01 → {tb.k_VR:.2f} after {len(tb.vr_adjustments)} retries",
     )
+    free = compute_bfl(cfg.with_updates({"procedure.enforce_v2_min": False}))
+    check(
+        "V2 ≥ 1.2 V_S enforced (k_VR root solve)",
+        1.2 <= res.v2_over_vs < 1.2 + 2e-4,
+        f"k_VR {free.k_VR:.3f} → {res.k_VR:.3f}; V2/V_S {free.v2_over_vs:.3f} → "
+        f"{res.v2_over_vs:.4f}",
+    )
+
+
+def fig8_spline() -> None:
+    """Hand-written natural cubic spline (Thomas solve) vs scipy on the synthetic CL table."""
+    path = ROOT / "aircraft" / "generic_widebody_synthetic" / "aero_takeoff.csv"
+    df = read_csv_table(path, ["alpha_deg", "CL", "CD"])
+    x, y = df["alpha_deg"].to_numpy(float), df["CL"].to_numpy(float)
+    ours = Interpolator1D(x, y, "cubic")
+    lin = Interpolator1D(x, y, "linear")
+    ref = CubicSpline(x, y, bc_type="natural")
+    xx = np.linspace(x[0], x[-1], 2001)
+    e = np.abs(ours.evaluate(xx) - ref(xx))
+    fig, (a, b) = plt.subplots(1, 2, figsize=(11, 4), constrained_layout=True)
+    a.plot(x, y, "o", color=INK, ms=5, label="table points")
+    a.plot(xx, lin.evaluate(xx), color=STOP, lw=1.5, label="linear")
+    a.plot(xx, ours.evaluate(xx), color=GO, lw=2, label="natural cubic spline (ours)")
+    a.set(title="CL(α), synthetic takeoff table", xlabel="α [deg]", ylabel="CL")
+    a.legend(loc="lower right")
+    b.semilogy(xx, np.maximum(e, 1e-18), color=GO, lw=1.2)
+    b.set(title="|ours − scipy CubicSpline(bc='natural')|", xlabel="α [deg]", ylabel="difference")
+    fig.savefig(OUT / "8_spline_vs_scipy.png")
+    plt.close(fig)
+    check("Natural cubic spline vs scipy", e.max() < 1e-12, f"max |diff| = {e.max():.1e}")
 
 
 def fig7_summary() -> None:
@@ -361,6 +395,7 @@ def main() -> None:
     fig4_scipy()
     fig5_ground_roll()
     fig6_and_physics()
+    fig8_spline()
     fig7_summary()
     npass = sum(ok for _, ok, _ in checks)
     print(f"\n{npass}/{len(checks)} checks pass; figures in {OUT}")

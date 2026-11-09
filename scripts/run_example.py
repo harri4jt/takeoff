@@ -48,7 +48,7 @@ def main() -> None:
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    sweep = sweep_v1(cfg, n=21)
+    sweep = sweep_v1(cfg, n=21, k_vr=result.k_VR)
     ax = bfl_chart(sweep, result)
     ax.figure.savefig(out / "bfl_chart.png", bbox_inches="tight")
     plt.close(ax.figure)

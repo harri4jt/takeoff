@@ -177,6 +177,22 @@ def rotate_and_climb(
     return Branch(name, segments, float(y_scr[0]), events, v_lof, float(y_scr[2]))
 
 
+def oei_v2_from_vr(
+    vm: VehicleModel, v_r: float, proc: ProcedureConfig, solver: SolverConfig
+) -> float:
+    """V2 (true airspeed at the screen height, one engine out) for rotation at ``v_r``.
+
+    From VR onwards the continued takeoff is always one-engine-out and starts at the
+    same airspeed, and its equations depend on neither x nor t (steady wind, constant
+    slope, rotation timed from VR). So V2 is a function of VR alone, independent of V1,
+    and can be found by simulating only the rotation and climb. Raises TouchbackError.
+    """
+    n_oei = vm.propulsion.n_engines - 1
+    y_r = [0.0, v_r - vm.env.wind(0.0, 0.0, 0.0)]  # ground speed at airspeed VR
+    branch = rotate_and_climb(vm, 0.0, y_r, n_oei, True, proc, solver, "v2_check", [], [])
+    return branch.v2_tas
+
+
 def simulate_aeo(
     vm: VehicleModel, roll: SegmentResult, proc: ProcedureConfig, solver: SolverConfig
 ) -> Branch:
@@ -234,11 +250,15 @@ def engine_failure_prefix(
             f"V1 is reached within t_recog={t_rec} s even if the engine fails at brake "
             "release; V1 is too low for this recognition time (raise V1_min or V_mcg)"
         )
-    f_hi = recog_end(v1)
+    # Upper bracket: V_EF = V1 (no acceleration during recognition). It is capped at
+    # the last stored roll speed, because the cached roll ends at VR only to within
+    # the event tolerance and V1 = VR would otherwise fall a few ulps outside it.
+    hi = min(v1, float(va[-1]))
+    f_hi = recog_end(hi)
     if f_hi <= 0.0:
         raise TakeoffError("aircraft cannot accelerate on the remaining engines at V1")
     res = safeguarded_secant(
-        recog_end, lo, v1, xtol=1e-10, ftol=solver.vef_tol_ftps, fa=f_lo, fb=f_hi
+        recog_end, lo, hi, xtol=1e-10, ftol=solver.vef_tol_ftps, fa=f_lo, fb=f_hi
     )
     v_ef = res.root
     if v_ef not in cache:

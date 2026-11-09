@@ -103,7 +103,10 @@ are true airspeeds, `V_TAS = V_EAS/√σ`.
 V_S = sqrt(2W / (ρ·S·CLmax))          (field ρ → TAS; identical to the EAS formula with ρ₀)
 VR  = k_VR·V_S
 V1  ∈ [V1_min, VR],   V1_min = V_mcg  if given, else 0.6·VR
+V2  = V_a at h = 35 ft (go branch)    required: V2 ≥ v2_min_ratio·V_S  (default 1.2)
 ```
+If the configured k_VR gives V2 < 1.2 V_S, k_VR is raised (§8.3) until V2 = 1.2 V_S.
+Only rotation speed changes; the procedure and every other input stay the same.
 
 ### 6.2 Sequence
 
@@ -190,6 +193,13 @@ to a relative error of 10⁻⁸ with both RK4 and RK45.
 | outer | V1 ∈ [V1_min, VR] | `d_go(V1) − d_stop(V1) = 0`, tolerance 0.05 ft | safeguarded secant |
 | inner | V_EF ∈ [V_a(0), V1] | `V_a(t_EF + t_recog) − V1 = 0`, tolerance 10⁻⁷ ft/s | safeguarded secant |
 | events | t* within a step | `g(t*, y(t*)) = 0`, tolerance 10⁻⁹ s | safeguarded secant |
+| V2 rule (first) | k_VR ≥ configured | `V2/V_S(k_VR) − 1.2 = 0`, tolerance 5·10⁻⁵ | safeguarded secant; each evaluation simulates only rotation → 35 ft (`oei_v2_from_vr`) |
+
+The V2 solve starts from `k_VR + 1.05·(1.2 − V2/V_S)` (V2/V_S − k_VR is nearly constant)
+and widens the step until the root is bracketed; it typically needs about 5 rotate-and-climb
+simulations. This works because V2 depends on VR only: from VR the go branch is one-engine-out
+from the same airspeed, and its equations depend on neither x nor t. The V1 solve then runs
+once, at the final k_VR.
 
 To find the state at V_EF, the code looks it up in the **cached AEO roll** (binary
 search over the stored rows, then event location inside one step). Each inner

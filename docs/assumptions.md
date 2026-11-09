@@ -13,9 +13,9 @@ chosen and why.
 | **V_mcg** | minimum control speed, ground | The lowest speed at which the rudder alone can hold the aircraft straight after an engine fails. It is optional. When given, it is the lowest V1 allowed. |
 | **V_EF** | engine-failure speed | The speed at which the engine **actually fails**. It is *not* the same as V1. |
 | **V1** | decision speed | The speed by which the pilot has **recognised** the failure and takes the first action (brakes if stopping). Below V1 the crew stops; at or above V1 it continues. |
-| **VR** | rotation speed | The pilot starts pulling the nose up at VR. Here `VR = k_VR·V_S`, default 1.10. |
+| **VR** | rotation speed | The pilot starts pulling the nose up at VR. Here `VR = k_VR·V_S`, default 1.10, raised automatically if needed to meet the V2 rule (below). |
 | **V_LOF** | liftoff speed | The airspeed when the wheels leave the ground (N = 0). |
-| **V2** | takeoff safety speed | The airspeed at the 35 ft screen height. Part 25 wants V2 ≥ 1.2 V_S (old rule) or 1.13 V_SR (current). This tool reports the ratio but does not enforce it. |
+| **V2** | takeoff safety speed | The airspeed at the 35 ft screen height, one engine out. Part 25 requires V2 ≥ V2_min = 1.2 V_S (the classic rule; the current rule is 1.13 V_SR with a 1-g stall speed). **Enforced** by default (see below). |
 
 **Why V_EF and V1 differ:** the pilot needs time to notice the failure. The
 regulations assume that time is about one second (`t_recog`, default 1 s). The engine
@@ -75,6 +75,30 @@ increments model **devices and failures**, which are separate hardware:
 
 If you want, set the increments to 0 in `aircraft.yaml`; they are optional.
 
+### V2 ≥ 1.2 V_S → enforced by raising VR
+
+Part 25.107 says V2 must be at least 1.2 V_S, and VR must be chosen so that V2 is
+reached by 35 ft with one engine out. An airframer meets this by **scheduling VR**.
+Rotating later means lifting off faster and so arriving at 35 ft faster. So the tool
+does the same thing:
+
+1. Solve the BFL at the configured `k_VR` (default 1.10).
+2. If V2/V_S < 1.2, find the smallest `k_VR` with V2/V_S = 1.2 by a safeguarded
+   secant solve. From VR onwards the continued takeoff is always one-engine-out and
+   starts at the same airspeed, and nothing in it depends on where along the runway it
+   is or on V1. So V2 depends on VR alone, and each function evaluation only has to
+   simulate rotate → lift-off → 35 ft. The BFL is then solved once at that k_VR. (A
+   time-varying wind, as in Phase 3, would couple them again.)
+
+For the synthetic aircraft this moves k_VR from 1.100 to 1.161 and the BFL from about
+9,280 ft to 9,930 ft. That's the price of the safety margin. Turn it off with
+`procedure.enforce_v2_min: false` (or the checkbox in the app) to see the
+unconstrained result, which is then flagged with a warning. The ratio is
+`procedure.v2_min_ratio` (default 1.2).
+
+Earlier versions only *reported* the ratio because the original spec asked for a
+diagnostic. Enforcing it is closer to how real takeoff speeds are scheduled.
+
 ### Other assumptions
 
 * **No reverse thrust credit** (Part 25 dry-runway rule). The operating engines go to
@@ -100,6 +124,24 @@ If you want, set the increments to 0 in `aircraft.yaml`; they are optional.
 ## The synthetic aircraft
 
 `generic_widebody_synthetic` is **invented**. Its README and YAML say so, every
-result summary repeats it, and the app shows it. Its V2/V_S of about 1.15 sits
-slightly below the old 1.2 rule. That is a consequence of the default k_VR = 1.10 and
-the synthetic lift curve. Raising `procedure.k_VR` (e.g. to 1.15) raises V2/V_S, at the cost of a longer field.
+result summary repeats it, and the app shows it. At the default k_VR = 1.10 its V2/V_S
+would be about 1.15, below the 1.2 rule, so the V2 rule raises k_VR to about 1.16.
+
+## Reading the animation
+
+* Both outcomes of the *same* engine failure are drawn on one runway. Until the engine
+  fails the two aircraft are identical (the blue one is drawn on top).
+* The **orange dotted line** marks where the engine fails (V_EF). The **black dotted line**
+  is V1, about 1 s later.
+* The **red line** is the BFL. The go aircraft crosses 35 ft exactly there. The stop
+  aircraft halts about 500 ft short because the stop distance includes the
+  2-second allowance (2 s × V1), a regulatory pad that is added on paper but not flown.
+  It is shown as the orange box on the runway.
+* The **green line** is the FAA field length, max(BFL, 1.15 × all-engines distance).
+  Switch the animation to **All engines** to see the normal takeoff and the 15 %
+  margin that leads to it.
+* The runway strip below is drawn to the same horizontal scale, with real-world
+  distances for comparison (`app/reference_runways.yaml`; they are context only and
+  should be double-checked before being quoted).
+* Heights are exaggerated (×25 by default, in ⚙ settings); otherwise 35 ft would be a
+  1-pixel bump over a 10,000 ft runway.

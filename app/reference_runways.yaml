@@ -1,0 +1,26 @@
+# Reference distances drawn on the runway strip under the animation, for scale.
+# These are REAL-WORLD figures quoted from memory for context only - they are not
+# inputs to any calculation. Verify each one (airport diagram / POH) before you put
+# it on a slide, and edit freely: add, remove or relabel entries.
+#
+#   length_ft : distance from brake release
+#   label     : description
+#   short     : text shown on the strip
+#   verify    : true = approximate figure, double-check before presenting
+references:
+  - length_ft: 1630
+    label: "Cessna 172, takeoff over 50 ft obstacle (approx.)"
+    short: "Cessna 172 TOFL"
+    verify: true        # 172S POH, max weight, sea level, standard day - check your POH
+  - length_ft: 7000
+    label: "LaGuardia (LGA) runways"
+    short: "LGA runways"
+    verify: false       # 4/22 and 13/31 are both ~7,000 ft
+  - length_ft: 12000
+    label: "CVG longest runway (18C/36C)"
+    short: "CVG longest"
+    verify: false
+  - length_ft: 16000
+    label: "Denver 16R/34L, longest US public runway"
+    short: "Denver 16R/34L"
+    verify: false

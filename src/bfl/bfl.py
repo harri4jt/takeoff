@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -25,6 +25,7 @@ from .takeoff import (
     TouchbackError,
     aeo_ground_roll,
     engine_failure_prefix,
+    oei_v2_from_vr,
     simulate_aeo,
     simulate_go,
     simulate_stop,
@@ -77,11 +78,11 @@ def _context(cfg: RunConfig, k_vr: float) -> _Context:
 
 def _with_vr_retries(
     cfg: RunConfig, fn: Callable[[_Context], T]
-) -> tuple[T, list[dict[str, float]], list[str]]:
+) -> tuple[T, list[dict[str, Any]], list[str]]:
     """Run ``fn`` and, on a touchback, raise k_VR by vr_step and rerun everything."""
     proc = cfg.procedure
     k_vr = proc.k_VR
-    adjustments: list[dict[str, float]] = []
+    adjustments: list[dict[str, Any]] = []
     warnings: list[str] = []
     for attempt in range(proc.max_vr_retries + 1):
         try:
@@ -89,7 +90,9 @@ def _with_vr_retries(
             return fn(ctx), adjustments, warnings
         except TouchbackError as exc:
             new = round(k_vr + proc.vr_step, 10)
-            adjustments.append({"attempt": attempt, "k_VR_old": k_vr, "k_VR_new": new})
+            adjustments.append(
+                {"reason": "touchback", "attempt": attempt, "k_VR_old": k_vr, "k_VR_new": new}
+            )
             warnings.append(f"touchback at k_VR={k_vr:.2f} ({exc}); raising k_VR to {new:.2f}")
             k_vr = new
     raise BFLError(
@@ -160,8 +163,6 @@ def _solve(ctx: _Context) -> BFLResult:
     field = max(bfl, cfg.procedure.field_length_aeo_factor * aeo_d)
     v_s_k = ctx.eas_kts(ctx.v_s)
     v2_k = ctx.eas_kts(go.v2_tas)
-    if v2_k / v_s_k < 1.2:
-        warnings.append(f"V2/V_S = {v2_k / v_s_k:.3f} < 1.2 (Part 25 diagnostic, not enforced)")
     if ctx.vm.chute is not None:
         warnings.append("drag chute credited in the stop: outside FAA Part 25 rules")
     if cfg.aircraft.synthetic:
@@ -196,25 +197,131 @@ def _solve(ctx: _Context) -> BFLResult:
     )
 
 
-def compute_bfl(config: RunConfig) -> BFLResult:
-    """Solve for the balanced field length.
-
-    Outer loop: bracket-safeguarded secant on f(V1) = d_go(V1) - d_stop(V1) over
-    [V1_min, VR]. Each f evaluation runs an inner secant solve for V_EF and simulates
-    both branches. On a touchback the whole solve is rerun with k_VR += vr_step.
-    """
-    result, adjustments, warnings = _with_vr_retries(config, _solve)
+def _solve_at(cfg: RunConfig) -> BFLResult:
+    """One BFL solve at cfg.procedure.k_VR (raised automatically on touchback)."""
+    result, adjustments, warnings = _with_vr_retries(cfg, _solve)
     result.vr_adjustments = adjustments
     result.warnings = warnings + result.warnings
     return result
 
 
+# V2 target is met with a small margin so round-off never leaves V2/V_S at 1.19999.
+_V2_MARGIN = 5e-5
+_K_VR_MAX = 2.0
+
+
+def _k_vr_for_v2(cfg: RunConfig) -> tuple[float, float, dict[str, Any]]:
+    """Smallest k_VR >= the configured one with V2/V_S >= v2_min_ratio.
+
+    Part 25.107(c)/(e): VR must be chosen so that V2 (the speed at the screen height,
+    one engine out) is at least V2_min = 1.2 V_S. A later rotation gives a faster
+    liftoff and so a faster V2, so g(k_VR) = V2/V_S(k_VR) - target is increasing and
+    a safeguarded secant solve finds the k_VR that just meets it.
+
+    V2 depends on VR only (see takeoff.oei_v2_from_vr), so each evaluation of g is a
+    single rotate-and-climb simulation, not a full BFL solve.
+
+    Returns (k_VR, V2/V_S at the configured k_VR, info).
+    """
+    proc, solver = cfg.procedure, cfg.solver
+    vm = build_model(cfg)
+    v_s = vm.stall_speed_tas()
+    target = proc.v2_min_ratio
+    goal = target + _V2_MARGIN
+    ratios: dict[float, float] = {}
+
+    def ratio(k: float) -> float:
+        try:
+            r = oei_v2_from_vr(vm, k * v_s, proc, solver) / v_s
+        except TouchbackError:
+            r = 0.0  # settles back: VR far too low, push k_VR up
+        ratios[k] = r
+        return r
+
+    k0 = proc.k_VR
+    r0 = ratio(k0)
+    if r0 >= target:
+        return k0, r0, {"evaluations": 1, "converged": True}
+
+    def g(k: float) -> float:
+        return ratio(k) - goal
+
+    # V2/V_S - k_VR is nearly constant (the speed gained between VR and 35 ft),
+    # so a unit-slope step is a good first guess; widen until the root is bracketed.
+    step = max(1.05 * (goal - r0), 1e-3) if r0 > 0 else 0.05
+    k1 = k0 + step
+    g1 = g(k1)
+    while g1 < 0.0:
+        step *= 2.0
+        k1 = k0 + step
+        if k1 > _K_VR_MAX:
+            raise BFLError(
+                f"cannot reach V2 >= {target:g} V_S even with k_VR = {_K_VR_MAX}; "
+                "set procedure.enforce_v2_min = false to see the unconstrained result"
+            )
+        g1 = g(k1)
+    res = safeguarded_secant(g, k0, k1, xtol=1e-7, ftol=_V2_MARGIN, maxiter=40, fa=r0 - goal, fb=g1)
+    # the smallest evaluated k_VR that satisfies the constraint
+    k_star = min(k for k, r in ratios.items() if r >= target)
+    return k_star, r0, {"evaluations": len(ratios), "converged": res.converged}
+
+
+def compute_bfl(config: RunConfig) -> BFLResult:
+    """Solve for the balanced field length.
+
+    1. (V2 rule, if procedure.enforce_v2_min) secant solve on k_VR so that
+       V2 >= v2_min_ratio * V_S; cheap, because V2 depends on VR only.
+    2. Outer loop: bracket-safeguarded secant on f(V1) = d_go(V1) - d_stop(V1) over
+       [V1_min, VR]. Each f evaluation runs an inner secant solve for V_EF and
+       simulates both branches.
+    On a touchback the whole solve is rerun with k_VR += vr_step.
+    """
+    proc = config.procedure
+    if not proc.enforce_v2_min:
+        result = _solve_at(config)
+        if result.v2_over_vs < proc.v2_min_ratio:
+            result.warnings.append(
+                f"V2/V_S = {result.v2_over_vs:.3f} < {proc.v2_min_ratio:g} "
+                "(not enforced: procedure.enforce_v2_min = false)"
+            )
+        return result
+
+    k0 = proc.k_VR
+    k_star, r0, info = _k_vr_for_v2(config)
+    if k_star == k0:
+        return _solve_at(config)
+    result = _solve_at(config.with_updates({"procedure.k_VR": k_star}))
+    result.vr_adjustments = [
+        {
+            "reason": "v2_min",
+            "k_VR_old": k0,
+            "k_VR_new": k_star,
+            "v2_evaluations": info["evaluations"],
+            "converged": info["converged"],
+        }
+    ] + result.vr_adjustments
+    result.warnings = [
+        f"k_VR raised {k0:.3f} -> {k_star:.3f} so that V2 >= {proc.v2_min_ratio:g} V_S "
+        f"(V2/V_S was {r0:.3f}; Part 25.107, {info['evaluations']} rotate-and-climb "
+        "simulations)"
+    ] + result.warnings
+    return result
+
+
 def sweep_v1(
-    config: RunConfig, v1_values: Sequence[float] | None = None, n: int = 15
+    config: RunConfig,
+    v1_values: Sequence[float] | None = None,
+    n: int = 15,
+    k_vr: float | None = None,
 ) -> pd.DataFrame:
     """Go and stop distances vs V1 (the classic crossing chart).
 
+    The sweep runs at a fixed rotation speed. To draw the chart that belongs to a
+    compute_bfl result (whose k_VR may have been raised for V2_min or touchback),
+    pass ``k_vr=result.k_VR``.
+
     Args:
+        k_vr: overrides procedure.k_VR for the sweep.
         v1_values: V1 values in KEAS; default ``n`` points evenly spaced in [V1_min, VR].
             Values outside [V1_min, VR] give NaN distances.
     Returns:
@@ -259,6 +366,8 @@ def sweep_v1(
             rows.append(row)
         return pd.DataFrame(rows)
 
+    if k_vr is not None:
+        config = config.with_updates({"procedure.k_VR": k_vr})
     df, _, _ = _with_vr_retries(config, run)
     return df
 

@@ -26,7 +26,7 @@ pip install -e ".[test]"        # into your Python 3.13 environment
 python scripts/run_example.py                  # summary + figures in output/
 python scripts/run_example.py --kcl 1.1 --headwind 10
 python scripts/make_verification_figures.py    # PNGs in output/verification/
-python -m app                                  # Dash app at http://127.0.0.1:8050
+python -m app                                  # Takeoff Performance Explorer at http://127.0.0.1:8050
 python -m pytest                               # test suite (~15 s)
 ```
 
@@ -47,10 +47,12 @@ sw = sweep_v1(cfg)                 # go/stop vs V1
 | Path | Contents |
 |---|---|
 | `src/bfl/` | the package: config, units, atmosphere, tables, aero, propulsion, dynamics, integrators, rootfind, phases, takeoff, bfl, results, plotting |
-| `app/` | Dash front end. It only calls `compute_bfl` / `sweep_v1`. |
+| `app/` | Dash front end ("Takeoff Performance Explorer"): animation, runway strip, details, and the docs as pages (☰ menu). It only calls the public `bfl` API. |
 | `aircraft/<name>/` | `aircraft.yaml` + CSV tables + README with data provenance |
 | `docs/equations.md` | every equation, sign convention and numerical method |
 | `docs/assumptions.md` | modelling decisions, the V-speed glossary, assumptions |
+| `docs/methods/` | one page per numerical method + verification gallery (also served by the app) |
+| `docs/STUDY_GUIDE.md` | checklist for understanding the implementation |
 | `scripts/` | `run_example.py`, `make_verification_figures.py` |
 | `tools/` | `make_synthetic_widebody.py` (table generator) |
 | `tests/` | integrator, root finder, interpolation and physics tests |

@@ -102,7 +102,7 @@ class BFLResult:
     v1_ground_kts: float
     density_slugft3: float
     v1_solver_history: list[dict[str, float]] = field(default_factory=list)
-    vr_adjustments: list[dict[str, float]] = field(default_factory=list)
+    vr_adjustments: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     aircraft_name: str = ""
     synthetic: bool = False
@@ -163,7 +163,7 @@ class BFLResult:
         row("  V_S  (stall, takeoff config)", f"{self.v_s_kts:.1f} kt")
         row("  V_EF (engine failure)", f"{self.v_ef_kts:.1f} kt")
         row("  V1   (decision)", f"{self.v1_kts:.1f} kt")
-        row("  VR   (rotation)", f"{self.vr_kts:.1f} kt  (k_VR={self.k_VR:.2f})")
+        row("  VR   (rotation)", f"{self.vr_kts:.1f} kt  (k_VR={self.k_VR:.3f})")
         row("  V_LOF (liftoff, OEI)", f"{self.v_lof_kts:.1f} kt")
         row("  V2   (at 35 ft, OEI)", f"{self.v2_kts:.1f} kt")
         row("  V2 / V_S  (Part 25 wants >= 1.2)", f"{self.v2_over_vs:.3f}")

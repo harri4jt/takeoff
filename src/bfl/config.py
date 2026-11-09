@@ -130,6 +130,10 @@ class ProcedureConfig(_Model):
     t_idle_s: float = Field(default=1.0, ge=0, description="after V1")
     t_spoilers_s: float = Field(default=2.0, ge=0, description="after V1")
     t_v1_allowance_s: float = Field(default=2.0, ge=0, description="Part 25 2-s distance credit")
+    enforce_v2_min: bool = Field(
+        default=True, description="raise k_VR until V2 >= v2_min_ratio * V_S (Part 25.107)"
+    )
+    v2_min_ratio: float = Field(default=1.2, gt=1.0, description="V2_min / V_S")
     vr_step: float = Field(default=0.01, gt=0)
     max_vr_retries: int = Field(default=20, ge=0)
     v1_min_fraction_of_vr: float = Field(default=0.6, gt=0, lt=1)

@@ -156,6 +156,7 @@ UNDERPOWERED = {
     "aircraft.attitude.theta_tailstrike_deg": 14.0,
     "multipliers.k_CD": 1.4,
     "procedure.k_VR": 1.01,
+    "procedure.enforce_v2_min": False,  # isolate the touchback mechanism
 }
 
 
@@ -166,6 +167,55 @@ def test_touchback_guard_raises_vr(base_cfg):
     assert r.k_VR == pytest.approx(1.01 + 0.01 * len(r.vr_adjustments))
     assert any("touchback" in w for w in r.warnings)
     assert r.go.to_dataframe()["h_ft"].min() >= -0.01
+
+
+def test_v2_min_enforced(base_cfg, base_result):
+    """Part 25.107: k_VR is raised by a root solve until V2 >= 1.2 V_S (and no further)."""
+    free = compute_bfl(base_cfg.with_updates({"procedure.enforce_v2_min": False}))
+    assert free.v2_over_vs < 1.2  # the synthetic aircraft needs the correction
+    assert any("not enforced" in w for w in free.warnings)
+    assert 1.2 <= base_result.v2_over_vs < 1.2 + 2e-4
+    assert base_result.k_VR > free.k_VR
+    assert base_result.bfl_ft > free.bfl_ft  # rotating later costs runway
+    adj = [a for a in base_result.vr_adjustments if a["reason"] == "v2_min"]
+    assert len(adj) == 1 and adj[0]["converged"]
+    # a k_VR that already satisfies the rule is left alone
+    high = compute_bfl(base_cfg.with_updates({"procedure.k_VR": 1.2}))
+    assert high.k_VR == 1.2 and not high.vr_adjustments
+
+
+def test_v2_depends_on_vr_only(base_cfg, base_result):
+    """The cheap rotate-and-climb V2 equals the V2 of the full go branch at the solved V1."""
+    from bfl.model import build_model
+    from bfl.takeoff import oei_v2_from_vr
+    from bfl.units import KTS_TO_FTPS
+
+    cfg = base_cfg.with_updates({"procedure.k_VR": base_result.k_VR})
+    vm = build_model(cfg)
+    v2 = oei_v2_from_vr(vm, base_result.k_VR * vm.stall_speed_tas(), cfg.procedure, cfg.solver)
+    assert vm.tas_to_eas(v2) / KTS_TO_FTPS == pytest.approx(base_result.v2_kts, abs=1e-6)
+
+
+def test_sweep_matches_result_k_vr(base_cfg, base_result):
+    """The V1 sweep at the result's k_VR crosses at the BFL."""
+    v1 = base_result.v1_kts
+    row = sweep_v1(base_cfg, [v1], k_vr=base_result.k_VR).iloc[0]
+    assert row.d_go_ft == pytest.approx(base_result.bfl_ft, abs=0.1)
+    assert row.d_stop_ft == pytest.approx(base_result.bfl_ft, abs=0.1)
+
+
+def test_v1_equal_vr_edge(base_cfg):
+    """Regression: V1 = VR (unbalanced, go governs) must not step outside the cached roll."""
+    cfg = base_cfg.with_updates(
+        {
+            "solver.method": "rk45",
+            "procedure.chute_enabled": True,
+            "multipliers.k_CL": 0.9,
+            "multipliers.k_CD": 0.8,
+        }
+    )
+    r = compute_bfl(cfg)
+    assert r.bfl_ft > 0 and r.v2_over_vs >= 1.2
 
 
 def test_touchback_retries_exhausted(base_cfg):
