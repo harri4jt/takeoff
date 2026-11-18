@@ -60,11 +60,21 @@ class AeroConfig(_Model):
     configurations: dict[str, str] = Field(description="config name -> CSV file")
     takeoff_configuration: str = "takeoff"
     delta_CD_engine_out: float = Field(default=0.0, ge=0)
+    CLmax: dict[str, float] = Field(
+        default_factory=dict,
+        description="optional CLmax per configuration for V_S (e.g. from certified stall "
+        "speeds); configurations not listed use max(CL) of their table",
+    )
 
     @model_validator(mode="after")
     def _has_takeoff(self) -> AeroConfig:
         if self.takeoff_configuration not in self.configurations:
             raise ValueError(f"takeoff configuration '{self.takeoff_configuration}' not listed")
+        unknown = set(self.CLmax) - set(self.configurations)
+        if unknown:
+            raise ValueError(f"CLmax given for unknown configuration(s): {sorted(unknown)}")
+        if any(v <= 0 for v in self.CLmax.values()):
+            raise ValueError("CLmax values must be positive")
         return self
 
 

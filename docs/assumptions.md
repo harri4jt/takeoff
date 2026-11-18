@@ -9,7 +9,7 @@ chosen and why.
 
 | Speed | Name | What it means here |
 |---|---|---|
-| **V_S** | stall speed | `sqrt(2W/(ρ S CLmax))` in the takeoff configuration. The reference that the other speeds are scaled from. |
+| **V_S** | stall speed | `sqrt(2W/(ρ S CLmax))` in the takeoff configuration. The reference that the other speeds are scaled from. CLmax is the table's maximum CL, unless `aero.CLmax` in aircraft.yaml gives one for the configuration (e.g. from certified stall speeds, as for the 747). Either way it is times k_CL. |
 | **V_mcg** | minimum control speed, ground | The lowest speed at which the rudder alone can hold the aircraft straight after an engine fails. It is optional. When given, it is the lowest V1 allowed. |
 | **V_EF** | engine-failure speed | The speed at which the engine **actually fails**. It is *not* the same as V1. |
 | **V1** | decision speed | The speed by which the pilot has **recognised** the failure and takes the first action (brakes if stopping). Below V1 the crew stops; at or above V1 it continues. |

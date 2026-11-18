@@ -87,6 +87,7 @@ def build_model(cfg: RunConfig) -> VehicleModel:
         ac.aero.delta_CD_engine_out,
         ac.spoilers.delta_CL,
         ac.spoilers.delta_CD,
+        ac.aero.CLmax.get(ac.aero.takeoff_configuration),
     )
 
     eng = ac.engines

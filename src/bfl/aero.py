@@ -5,7 +5,10 @@
 
 The multipliers scale only the clean table (so k_CL moves CLmax, V_S and VR); the
 device/failure increments are added unscaled, keeping the lift-vs-drag comparison
-about the airframe itself. CLmax = k_CL * max(CL_table).
+about the airframe itself. CLmax = k_CL * max(CL_table), unless the aircraft gives an
+explicit CLmax for the configuration (``aero.CLmax`` in aircraft.yaml), in which case
+CLmax = k_CL * that value. The explicit value only sets V_S; the CL(alpha) curve the
+dynamics use is unchanged.
 """
 
 from __future__ import annotations
@@ -56,11 +59,13 @@ class AeroModel:
     dCD_engine_out: float = 0.0
     dCL_spoiler: float = 0.0
     dCD_spoiler: float = 0.0
+    cl_max_override: float | None = None
 
     @property
     def cl_max(self) -> float:
-        """Maximum CL of the takeoff configuration, including the k_CL multiplier."""
-        return self.k_CL * self.table.cl_max
+        """CLmax for V_S (explicit value if given, else table max), times k_CL."""
+        base = self.table.cl_max if self.cl_max_override is None else self.cl_max_override
+        return self.k_CL * base
 
     def coefficients(
         self, alpha_rad: float, engine_out: bool, spoilers: bool

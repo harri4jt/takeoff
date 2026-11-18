@@ -1,43 +1,50 @@
 # =====================================================================================
-#  Boeing 747-100 - TEMPLATE ONLY. No values have been filled in.
-#  Every `null` / TODO must be digitized from the NASA reports listed in README.md.
-#  Do NOT fill these from memory or from un-cited sources.
-#  Until completed, loading this aircraft fails validation on purpose.
+#  Boeing 747-100 (JT9D-3) - real-aircraft data, digitized from public sources.
+#  Every value is cited in README.md. Tables are built by tools/make_b747_tables.py.
+#  Valid for SEA LEVEL, STANDARD DAY only (the thrust table is not rescaled for
+#  altitude or temperature).
 # =====================================================================================
 name: Boeing 747-100
 synthetic: false
-description: TEMPLATE - data to be digitized from NASA CR-114494 / CR-1756.
+description: >-
+  Boeing 747-100 with JT9D-3 engines. Aero from NASA CR-114494 (Boeing simulator data),
+  thrust at AFM takeoff EPR, sea level standard day.
 
 geometry:
-  wing_area_ft2: null           # TODO: reference wing area S [ft^2]  (source: ___ p.__)
+  wing_area_ft2: 5500.0         # CR-114494 p.1.1-3, "Summary of areas and dimensions"
 
 weight:
-  default_weight_lbf: null      # TODO: takeoff gross weight for the comparison case [lbf]
+  default_weight_lbf: 710000.0  # 747-100 maximum takeoff weight, Boeing D6-58326 sec.3.3.1
 
 engines:
   n_engines: 4
-  thrust_mode: table            # TODO: 'constant' or 'table' depending on what the source gives
-  thrust_table: thrust.csv      # per-engine thrust vs airspeed (and temperature if available)
-  thrust_per_engine_lbf: null   # TODO: only if thrust_mode = constant
-  idle_thrust_per_engine_lbf: null   # TODO: ground idle thrust per engine [lbf]
-  thrust_incidence_deg: 0.0     # TODO: thrust-line angle relative to body axis, if given
+  thrust_mode: table
+  thrust_table: thrust.csv      # per engine vs TAS, EPR 1.42, SL ISA (see README)
+  idle_thrust_per_engine_lbf: 2000.0   # ESTIMATE (not from a source), see README
+  thrust_incidence_deg: 0.0     # not given; thrust line taken along the body axis
 
 attitude:
-  theta_ground_deg: null        # TODO: ground attitude (fuselage reference) [deg]
-  theta_tailstrike_deg: null    # TODO: tail-strike pitch attitude [deg]
+  # Attitudes are in the wing-reference-plane frame the aero tables use:
+  # alpha_WRP = alpha_FRL + 2 deg (CR-114494 p.1.3-4).
+  theta_ground_deg: 2.0         # fuselage level on the ground (FRL 0 deg) -> WRP 2 deg
+  theta_tailstrike_deg: 15.0    # ~13 deg fuselage attitude, from the D6-58326 side view
 
 aero:
   configurations:
-    takeoff: aero_takeoff.csv   # TODO: which flap setting (10 or 20 deg)? record in README
-  takeoff_configuration: takeoff
-  delta_CD_engine_out: null     # TODO: windmilling + trim drag increment, one engine out
+    flaps10: aero_flaps10.csv
+    flaps20: aero_flaps20.csv
+  takeoff_configuration: flaps20  # Boeing's chart uses flaps 20 except at the heaviest weights
+  delta_CD_engine_out: 0.0015   # windmilling drag, CR-114494 p.12.4-2 (~600 lb at M 0.22)
+  CLmax:                        # from certification stall speeds, CR-114494 p.2.0-37
+    flaps10: 1.95
+    flaps20: 2.13
 
-spoilers:
-  delta_CL: null                # TODO: ground spoiler lift increment (negative)
-  delta_CD: null                # TODO: ground spoiler drag increment
+spoilers:                       # ESTIMATE (not from a source), see README
+  delta_CL: -0.60
+  delta_CD: 0.070
 
 chute:
   enabled: false                # transports do not use drag chutes
 
 speeds:
-  V_mcg_kts: null               # TODO (optional): minimum control speed on the ground [KCAS]
+  V_mcg_kts: 106.0              # AFM minimum control speeds, CR-114494 p.15.0-23 (SL, 15 C)
