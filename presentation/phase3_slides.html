@@ -15,167 +15,191 @@
   .slide { width: 1280px; height: 720px; position: relative; overflow: hidden; background: white;
            padding: 40px 56px; page-break-after: always; break-after: page; }
   .slide:last-child { page-break-after: auto; break-after: auto; }
-  h2 { margin: 0 0 18px; font-size: 32px; letter-spacing: -0.3px; }
+  h2 { margin: 0 0 16px; font-size: 32px; letter-spacing: -0.3px; }
   h3 { margin: 0 0 8px; font-size: 16px; color: var(--muted); }
   .foot { position: absolute; left: 56px; right: 56px; bottom: 16px; font-size: 12px; color: #8a96a3;
           display: flex; justify-content: space-between; }
   sub, sup { font-size: 70%; }
   .m { font-family: "DejaVu Serif", serif; }
-  .box { background: var(--soft); border-radius: 12px; padding: 14px 18px; }
+  .box { background: var(--soft); border-radius: 12px; padding: 12px 18px; }
   .note { font-size: 13.5px; color: var(--muted); line-height: 1.45; }
   .new { color: var(--orange); font-weight: 600; }
+  ul.tight { margin: 4px 0 0; padding-left: 18px; font-size: 15px; line-height: 1.45; }
+  ul.tight li { margin: 3px 0; }
 
-  /* slide 1 */
-  .s1 { display: grid; grid-template-columns: 540px 1fr; gap: 22px; }
-  .inputs { width: 100%; border-collapse: collapse; font-size: 15px; }
-  .inputs th { text-align: left; font-size: 12.5px; color: var(--muted); border-bottom: 2px solid var(--line); padding: 4px 6px; }
-  .inputs td { border-bottom: 1px solid var(--line); padding: 7px 6px; vertical-align: top; line-height: 1.35; }
-  .inputs td:first-child { font-weight: 700; white-space: nowrap; }
-  .tag { display: inline-block; font-size: 12px; border-radius: 999px; padding: 1px 8px; font-weight: 700; }
-  .tag.have { background: #e3f6ec; color: var(--faa); }
-  .tag.need { background: #fdebe2; color: var(--orange); }
-  .sens { font-size: 16px; line-height: 1.75; }
-  .sens .row { display: grid; grid-template-columns: 170px 1fr; }
-  .ift { margin-top: 12px; border: 2px solid var(--blue); border-radius: 12px; padding: 12px 18px; }
-  .ift h3 { color: var(--blue); }
-  .question { background: #eaf2fc; border-left: 5px solid var(--blue); border-radius: 8px; padding: 10px 16px;
-              font-size: 19px; line-height: 1.4; margin: -4px 0 16px; }
-  .s1 .box + .ift, .s1 .box { margin-top: 0; }
-  .s1 > div > .ift { margin-top: 14px; }
-  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
-  .step { border-radius: 12px; padding: 10px 14px; border: 1.5px solid var(--line); font-size: 14.5px; line-height: 1.4; }
-  .step b { display: block; font-size: 15.5px; margin-bottom: 2px; }
-  .step .n { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: white;
-             text-align: center; line-height: 22px; font-size: 13px; margin-right: 6px; }
+  /* ---------- title (same as the 11/13 deck) */
+  .title { background: linear-gradient(180deg, #4f8fd1 0%, #8ec1ea 55%, #dceefa 100%); color: white; padding: 0; }
+  .title .cloud { position: absolute; background: rgba(255,255,255,0.8); border-radius: 60px; height: 56px; filter: blur(1px); }
+  .title .cloud::before, .title .cloud::after { content: ""; position: absolute; background: inherit; border-radius: 50%; }
+  .title .cloud::before { width: 90px; height: 84px; left: 34px; top: -42px; }
+  .title .cloud::after  { width: 70px; height: 60px; left: 110px; top: -26px; }
+  .title-text { position: absolute; left: 80px; top: 150px; right: 80px; }
+  .title-text .course { font-size: 18px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+  .title-text h1 { font-size: 58px; line-height: 1.08; margin: 14px 0 16px; text-shadow: 0 2px 12px rgba(16,45,80,0.25); }
+  .title-text .tag { font-size: 23px; max-width: 900px; line-height: 1.35; }
+  .authors { position: absolute; left: 80px; bottom: 160px; font-size: 26px; font-weight: 600; color: #0f2c4c; }
+  .runway { position: absolute; left: 0; right: 0; bottom: 0; height: 96px; background: #a7c98a; }
+  .runway .rw { position: absolute; left: 80px; right: -20px; top: 26px; height: 44px; background: #3b3f46; }
+  .runway .dash { position: absolute; left: 140px; right: 0; top: 47px; border-top: 3px dashed white; }
+  .runway .keys { position: absolute; left: 92px; top: 31px; width: 34px; height: 34px;
+    background: repeating-linear-gradient(180deg, white 0 4px, transparent 4px 7px); }
 
-  /* slide 2 */
-  .frame { display: grid; grid-template-columns: 270px 1fr; gap: 20px; align-items: stretch; margin-bottom: 14px; }
-  .eqs { display: grid; grid-template-columns: 330px 1fr; gap: 16px; }
-  .eqs .m { font-size: 15.5px; line-height: 1.9; white-space: nowrap; }
-  .eqs h4 { margin: 0 0 4px; font-size: 16px; }
-  .eqs h4 span { font-weight: 400; color: var(--muted); font-size: 13.5px; }
-  .bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 14px; }
-  .bottom ul { margin: 4px 0 0; padding-left: 18px; font-size: 14.5px; line-height: 1.45; }
-  .bottom li { margin: 3px 0; }
+  /* ---------- slide 2: the tailwind problem */
+  .tw-top { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: center; }
+  .nums { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  .nums th { text-align: right; font-size: 12px; color: var(--muted); border-bottom: 2px solid var(--line); padding: 4px 6px; }
+  .nums th:first-child, .nums td:first-child { text-align: left; }
+  .nums td { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: right; white-space: nowrap; }
+  .nums td.b { color: var(--blue); font-weight: 700; } .nums td.o { color: var(--orange); font-weight: 700; }
+  .tw-bot { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 10px; }
+
+  /* ---------- slide 3: gust equations */
+  .g-top { display: grid; grid-template-columns: 1fr 1.35fr; gap: 18px; }
+  .g-top .m { font-size: 16px; line-height: 1.85; white-space: nowrap; }
+  .g-top h4 { margin: 0 0 2px; font-size: 15.5px; }
+  .g-top h4 span { font-weight: 400; color: var(--muted); font-size: 13px; }
+  .g-bot { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 16px; margin-top: 12px; }
+  .vars { width: 100%; border-collapse: collapse; font-size: 12.8px; }
+  .vars td { padding: 1.5px 4px; vertical-align: top; line-height: 1.3; }
+  .vars td:first-child { font-family: "DejaVu Serif", serif; white-space: nowrap; width: 58px; }
+  .vars tr.sec td { font-weight: 700; color: var(--muted); padding-top: 5px; font-family: inherit; }
+  .zero td { color: var(--muted); }
 </style>
 </head>
 <body>
 
-<!-- ============================================================ 1: THE QUESTION -->
-<section class="slide">
-  <h2>11/20/26 update: inputs that vary during the takeoff</h2>
-  <div class="question">
-    If thrust, lift and drag each fluctuate a little <i>over the course of a single takeoff</i>,
-    how large can those fluctuations be before the BFL changes noticeably?
+<!-- ============================================================ 1: TITLE -->
+<section class="slide title">
+  <div class="cloud" style="left: 860px; top: 70px; width: 220px;"></div>
+  <div class="cloud" style="left: 1040px; top: 300px; width: 170px; opacity: .7;"></div>
+  <div class="cloud" style="left: 640px; top: 420px; width: 140px; opacity: .55;"></div>
+  <svg style="position:absolute; left: 760px; top: 420px;" width="420" height="170" viewBox="0 0 420 170">
+    <g transform="translate(220,130) rotate(-11) scale(4.2)">
+      <path d="M-38,-4 L-41,-19 L-35,-19 L-27,-8.2 L13,-8.2 L19,-7.4 L23.5,-5.8 L25,-4.4 L24,-3.2 L20,-2.3 L-28,-2.3 Z" fill="#2a78d6"/>
+      <path d="M-34,-9 L-44,-10.4 L-43,-11.6 L-31,-10.4 Z" fill="#2a78d6"/>
+      <path d="M-7,-1 L3,-1 L4.5,-2.3 L3,-3.6 L-7,-3.6 Z" fill="#1f5fae"/>
+    </g>
+  </svg>
+  <div class="title-text">
+    <div class="course">MATH 6006 Numerical Analysis · Final Project · Update 11/20/26</div>
+    <h1>Balanced Field Length:<br>wind gusts</h1>
+    <div class="tag">What happens to the runway a jet needs when the wind changes during the takeoff?</div>
   </div>
-  <div class="s1">
-    <div class="box">
-      <h3>Time-varying multipliers (one takeoff)</h3>
-      <div class="m" style="font-size:17px; line-height:1.9">
-        T(t) = [1 + ε<sub>T</sub>(t)] · T(V<sub>a</sub>)<br>
-        C<sub>L</sub>(t) = [1 + ε<sub>L</sub>(t)] · C<sub>L</sub>(α)<br>
-        C<sub>D</sub>(t) = [1 + ε<sub>D</sub>(t)] · C<sub>D</sub>(α)
-      </div>
-      <div class="note" style="margin-top:6px">ε<sub>i</sub>(t): zero mean, size σ<sub>i</sub>, and a correlation
-        time τ<sub>i</sub> that sets how fast it changes. Wind gusts u<sub>w</sub>(t), w<sub>g</sub>(t) are the
-        same kind of input and enter the equations of motion directly (next slide).</div>
-      <h3 style="margin-top:14px">Perturbation of the ground-roll acceleration</h3>
-      <div class="m" style="font-size:16.5px; line-height:1.8">
-        a = [T − q̄S(C<sub>D</sub> − μC<sub>L</sub>) − μW] / m<br>
-        m δa(t) = T ε<sub>T</sub>(t) − q̄S C<sub>D</sub> ε<sub>D</sub>(t) + μ q̄S C<sub>L</sub> ε<sub>L</sub>(t)
-      </div>
-      <div class="note">μ ≈ 0.03 rolling, ≈ 0.3 braking. Lift also sets the liftoff speed.</div>
-    </div>
-    <div>
-      <div class="box">
-        <h3>From a fluctuation to a distance</h3>
-        <div class="m" style="font-size:17px; line-height:1.9">
-          d = ∫ V dV / a &nbsp;⇒&nbsp; δd = − ∫<sub>0</sub><sup>t<sub>f</sub></sup> (V / a) · δa(t) dt
-        </div>
-        <div class="note">Each moment of the run is weighted by V/a. A fluctuation counts most where the
-          aircraft is fast and accelerating slowly, e.g. after the engine failure.</div>
-      </div>
-      <div class="ift">
-        <h3>From the two distances to V1 and the BFL</h3>
-        <div class="m" style="font-size:16.5px; line-height:1.85">
-          δV1 = − (δd<sub>go</sub> − δd<sub>stop</sub>) / (g − s)<br>
-          δBFL = w δd<sub>go</sub> + (1 − w) δd<sub>stop</sub>, &nbsp; w = s / (s − g)<br>
-          g = ∂d<sub>go</sub>/∂V1 &lt; 0, &nbsp; s = ∂d<sub>stop</sub>/∂V1 &gt; 0
-        </div>
-        <div class="note">V1 follows the <i>difference</i> of the two distance changes and the BFL their
-          <i>weighted average</i>. A fluctuation before V1 hits both branches.</div>
-      </div>
-    </div>
-  </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>1</span></div>
+  <div class="authors">John Harrison &amp; Connor Seng</div>
+  <div class="runway"><div class="rw"></div><div class="keys"></div><div class="dash"></div></div>
 </section>
 
-<!-- ============================================================ 2: GUSTS IN THE EOM -->
+<!-- ============================================================ 2: THE PROBLEM -->
 <section class="slide">
-  <h2>Wind gusts in the equations of motion</h2>
-  <div class="frame">
-    <div class="box">
-      <h3>Setup</h3>
-      <div class="note" style="font-size:14.5px; color:var(--ink)">
-        Wind velocity in the runway frame: <span class="m">w = (−u<sub>w</sub>(t), w<sub>g</sub>(t))</span><br>
-        u<sub>w</sub> = headwind (+), w<sub>g</sub> = updraft (+)<br>
-        ground velocity = air-relative velocity + w<br><br>
-        Newton applies to the <b>ground</b> velocity:<br>
-        <span class="m">m d/dt (V<sub>a</sub> e<sub>V</sub> + w) = F</span><br>
-        Project onto e<sub>V</sub> = (cos γ, sin γ) and e<sub>n</sub> = (−sin γ, cos γ).
-      </div>
-    </div>
-    <div class="box">
-      <div class="eqs">
-        <div>
-          <h4>Ground roll <span>y = [x, V], V = ground speed</span></h4>
-          <div class="m">
-            V<sub>a</sub> = V + <span class="new">u<sub>w</sub>(t)</span><br>
-            α = θ + <span class="new">w<sub>g</sub>/V<sub>a</sub></span><br>
-            m dV/dt = T cos ε − D − μF<sub>N</sub> − W sin φ<br>
-            F<sub>N</sub> = W cos φ − L − T sin ε<br>
-            dx/dt = V
-          </div>
-          <div class="note">V is already inertial, so there are no new derivative terms. Gusts enter only
-            through q̄ = ½ρV<sub>a</sub><sup>2</sup> and α.</div>
-        </div>
-        <div>
-          <h4>Airborne <span>y = [x, h, V<sub>a</sub>, γ], air-relative</span></h4>
-          <div class="m">
-            dx/dt = V<sub>a</sub> cos γ − <span class="new">u<sub>w</sub></span><br>
-            dh/dt = V<sub>a</sub> sin γ + <span class="new">w<sub>g</sub></span><br>
-            m dV<sub>a</sub>/dt = T cos ε − D − W sin γ <span class="new">+ m(u̇<sub>w</sub> cos γ − ẇ<sub>g</sub> sin γ)</span><br>
-            m V<sub>a</sub> dγ/dt = T sin ε + L − W cos γ <span class="new">− m(u̇<sub>w</sub> sin γ + ẇ<sub>g</sub> cos γ)</span><br>
-            α = θ − γ
-          </div>
-          <div class="note">A rising headwind adds airspeed with no thrust. An updraft lowers the
-            air-relative γ, which raises α and lift.</div>
-        </div>
-      </div>
+  <h2>Why wind matters: V1 barely moves, the BFL grows</h2>
+  <div class="tw-top">
+    <img src="fig_tailwind.svg" style="width: 100%;" alt="airspeed and ground speed vs time, no wind and 15 kt tailwind">
+    <div>
+      <h3>747-100, 710,000 lb, sea level</h3>
+      <table class="nums">
+        <tr><th></th><th>no wind</th><th>15 kt tail</th></tr>
+        <tr><td>V1 (airspeed)</td><td class="b">146 kt</td><td class="o">145 kt</td></tr>
+        <tr><td>V1 ground speed</td><td class="b">146 kt</td><td class="o">160 kt</td></tr>
+        <tr><td>BFL</td><td class="b">9,625 ft</td><td class="o">11,273 ft</td></tr>
+        <tr><td>change</td><td></td><td class="o">+1,648 ft</td></tr>
+        <tr><td></td><td></td><td class="o">(+17%)</td></tr>
+      </table>
     </div>
   </div>
-  <div class="note" style="font-size:14px"><span class="new">Orange</span> = new terms. With a steady wind
-    (u̇<sub>w</sub> = ẇ<sub>g</sub> = 0, w<sub>g</sub> = 0) they vanish and the current model is recovered.</div>
-  <div class="bottom">
+  <div class="tw-bot">
     <div class="box">
-      <h3>Gust models</h3>
-      <ul>
-        <li><b>Discrete 1 − cos gust:</b> <span class="m">u<sub>w</sub> = U<sub>0</sub> + ½U<sub>g</sub>(1 − cos 2πt/T<sub>g</sub>)</span>, a single smooth bump.</li>
-        <li><b>Dryden turbulence:</b> white noise through a shaping filter with intensity σ<sub>u</sub> and length scale L<sub>u</sub>.
-          This is the standard random-gust model.</li>
+      <h3>Airspeed sets the speeds, ground speed sets the distance</h3>
+      <div class="m" style="font-size:16px; line-height:1.7">
+        V<sub>ground</sub> = V<sub>a</sub> − u<sub>w</sub>,&nbsp;&nbsp;&nbsp; x = ∫ V<sub>ground</sub> dt
+      </div>
+      <ul class="tight">
+        <li>V1, VR and V2 are <b>airspeeds</b>: the wing and the pilot only see the air. So V1 hardly changes.</li>
+        <li>With a tailwind the jet reaches that airspeed at a <b>higher ground speed</b>, and the extra area
+          under the ground-speed curve is extra runway.</li>
+        <li>An unchanged V1 does <b>not</b> mean an unchanged BFL.</li>
       </ul>
     </div>
     <div class="box">
-      <h3>Numerical consequences</h3>
-      <ul>
-        <li>Generate each gust history first and interpolate it. The right-hand side then stays smooth and
-          deterministic, so RK45 and event location still work.</li>
-        <li>Use the <b>same</b> gust history in the go and stop branches, or the V1 secant solve sees noise.</li>
-        <li>The airspeed can cross V<sub>EF</sub>, V1 or VR more than once. The first crossing triggers the event.</li>
+      <h3>Why gusts are a good way to add randomness</h3>
+      <ul class="tight">
+        <li>Real wind is never steady. A steady 15 kt change already costs 17% of the runway.</li>
+        <li>A gust <b>changes during the takeoff</b>, so it can arrive before or after V1, during the stop or the climb.</li>
+        <li>It enters the equations of motion directly through the airspeed (next slide).</li>
+        <li>It has natural random parameters: size, duration and when it hits.</li>
       </ul>
     </div>
   </div>
   <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>2</span></div>
+</section>
+
+<!-- ============================================================ 3: GUSTS IN THE EOM -->
+<section class="slide">
+  <h2>Adding a gust to the equations of motion</h2>
+  <div class="g-top">
+    <div class="box">
+      <h4>Ground roll <span>state y = [x, V], V = ground speed</span></h4>
+      <div class="m">
+        V<sub>a</sub> = V + <span class="new">u<sub>w</sub>(t)</span><br>
+        m dV/dt = T − D − μ(W − L)<br>
+        dx/dt = V
+      </div>
+      <div class="note">V is already the ground (inertial) speed, so there are no new derivative terms.
+        The gust only changes V<sub>a</sub>, and with it q̄ = ½ρV<sub>a</sub><sup>2</sup>, L, D and T.</div>
+    </div>
+    <div class="box">
+      <h4>Airborne <span>state y = [x, h, V<sub>a</sub>, γ], measured relative to the air</span></h4>
+      <div class="m">
+        dx/dt = V<sub>a</sub> cos γ − <span class="new">u<sub>w</sub>(t)</span>,&nbsp;&nbsp; dh/dt = V<sub>a</sub> sin γ<br>
+        m dV<sub>a</sub>/dt = T − D − W sin γ <span class="new">+ m u̇<sub>w</sub> cos γ</span><br>
+        m V<sub>a</sub> dγ/dt = L − W cos γ <span class="new">− m u̇<sub>w</sub> sin γ</span>
+      </div>
+      <div class="note">From Newton applied to the ground velocity (air-relative velocity + wind). A rising
+        headwind adds airspeed without thrust; a rising tailwind takes it away.
+        <span class="new">Orange</span> = new terms; with u̇<sub>w</sub> = 0 we recover the current model.</div>
+    </div>
+  </div>
+  <div class="g-bot">
+    <div class="box">
+      <h3>Variables</h3>
+      <table class="vars">
+        <tr><td>x, h</td><td>distance along runway, height [ft]</td></tr>
+        <tr><td>V, V<sub>a</sub></td><td>ground speed, airspeed [ft/s]</td></tr>
+        <tr><td>γ</td><td>flight-path angle (relative to the air)</td></tr>
+        <tr><td>u<sub>w</sub>(t)</td><td>headwind (+), tailwind (−) [ft/s]</td></tr>
+        <tr><td>T, D, L</td><td>thrust; drag, lift = q̄S·C<sub>D</sub>, q̄S·C<sub>L</sub></td></tr>
+        <tr><td>W, m</td><td>weight; mass = W/g</td></tr>
+        <tr><td>μ, ρ, S</td><td>friction coeff., air density, wing area</td></tr>
+        <tr class="sec"><td colspan="2">Set to zero to start</td></tr>
+        <tr class="zero"><td>ε = 0</td><td>thrust angle to the flight path (= α + engine incidence; a few deg, cos ε ≈ 1)</td></tr>
+        <tr class="zero"><td>φ = 0</td><td>runway slope (flat runway)</td></tr>
+        <tr class="zero"><td>w<sub>g</sub> = 0</td><td>vertical gust: along-runway wind only</td></tr>
+      </table>
+    </div>
+    <div class="box">
+      <h3>Discrete "1 − cos" gust</h3>
+      <div class="m" style="font-size:15px; line-height:1.75">
+        u<sub>w</sub>(t) = U<sub>0</sub> + ½U<sub>g</sub>[1 − cos(2π(t − t<sub>g</sub>)/T<sub>g</sub>)]<br>
+        u̇<sub>w</sub>(t) = (πU<sub>g</sub>/T<sub>g</sub>) sin(2π(t − t<sub>g</sub>)/T<sub>g</sub>)<br>
+        <span class="note" style="font-family: inherit">for t<sub>g</sub> ≤ t ≤ t<sub>g</sub> + T<sub>g</sub>; otherwise u<sub>w</sub> = U<sub>0</sub>, u̇<sub>w</sub> = 0</span>
+      </div>
+      <div class="note">U<sub>0</sub> steady wind · U<sub>g</sub> gust size (− for a tailwind gust) ·
+        T<sub>g</sub> duration · t<sub>g</sub> start time. One smooth bump: u<sub>w</sub> and u̇<sub>w</sub>
+        are continuous. U<sub>g</sub>, T<sub>g</sub>, t<sub>g</sub> are what we make random.</div>
+    </div>
+    <div class="box">
+      <h3>Putting it in the numerical solution</h3>
+      <ul class="tight" style="font-size:13.8px">
+        <li>u<sub>w</sub>(t) and u̇<sub>w</sub>(t) are closed-form functions of t, evaluated inside f(t, y).
+          RK4/RK45 are unchanged and no new states are needed.</li>
+        <li>Make the gust's start and end step boundaries, as we already do for events, and keep the step
+          below about T<sub>g</sub>/10.</li>
+        <li>Measure t from brake release, and use the same gust in the go and stop branches.</li>
+        <li>V<sub>EF</sub>, V1 and VR are airspeed events, so a gust can push the airspeed across V1 early.
+          The first crossing counts.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>3</span></div>
 </section>
 
 </body>
