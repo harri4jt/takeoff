@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>BFL – Phase 3 plan</title>
+<title>BFL – 11/20/26 update</title>
 <style>
   @page { size: 1280px 720px; margin: 0; }
   :root {
@@ -59,7 +59,7 @@
 
 <!-- ============================================================ 1: PHASE 3 SCOPE -->
 <section class="slide">
-  <h2>Phase 3: uncertainty in the inputs</h2>
+  <h2>11/20/26 update: uncertainty in the inputs</h2>
   <div class="s1">
     <div>
       <h3>What becomes random</h3>
@@ -83,7 +83,7 @@
     </div>
     <div>
       <div class="box">
-        <h3>Hand analysis: first-order sensitivity of the ground-roll acceleration</h3>
+        <h3>First-order sensitivity of the ground-roll acceleration</h3>
         <div class="sens m">
           <div class="row"><span>a = dV/dt =</span><span>[T − q̄S(C<sub>D</sub> − μC<sub>L</sub>) − μW] / m,&nbsp;&nbsp; q̄ = ½ρV<sub>a</sub><sup>2</sup></span></div>
           <div class="row"><span>∂a/∂T</span><span>= 1/m</span></div>
@@ -99,16 +99,24 @@
           ⇒&nbsp; dV1/dp = − (∂Δd/∂p) / (∂Δd/∂V1)
         </div>
         <div class="note">V1 hardly moves when an input shifts the go and stop distances by about the same
-          amount. The BFL itself can still move. To check by hand and by simulation.</div>
+          amount. The BFL itself can still move (below).</div>
       </div>
     </div>
   </div>
-  <div class="steps">
-    <div class="step"><b><span class="n">1</span>Derive by hand</b>Sensitivities of a, V1 and BFL to T, C<sub>L</sub>, C<sub>D</sub> and gusts.</div>
-    <div class="step"><b><span class="n">2</span>Monte Carlo</b>Sample the inputs, solve the BFL N times, compare the spread of V1 and BFL with step 1.</div>
-    <div class="step"><b><span class="n">3</span>Rank the inputs</b>Show which ones matter, and that the small ones really are small.</div>
+  <div class="ift" style="margin-top:16px; border-color: var(--faa)">
+    <h3 style="color: var(--faa)">From V1 to the BFL, and from input variance to output variance</h3>
+    <div class="m" style="font-size:16px; line-height:1.8">
+      BFL = d<sub>go</sub>(V1, p) = d<sub>stop</sub>(V1, p) &nbsp;⇒&nbsp;
+      dBFL/dp = w ∂d<sub>go</sub>/∂p + (1 − w) ∂d<sub>stop</sub>/∂p, &nbsp;&nbsp;
+      w = s/(s − g), &nbsp; g = ∂d<sub>go</sub>/∂V1 &lt; 0, &nbsp; s = ∂d<sub>stop</sub>/∂V1 &gt; 0<br>
+      σ<sub>BFL</sub><sup>2</sup> ≈ Σ<sub>i</sub> (dBFL/dp<sub>i</sub>)<sup>2</sup> σ<sub>i</sub><sup>2</sup>,
+      &nbsp;&nbsp; σ<sub>V1</sub><sup>2</sup> ≈ Σ<sub>i</sub> (dV1/dp<sub>i</sub>)<sup>2</sup> σ<sub>i</sub><sup>2</sup>
+      &nbsp;&nbsp;<span class="note">(small, independent inputs)</span>
+    </div>
+    <div class="note">V1 follows the <i>difference</i> of the go and stop sensitivities; the BFL follows their
+      <i>weighted average</i>. An input can leave V1 unchanged and still move the BFL.</div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · Phase 3 plan</span><span>1</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>1</span></div>
 </section>
 
 <!-- ============================================================ 2: GUSTS IN THE EOM -->
@@ -176,7 +184,7 @@
       </ul>
     </div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · Phase 3 plan</span><span>2</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>2</span></div>
 </section>
 
 </body>
