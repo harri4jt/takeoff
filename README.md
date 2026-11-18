@@ -54,14 +54,19 @@ sw = sweep_v1(cfg)                 # go/stop vs V1
 | `docs/methods/` | one page per numerical method + verification gallery (also served by the app) |
 | `docs/STUDY_GUIDE.md` | checklist for understanding the implementation |
 | `scripts/` | `run_example.py`, `make_verification_figures.py` |
-| `tools/` | `make_synthetic_widebody.py` (table generator) |
+| `tools/` | `make_synthetic_widebody.py`, `make_b747_tables.py`, `make_sr71_tables.py` (table generators) |
 | `tests/` | integrator, root finder, interpolation and physics tests |
 
 ## Aircraft
 
 * `generic_widebody_synthetic`: **synthetic, invented data** for a fictional 4-engine widebody.
-* `b747_100`: **template only**. Fill it in from NASA CR-114494 / CR-1756 (see its README).
-  Until then it fails validation on purpose.
+* `b747_100`: **real data** for the Boeing 747-100 (JT9D-3), digitized from NASA
+  CR-114494 and Boeing's airport-planning document. Flaps 10 and 20; sea level,
+  standard day only. Validated against Boeing's runway-length chart
+  (`scripts/validate_b747.py`, model 5–9% conservative). Sources in its README.
+* `sr71`: **real lift and thrust** for the Lockheed SR-71A from the declassified flight
+  manual (2-D thrust table vs airspeed and temperature, drag chute). Drag is
+  **estimated**. Sea-level pressure altitude, −38 to 40 °C. Sources in its README.
 
 To add an aircraft, make a folder with an `aircraft.yaml` (copy one of the existing
 ones), `aero_takeoff.csv` (`alpha_deg,CL,CD`), and optionally `thrust.csv`

@@ -235,3 +235,39 @@ def test_unbalanced_reported(base_cfg):
     assert not r.balanced
     assert r.v1_kts == pytest.approx(163.0, abs=1e-6)
     assert r.bfl_ft == pytest.approx(r.d_stop_ft)
+
+
+def test_clmax_override_sets_stall_speed(base_cfg, base_result):
+    """An explicit CLmax changes V_S as sqrt(CLmax_table / CLmax) and nothing else."""
+    table_max = build_model(base_cfg).aero.table.cl_max
+    cfg = base_cfg.with_updates({"aircraft.aero.CLmax": {"takeoff": 1.1 * table_max}})
+    vm = build_model(cfg)
+    assert vm.aero.cl_max == pytest.approx(1.1 * table_max)
+    r = compute_bfl(cfg)
+    assert r.v_s_kts == pytest.approx(base_result.v_s_kts / 1.1**0.5, rel=1e-9)
+    assert r.bfl_ft < base_result.bfl_ft  # lower V_S -> lower VR -> shorter
+
+
+def test_clmax_override_unknown_config_rejected(base_cfg):
+    with pytest.raises(ValueError):
+        base_cfg.with_updates({"aircraft.aero.CLmax": {"flaps99": 2.0}})
+
+
+def test_b747_loads_and_balances():
+    """The digitized 747-100 data load and give a balanced, plausible result."""
+    r = compute_bfl(load_config("b747_100"))
+    assert r.balanced
+    assert 7_000 < r.bfl_ft < 13_000
+    assert r.v2_over_vs >= 1.2 - 1e-9
+
+
+def test_sr71_loads_and_runs():
+    """SR-71 data load; the all-engines run matches the flight-test speeds (rotate ~180,
+    lift off ~200 KIAS at a 10 deg attitude); the hot-day 2-D thrust table is used."""
+    cfg = load_config("sr71", overrides={"environment.weight_lbf": 120_000.0})
+    r = compute_bfl(cfg)
+    assert 165 < r.vr_kts < 195 and 180 < r.v_lof_kts < 215
+    assert 4_000 < r.aeo_distance_ft < 9_000
+    assert r.chute_used
+    hot = compute_bfl(cfg.with_updates({"environment.temperature_F": 95.0}))
+    assert hot.aeo_distance_ft > r.aeo_distance_ft * 1.1  # less thrust on a hot day
