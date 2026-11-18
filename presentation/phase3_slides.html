@@ -26,7 +26,7 @@
   .new { color: var(--orange); font-weight: 600; }
 
   /* slide 1 */
-  .s1 { display: grid; grid-template-columns: 500px 1fr; gap: 26px; }
+  .s1 { display: grid; grid-template-columns: 540px 1fr; gap: 22px; }
   .inputs { width: 100%; border-collapse: collapse; font-size: 15px; }
   .inputs th { text-align: left; font-size: 12.5px; color: var(--muted); border-bottom: 2px solid var(--line); padding: 4px 6px; }
   .inputs td { border-bottom: 1px solid var(--line); padding: 7px 6px; vertical-align: top; line-height: 1.35; }
@@ -38,6 +38,10 @@
   .sens .row { display: grid; grid-template-columns: 170px 1fr; }
   .ift { margin-top: 12px; border: 2px solid var(--blue); border-radius: 12px; padding: 12px 18px; }
   .ift h3 { color: var(--blue); }
+  .question { background: #eaf2fc; border-left: 5px solid var(--blue); border-radius: 8px; padding: 10px 16px;
+              font-size: 19px; line-height: 1.4; margin: -4px 0 16px; }
+  .s1 .box + .ift, .s1 .box { margin-top: 0; }
+  .s1 > div > .ift { margin-top: 14px; }
   .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
   .step { border-radius: 12px; padding: 10px 14px; border: 1.5px solid var(--line); font-size: 14.5px; line-height: 1.4; }
   .step b { display: block; font-size: 15.5px; margin-bottom: 2px; }
@@ -57,64 +61,51 @@
 </head>
 <body>
 
-<!-- ============================================================ 1: PHASE 3 SCOPE -->
+<!-- ============================================================ 1: THE QUESTION -->
 <section class="slide">
-  <h2>11/20/26 update: uncertainty in the inputs</h2>
+  <h2>11/20/26 update: inputs that vary during the takeoff</h2>
+  <div class="question">
+    If thrust, lift and drag each fluctuate a little <i>over the course of a single takeoff</i>,
+    how large can those fluctuations be before the BFL changes noticeably?
+  </div>
   <div class="s1">
-    <div>
-      <h3>What becomes random</h3>
-      <table class="inputs">
-        <tr><th>Input</th><th>Model</th><th>In the code</th></tr>
-        <tr><td>Wind gusts</td>
-            <td>headwind u<sub>w</sub>(t) and updraft w<sub>g</sub>(t) that change during the run</td>
-            <td><span class="tag need">new equations →</span></td></tr>
-        <tr><td>Thrust</td>
-            <td><span class="m">T → (1 + ε<sub>T</sub>) T</span>, engine-to-engine scatter, wear</td>
-            <td><span class="tag need">add k<sub>T</sub></span></td></tr>
-        <tr><td>Lift</td>
-            <td><span class="m">C<sub>L</sub> → k<sub>CL</sub> C<sub>L</sub></span>, k<sub>CL</sub> ~ N(1, σ<sub>L</sub>)</td>
-            <td><span class="tag have">k_CL exists</span></td></tr>
-        <tr><td>Drag</td>
-            <td><span class="m">C<sub>D</sub> → k<sub>CD</sub> C<sub>D</sub></span>, k<sub>CD</sub> ~ N(1, σ<sub>D</sub>)</td>
-            <td><span class="tag have">k_CD exists</span></td></tr>
-      </table>
-      <p class="note" style="margin-top:10px">Thrust, lift and drag are random <i>constants</i> for one takeoff.
-        Gusts are random <i>functions of time</i>, so only they change the equations of motion.</p>
+    <div class="box">
+      <h3>Time-varying multipliers (one takeoff)</h3>
+      <div class="m" style="font-size:17px; line-height:1.9">
+        T(t) = [1 + ε<sub>T</sub>(t)] · T(V<sub>a</sub>)<br>
+        C<sub>L</sub>(t) = [1 + ε<sub>L</sub>(t)] · C<sub>L</sub>(α)<br>
+        C<sub>D</sub>(t) = [1 + ε<sub>D</sub>(t)] · C<sub>D</sub>(α)
+      </div>
+      <div class="note" style="margin-top:6px">ε<sub>i</sub>(t): zero mean, size σ<sub>i</sub>, and a correlation
+        time τ<sub>i</sub> that sets how fast it changes. Wind gusts u<sub>w</sub>(t), w<sub>g</sub>(t) are the
+        same kind of input and enter the equations of motion directly (next slide).</div>
+      <h3 style="margin-top:14px">Perturbation of the ground-roll acceleration</h3>
+      <div class="m" style="font-size:16.5px; line-height:1.8">
+        a = [T − q̄S(C<sub>D</sub> − μC<sub>L</sub>) − μW] / m<br>
+        m δa(t) = T ε<sub>T</sub>(t) − q̄S C<sub>D</sub> ε<sub>D</sub>(t) + μ q̄S C<sub>L</sub> ε<sub>L</sub>(t)
+      </div>
+      <div class="note">μ ≈ 0.03 rolling, ≈ 0.3 braking. Lift also sets the liftoff speed.</div>
     </div>
     <div>
       <div class="box">
-        <h3>First-order sensitivity of the ground-roll acceleration</h3>
-        <div class="sens m">
-          <div class="row"><span>a = dV/dt =</span><span>[T − q̄S(C<sub>D</sub> − μC<sub>L</sub>) − μW] / m,&nbsp;&nbsp; q̄ = ½ρV<sub>a</sub><sup>2</sup></span></div>
-          <div class="row"><span>∂a/∂T</span><span>= 1/m</span></div>
-          <div class="row"><span>∂a/∂C<sub>D</sub></span><span>= −q̄S/m</span></div>
-          <div class="row"><span>∂a/∂C<sub>L</sub></span><span>= μ q̄S/m&nbsp;&nbsp;<span class="note">(μ ≈ 0.03 rolling, ≈ 0.3 braking)</span></span></div>
-          <div class="row"><span>∂a/∂u<sub>w</sub></span><span>= [∂T/∂V<sub>a</sub> − ρV<sub>a</sub>S(C<sub>D</sub> − μC<sub>L</sub>)] / m</span></div>
+        <h3>From a fluctuation to a distance</h3>
+        <div class="m" style="font-size:17px; line-height:1.9">
+          d = ∫ V dV / a &nbsp;⇒&nbsp; δd = − ∫<sub>0</sub><sup>t<sub>f</sub></sup> (V / a) · δa(t) dt
         </div>
+        <div class="note">Each moment of the run is weighted by V/a. A fluctuation counts most where the
+          aircraft is fast and accelerating slowly, e.g. after the engine failure.</div>
       </div>
       <div class="ift">
-        <h3>Effect on V1 (implicit function theorem)</h3>
-        <div class="m" style="font-size:16.5px; line-height:1.7">
-          V1 solves &nbsp;Δd(V1, p) = d<sub>go</sub>(V1, p) − d<sub>stop</sub>(V1, p) = 0<br>
-          ⇒&nbsp; dV1/dp = − (∂Δd/∂p) / (∂Δd/∂V1)
+        <h3>From the two distances to V1 and the BFL</h3>
+        <div class="m" style="font-size:16.5px; line-height:1.85">
+          δV1 = − (δd<sub>go</sub> − δd<sub>stop</sub>) / (g − s)<br>
+          δBFL = w δd<sub>go</sub> + (1 − w) δd<sub>stop</sub>, &nbsp; w = s / (s − g)<br>
+          g = ∂d<sub>go</sub>/∂V1 &lt; 0, &nbsp; s = ∂d<sub>stop</sub>/∂V1 &gt; 0
         </div>
-        <div class="note">V1 hardly moves when an input shifts the go and stop distances by about the same
-          amount. The BFL itself can still move (below).</div>
+        <div class="note">V1 follows the <i>difference</i> of the two distance changes and the BFL their
+          <i>weighted average</i>. A fluctuation before V1 hits both branches.</div>
       </div>
     </div>
-  </div>
-  <div class="ift" style="margin-top:16px; border-color: var(--faa)">
-    <h3 style="color: var(--faa)">From V1 to the BFL, and from input variance to output variance</h3>
-    <div class="m" style="font-size:16px; line-height:1.8">
-      BFL = d<sub>go</sub>(V1, p) = d<sub>stop</sub>(V1, p) &nbsp;⇒&nbsp;
-      dBFL/dp = w ∂d<sub>go</sub>/∂p + (1 − w) ∂d<sub>stop</sub>/∂p, &nbsp;&nbsp;
-      w = s/(s − g), &nbsp; g = ∂d<sub>go</sub>/∂V1 &lt; 0, &nbsp; s = ∂d<sub>stop</sub>/∂V1 &gt; 0<br>
-      σ<sub>BFL</sub><sup>2</sup> ≈ Σ<sub>i</sub> (dBFL/dp<sub>i</sub>)<sup>2</sup> σ<sub>i</sub><sup>2</sup>,
-      &nbsp;&nbsp; σ<sub>V1</sub><sup>2</sup> ≈ Σ<sub>i</sub> (dV1/dp<sub>i</sub>)<sup>2</sup> σ<sub>i</sub><sup>2</sup>
-      &nbsp;&nbsp;<span class="note">(small, independent inputs)</span>
-    </div>
-    <div class="note">V1 follows the <i>difference</i> of the go and stop sensitivities; the BFL follows their
-      <i>weighted average</i>. An input can leave V1 unchanged and still move the BFL.</div>
   </div>
   <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>1</span></div>
 </section>
