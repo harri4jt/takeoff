@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BFL – Phase 3 plan</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  :root {
+    --ink: #0f1d2b; --muted: #4a5868; --line: #d7dee6; --soft: #f3f7fb;
+    --blue: #2a78d6; --orange: #eb6834; --green: #1baf7a; --red: #d7263d; --faa: #1f9d55;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Noto Sans", "DejaVu Sans", sans-serif; color: var(--ink); }
+  .slide { width: 1280px; height: 720px; position: relative; overflow: hidden; background: white;
+           padding: 40px 56px; page-break-after: always; break-after: page; }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+  h2 { margin: 0 0 18px; font-size: 32px; letter-spacing: -0.3px; }
+  h3 { margin: 0 0 8px; font-size: 16px; color: var(--muted); }
+  .foot { position: absolute; left: 56px; right: 56px; bottom: 16px; font-size: 12px; color: #8a96a3;
+          display: flex; justify-content: space-between; }
+  sub, sup { font-size: 70%; }
+  .m { font-family: "DejaVu Serif", serif; }
+  .box { background: var(--soft); border-radius: 12px; padding: 14px 18px; }
+  .note { font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+  .new { color: var(--orange); font-weight: 600; }
+
+  /* slide 1 */
+  .s1 { display: grid; grid-template-columns: 500px 1fr; gap: 26px; }
+  .inputs { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .inputs th { text-align: left; font-size: 12.5px; color: var(--muted); border-bottom: 2px solid var(--line); padding: 4px 6px; }
+  .inputs td { border-bottom: 1px solid var(--line); padding: 7px 6px; vertical-align: top; line-height: 1.35; }
+  .inputs td:first-child { font-weight: 700; white-space: nowrap; }
+  .tag { display: inline-block; font-size: 12px; border-radius: 999px; padding: 1px 8px; font-weight: 700; }
+  .tag.have { background: #e3f6ec; color: var(--faa); }
+  .tag.need { background: #fdebe2; color: var(--orange); }
+  .sens { font-size: 16px; line-height: 1.75; }
+  .sens .row { display: grid; grid-template-columns: 170px 1fr; }
+  .ift { margin-top: 12px; border: 2px solid var(--blue); border-radius: 12px; padding: 12px 18px; }
+  .ift h3 { color: var(--blue); }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+  .step { border-radius: 12px; padding: 10px 14px; border: 1.5px solid var(--line); font-size: 14.5px; line-height: 1.4; }
+  .step b { display: block; font-size: 15.5px; margin-bottom: 2px; }
+  .step .n { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: white;
+             text-align: center; line-height: 22px; font-size: 13px; margin-right: 6px; }
+
+  /* slide 2 */
+  .frame { display: grid; grid-template-columns: 270px 1fr; gap: 20px; align-items: stretch; margin-bottom: 14px; }
+  .eqs { display: grid; grid-template-columns: 330px 1fr; gap: 16px; }
+  .eqs .m { font-size: 15.5px; line-height: 1.9; white-space: nowrap; }
+  .eqs h4 { margin: 0 0 4px; font-size: 16px; }
+  .eqs h4 span { font-weight: 400; color: var(--muted); font-size: 13.5px; }
+  .bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 14px; }
+  .bottom ul { margin: 4px 0 0; padding-left: 18px; font-size: 14.5px; line-height: 1.45; }
+  .bottom li { margin: 3px 0; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ 1: PHASE 3 SCOPE -->
+<section class="slide">
+  <h2>Phase 3: uncertainty in the inputs</h2>
+  <div class="s1">
+    <div>
+      <h3>What becomes random</h3>
+      <table class="inputs">
+        <tr><th>Input</th><th>Model</th><th>In the code</th></tr>
+        <tr><td>Wind gusts</td>
+            <td>headwind u<sub>w</sub>(t) and updraft w<sub>g</sub>(t) that change during the run</td>
+            <td><span class="tag need">new equations →</span></td></tr>
+        <tr><td>Thrust</td>
+            <td><span class="m">T → (1 + ε<sub>T</sub>) T</span>, engine-to-engine scatter, wear</td>
+            <td><span class="tag need">add k<sub>T</sub></span></td></tr>
+        <tr><td>Lift</td>
+            <td><span class="m">C<sub>L</sub> → k<sub>CL</sub> C<sub>L</sub></span>, k<sub>CL</sub> ~ N(1, σ<sub>L</sub>)</td>
+            <td><span class="tag have">k_CL exists</span></td></tr>
+        <tr><td>Drag</td>
+            <td><span class="m">C<sub>D</sub> → k<sub>CD</sub> C<sub>D</sub></span>, k<sub>CD</sub> ~ N(1, σ<sub>D</sub>)</td>
+            <td><span class="tag have">k_CD exists</span></td></tr>
+      </table>
+      <p class="note" style="margin-top:10px">Thrust, lift and drag are random <i>constants</i> for one takeoff.
+        Gusts are random <i>functions of time</i>, so only they change the equations of motion.</p>
+    </div>
+    <div>
+      <div class="box">
+        <h3>Hand analysis: first-order sensitivity of the ground-roll acceleration</h3>
+        <div class="sens m">
+          <div class="row"><span>a = dV/dt =</span><span>[T − q̄S(C<sub>D</sub> − μC<sub>L</sub>) − μW] / m,&nbsp;&nbsp; q̄ = ½ρV<sub>a</sub><sup>2</sup></span></div>
+          <div class="row"><span>∂a/∂T</span><span>= 1/m</span></div>
+          <div class="row"><span>∂a/∂C<sub>D</sub></span><span>= −q̄S/m</span></div>
+          <div class="row"><span>∂a/∂C<sub>L</sub></span><span>= μ q̄S/m&nbsp;&nbsp;<span class="note">(μ ≈ 0.03 rolling, ≈ 0.3 braking)</span></span></div>
+          <div class="row"><span>∂a/∂u<sub>w</sub></span><span>= [∂T/∂V<sub>a</sub> − ρV<sub>a</sub>S(C<sub>D</sub> − μC<sub>L</sub>)] / m</span></div>
+        </div>
+      </div>
+      <div class="ift">
+        <h3>Effect on V1 (implicit function theorem)</h3>
+        <div class="m" style="font-size:16.5px; line-height:1.7">
+          V1 solves &nbsp;Δd(V1, p) = d<sub>go</sub>(V1, p) − d<sub>stop</sub>(V1, p) = 0<br>
+          ⇒&nbsp; dV1/dp = − (∂Δd/∂p) / (∂Δd/∂V1)
+        </div>
+        <div class="note">V1 hardly moves when an input shifts the go and stop distances by about the same
+          amount. The BFL itself can still move. To check by hand and by simulation.</div>
+      </div>
+    </div>
+  </div>
+  <div class="steps">
+    <div class="step"><b><span class="n">1</span>Derive by hand</b>Sensitivities of a, V1 and BFL to T, C<sub>L</sub>, C<sub>D</sub> and gusts.</div>
+    <div class="step"><b><span class="n">2</span>Monte Carlo</b>Sample the inputs, solve the BFL N times, compare the spread of V1 and BFL with step 1.</div>
+    <div class="step"><b><span class="n">3</span>Rank the inputs</b>Show which ones matter, and that the small ones really are small.</div>
+  </div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · Phase 3 plan</span><span>1</span></div>
+</section>
+
+<!-- ============================================================ 2: GUSTS IN THE EOM -->
+<section class="slide">
+  <h2>Wind gusts in the equations of motion</h2>
+  <div class="frame">
+    <div class="box">
+      <h3>Setup</h3>
+      <div class="note" style="font-size:14.5px; color:var(--ink)">
+        Wind velocity in the runway frame: <span class="m">w = (−u<sub>w</sub>(t), w<sub>g</sub>(t))</span><br>
+        u<sub>w</sub> = headwind (+), w<sub>g</sub> = updraft (+)<br>
+        ground velocity = air-relative velocity + w<br><br>
+        Newton applies to the <b>ground</b> velocity:<br>
+        <span class="m">m d/dt (V<sub>a</sub> e<sub>V</sub> + w) = F</span><br>
+        Project onto e<sub>V</sub> = (cos γ, sin γ) and e<sub>n</sub> = (−sin γ, cos γ).
+      </div>
+    </div>
+    <div class="box">
+      <div class="eqs">
+        <div>
+          <h4>Ground roll <span>y = [x, V], V = ground speed</span></h4>
+          <div class="m">
+            V<sub>a</sub> = V + <span class="new">u<sub>w</sub>(t)</span><br>
+            α = θ + <span class="new">w<sub>g</sub>/V<sub>a</sub></span><br>
+            m dV/dt = T cos ε − D − μF<sub>N</sub> − W sin φ<br>
+            F<sub>N</sub> = W cos φ − L − T sin ε<br>
+            dx/dt = V
+          </div>
+          <div class="note">V is already inertial, so there are no new derivative terms. Gusts enter only
+            through q̄ = ½ρV<sub>a</sub><sup>2</sup> and α.</div>
+        </div>
+        <div>
+          <h4>Airborne <span>y = [x, h, V<sub>a</sub>, γ], air-relative</span></h4>
+          <div class="m">
+            dx/dt = V<sub>a</sub> cos γ − <span class="new">u<sub>w</sub></span><br>
+            dh/dt = V<sub>a</sub> sin γ + <span class="new">w<sub>g</sub></span><br>
+            m dV<sub>a</sub>/dt = T cos ε − D − W sin γ <span class="new">+ m(u̇<sub>w</sub> cos γ − ẇ<sub>g</sub> sin γ)</span><br>
+            m V<sub>a</sub> dγ/dt = T sin ε + L − W cos γ <span class="new">− m(u̇<sub>w</sub> sin γ + ẇ<sub>g</sub> cos γ)</span><br>
+            α = θ − γ
+          </div>
+          <div class="note">A rising headwind adds airspeed with no thrust. An updraft lowers the
+            air-relative γ, which raises α and lift.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note" style="font-size:14px"><span class="new">Orange</span> = new terms. With a steady wind
+    (u̇<sub>w</sub> = ẇ<sub>g</sub> = 0, w<sub>g</sub> = 0) they vanish and the current model is recovered.</div>
+  <div class="bottom">
+    <div class="box">
+      <h3>Gust models</h3>
+      <ul>
+        <li><b>Discrete 1 − cos gust:</b> <span class="m">u<sub>w</sub> = U<sub>0</sub> + ½U<sub>g</sub>(1 − cos 2πt/T<sub>g</sub>)</span>, a single smooth bump.</li>
+        <li><b>Dryden turbulence:</b> white noise through a shaping filter with intensity σ<sub>u</sub> and length scale L<sub>u</sub>.
+          This is the standard random-gust model.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Numerical consequences</h3>
+      <ul>
+        <li>Generate each gust history first and interpolate it. The right-hand side then stays smooth and
+          deterministic, so RK45 and event location still work.</li>
+        <li>Use the <b>same</b> gust history in the go and stop branches, or the V1 secant solve sees noise.</li>
+        <li>The airspeed can cross V<sub>EF</sub>, V1 or VR more than once. The first crossing triggers the event.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · Phase 3 plan</span><span>2</span></div>
+</section>
+
+</body>
+</html>
