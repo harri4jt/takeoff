@@ -89,8 +89,18 @@ slope, N = 0 means `L + T sin ε = W cos φ` instead of `W`. That leaves a resid
 `dγ/dt ∝ W(cos φ − 1)` of order 10⁻⁵ rad/s, which is negligible.
 
 **Phase 3 note:** with a time-varying wind, `dV_a/dt` and `dγ/dt` gain wind-rate
-terms (`−dV_w/dt·cos γ` and similar), or the state must be rewritten in the ground
-frame. That change is confined to `air_terms` and `ground_to_air_state`.
+terms, or the state must be rewritten in the ground frame. With headwind `V_w(t)`
+(+ headwind) and updraft `w_g(t)` (+ up), Newton in the ground frame projected onto
+the air-relative path gives
+```
+dV_a/dt = (T·cos ε_T − D)/m − g·sin γ + dV_w/dt·cos γ − dw_g/dt·sin γ
+dγ/dt   = (T·sin ε_T + L)/(m·V_a) − g·cos γ / V_a − (dV_w/dt·sin γ + dw_g/dt·cos γ)/V_a
+dh/dt   = V_a·sin γ + w_g
+```
+A rising headwind adds airspeed (`+dV_w/dt·cos γ`). On the ground the equations keep
+their form, because V is already the ground speed; the wind enters only through
+`V_a = V + V_w` and `α = θ + w_g/V_a`. That change is confined to `air_terms` and
+`ground_to_air_state`.
 
 ## 6. Procedure (FAA Part 25 style)
 
