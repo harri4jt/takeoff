@@ -140,11 +140,16 @@
       <div class="note" style="text-align:center; margin-top:4px">our model at 710,000 lb (max takeoff weight)</div>
     </div>
     <div>
-      <img src="fig_b747_validation.svg" style="width: 100%;" alt="Boeing published vs model runway length">
+      <img src="fig_b747_validation.svg" style="width: 90%; display:block; margin: 0 auto;" alt="Boeing published vs model runway length">
       <ul class="tight">
         <li>Boeing publishes the <b>field length</b> = max(BFL, 1.15 × all-engines distance), so that is what we compare.
           Our model is <b>5–9% conservative</b> (asks for more runway).</li>
-        <li>Nothing was tuned to match. Likely causes of the gap: no ground effect in the model, our rolling-friction value (μ = 0.03), and the chart's slightly more powerful JT9D-3A engines.</li>
+        <li>Nothing was tuned to match. Likely causes of the gap:
+          <ul style="margin:2px 0 0; padding-left:18px">
+            <li>no ground effect in the model</li>
+            <li>assumed friction values don't match Boeing's</li>
+            <li>different engine versions (JT9D-3A for Boeing's published field lengths vs JT9D-3 in our model)</li>
+          </ul></li>
       </ul>
     </div>
   </div>
