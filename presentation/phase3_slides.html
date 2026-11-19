@@ -85,6 +85,16 @@
   .scan img { display: block; width: 100%; }
   .scan .cap { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.35; }
   .arrow { text-align: center; font-size: 14px; color: var(--blue); font-weight: 700; margin: 2px 0; }
+  .src-head { background: var(--soft); border-radius: 10px; padding: 8px 16px; font-size: 14.5px; line-height: 1.4; margin-bottom: 12px; }
+  .src-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .src-col { display: flex; flex-direction: column; align-items: center; }
+  .src-col h4 { margin: 0 0 6px; font-size: 18px; align-self: flex-start; }
+  .scan2 { height: 222px; width: 100%; display: flex; align-items: center; justify-content: center;
+           border: 1.5px solid var(--line); border-radius: 10px; background: white; padding: 6px; }
+  .scan2 img { max-height: 100%; max-width: 100%; display: block; }
+  .cap2 { font-size: 12px; color: var(--muted); margin-top: 4px; text-align: center; }
+  .down { font-size: 14px; color: var(--blue); font-weight: 700; margin: 2px 0; }
+  .plot2 { height: 205px; width: auto; max-width: 100%; display: block; }
 </style>
 </head>
 <body>
@@ -121,7 +131,7 @@
       </div>
       <div class="baseline"><b>New baseline aircraft data: Boeing 747-100.</b> The original "jumbo jet": it first
         flew in 1969 and held the record for the most passengers of any airliner for 37 years. The one pictured
-        is NASA's Shuttle Carrier, which flew the Space Shuttle on its back.</div>
+        is NASA's Shuttle Carrier.</div>
       <div class="kpis">
         <div class="kpi"><b>146 kt</b><span>V1</span></div>
         <div class="kpi"><b>158 kt</b><span>VR</span></div>
@@ -134,7 +144,7 @@
       <ul class="tight">
         <li>Boeing publishes the <b>field length</b> = max(BFL, 1.15 × all-engines distance), so that is what we compare.
           Our model is <b>5–9% conservative</b> (asks for more runway).</li>
-        <li>Nothing was tuned to match. Likely gap: no ground effect, rolling friction, slightly different engine version.</li>
+        <li>Nothing was tuned to match. Likely causes of the gap: no ground effect in the model, our rolling-friction value (μ = 0.03), and the chart's slightly more powerful JT9D-3A engines.</li>
       </ul>
     </div>
   </div>
@@ -144,30 +154,30 @@
 <!-- ============================================================ 3: DATA SOURCE -->
 <section class="slide">
   <h2>Where the 747 data comes from</h2>
-  <div class="s-grid">
-    <div class="scan">
-      <img src="src_cr114494_lift.png" alt="Boeing chart: lift coefficient vs angle of attack">
-      <div class="cap">Boeing chart 2.0-7, "Lift coefficient, effect of angle of attack" (one of the source pages)</div>
+  <div class="src-head"><b>NASA CR-114494 (1970)</b>, <i>The Simulation of a Jumbo Jet Transport Aircraft, Vol. II:
+    Modeling Data</i>: the data package Boeing gave NASA to build its 747 flight simulator, including the
+    FAA-approved flight manual. Free on NASA's technical reports server.</div>
+  <div class="src-cols">
+    <div class="src-col">
+      <h4>Lift</h4>
+      <div class="scan2"><img src="src_cr114494_lift.png" alt="Boeing chart 2.0-7, lift coefficient"></div>
+      <div class="cap2">Boeing chart 2.0-7</div>
+      <div class="down">↓ digitized</div>
+      <img class="plot2" src="fig_b747_cl.svg" alt="digitized lift coefficient">
     </div>
-    <div>
-      <div class="box" style="margin-bottom:10px; padding:8px 14px">
-        <div style="font-size:14.5px; line-height:1.4"><b>NASA CR-114494 (1970)</b>, <i>The Simulation of a Jumbo Jet
-          Transport Aircraft, Vol. II: Modeling Data</i>: the data package Boeing gave NASA to build its 747
-          flight simulator. Includes the FAA-approved flight manual. Free on NASA's technical reports server.</div>
-      </div>
-      <div style="display:grid; grid-template-columns: 310px 1fr; gap: 14px; align-items: center;">
-        <div class="scan">
-          <img src="src_cr114494_thrust.png" style="height:195px; width:auto; margin:0 auto;" alt="Boeing chart: installed net thrust of the JT9D-3">
-          <div class="cap">Boeing chart 12.2-3, installed JT9D-3 engine thrust</div>
-        </div>
-        <ul class="tight" style="font-size:14.5px">
-          <li><b>Lift and drag</b> vs angle of attack, flaps 10 and 20, plus landing-gear drag</li>
-          <li><b>Thrust</b> per engine vs speed at the flight-manual takeoff setting</li>
-          <li><b>Stall and control speeds</b> from the flight manual</li>
-        </ul>
-      </div>
-      <div class="arrow">↓ digitized from the 300-dpi scans into the model's tables</div>
-      <img src="fig_b747_data.svg" style="width: 100%; max-height: 225px; object-fit: contain;" alt="digitized lift, drag and thrust tables">
+    <div class="src-col">
+      <h4>Drag</h4>
+      <div class="scan2"><img src="src_cr114494_drag.png" alt="Boeing chart 3.0-5, drag coefficient"></div>
+      <div class="cap2">Boeing chart 3.0-5 (+ landing-gear drag, 3.0-15)</div>
+      <div class="down">↓ digitized</div>
+      <img class="plot2" src="fig_b747_cd.svg" alt="digitized drag coefficient">
+    </div>
+    <div class="src-col">
+      <h4>Thrust (JT9D-3 engine)</h4>
+      <div class="scan2"><img src="src_cr114494_thrust.png" alt="Boeing chart 12.2-3, installed net thrust"></div>
+      <div class="cap2">Boeing chart 12.2-3, at the flight-manual takeoff setting</div>
+      <div class="down">↓ digitized</div>
+      <img class="plot2" src="fig_b747_thrust.svg" alt="digitized thrust per engine">
     </div>
   </div>
   <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>3</span></div>

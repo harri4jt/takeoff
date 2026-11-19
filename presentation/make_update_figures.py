@@ -1,4 +1,4 @@
-"""Figures for the 11/20/26 update (presentation/fig_tailwind.svg, fig_b747_*.svg).
+"""Figures for the 11/20/26 update (presentation/fig_tailwind.svg, fig_b747_*.svg, fig_gust_shape.svg).
 
     python presentation/make_update_figures.py
 
@@ -119,26 +119,33 @@ def fig_b747_validation() -> None:
 
 
 def fig_b747_data() -> None:
+    """One small panel per table (lift, drag, thrust) for the data-source slide."""
     import pandas as pd
 
     d = OUT.parent / "aircraft" / "b747_100"
     f10 = pd.read_csv(d / "aero_flaps10.csv", comment="#")
     f20 = pd.read_csv(d / "aero_flaps20.csv", comment="#")
     th = pd.read_csv(d / "thrust.csv", comment="#")
-    fig, (a, b, c) = plt.subplots(1, 3, figsize=(11.0, 3.2))
-    for df, col, lab in ((f10, ORANGE, "flaps 10"), (f20, BLUE, "flaps 20")):
-        a.plot(df.alpha_deg, df.CL, "o-", color=col, ms=3.5, lw=1.8, label=lab)
-        b.plot(df.alpha_deg, df.CD, "o-", color=col, ms=3.5, lw=1.8, label=lab)
-    a.set(title="Lift coefficient", xlabel="α [deg]", ylabel="C$_L$")
-    b.set(title="Drag coefficient (incl. gear)", xlabel="α [deg]", ylabel="C$_D$")
-    a.legend(loc="lower right")
-    c.plot(th.airspeed_kts, th.thrust_lbf / 1e3, "o-", color=INK, ms=5, lw=1.8)
-    c.set(title="Thrust per engine", xlabel="true airspeed [kt]", ylabel="thrust [1000 lb]",
-          ylim=(30, 44))
+    size = (3.9, 2.55)
+
+    for col, ylab, name in (("CL", "C$_L$", "fig_b747_cl.svg"), ("CD", "C$_D$", "fig_b747_cd.svg")):
+        fig, ax = plt.subplots(figsize=size)
+        for df, c, lab in ((f10, ORANGE, "flaps 10"), (f20, BLUE, "flaps 20")):
+            ax.plot(df.alpha_deg, df[col], "o-", color=c, ms=3.2, lw=1.8, label=lab)
+        ax.set(xlabel="angle of attack α [deg]", ylabel=ylab)
+        ax.legend(loc="lower right" if col == "CL" else "upper left", fontsize=11)
+        fig.tight_layout()
+        fig.savefig(OUT / name, bbox_inches="tight", transparent=True)
+        plt.close(fig)
+        print("wrote", OUT / name)
+
+    fig, ax = plt.subplots(figsize=size)
+    ax.plot(th.airspeed_kts, th.thrust_lbf / 1e3, "o-", color=INK, ms=5, lw=1.8)
+    ax.set(xlabel="true airspeed [kt]", ylabel="thrust per engine [klb]", ylim=(30, 44))
     fig.tight_layout()
-    fig.savefig(OUT / "fig_b747_data.svg", bbox_inches="tight", transparent=True)
+    fig.savefig(OUT / "fig_b747_thrust.svg", bbox_inches="tight", transparent=True)
     plt.close(fig)
-    print("wrote", OUT / "fig_b747_data.svg")
+    print("wrote", OUT / "fig_b747_thrust.svg")
 
 
 def fig_gust_shape() -> None:
