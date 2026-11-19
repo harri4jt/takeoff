@@ -87,17 +87,27 @@ def fig_b747_validation() -> None:
     runs = [compute_bfl(load_config("b747_100", overrides={"environment.weight_lbf": k * 1e3}))
             for k in w]
     far = [r.faa_field_length_ft for r in runs]
+    bfl = [r.bfl_ft for r in runs]
+    nom = compute_bfl(load_config("b747_100"))  # default weight 710,000 lb
+    wn = 710
     fig, ax = plt.subplots(figsize=(7.0, 4.3))
     ax.fill_between(w, [p[1] for p in BOEING_SL], far, color=BLUE, alpha=0.10, lw=0)
     ax.plot(w, [p[1] for p in BOEING_SL], "o-", color=INK, lw=2.2, ms=6,
-            label="Boeing published (airport planning doc)")
-    ax.plot(w, far, "s-", color=BLUE, lw=2.4, ms=6, label="our model (FAA field length)")
+            label="Boeing published field length")
+    ax.plot(w + [wn], far + [nom.faa_field_length_ft], "s-", color=BLUE, lw=2.4, ms=6,
+            label="our model: field length")
+    ax.plot(w + [wn], bfl + [nom.bfl_ft], "--", color=BLUE, lw=1.6, alpha=0.7,
+            label="our model: BFL")
     for k, b, m in zip(w, [p[1] for p in BOEING_SL], far):
-        if k in (540, 620, 705):
+        if k in (540, 620):
             ax.annotate(f"{100 * (m / b - 1):+.0f}%", (k, m), (0, 10), textcoords="offset points",
                         ha="center", color=BLUE, fontweight="bold", fontsize=12)
+    ax.plot([wn], [nom.bfl_ft], "*", color=ORANGE, ms=19, zorder=6, mec="white", mew=1.2)
+    ax.annotate(f"710,000 lb (max takeoff)\nBFL {nom.bfl_ft:,.0f} ft", (wn, nom.bfl_ft), (716, 5300),
+                textcoords="data", color="#c4541f", fontweight="bold", fontsize=11.5, ha="right",
+                arrowprops=dict(arrowstyle="-", color=ORANGE))
     ax.set(xlabel="takeoff weight [1000 lb]", ylabel="runway length [ft]",
-           title="747-100, flaps 20, sea level, standard day", ylim=(4400, 10600))
+           title="747-100, flaps 20, sea level, standard day", ylim=(4400, 10600), xlim=(490, 720))
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:,.0f}"))
     ax.legend(loc="upper left")
     fig.tight_layout()

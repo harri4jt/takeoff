@@ -112,27 +112,28 @@
 
 <!-- ============================================================ 2: 747 BASELINE -->
 <section class="slide">
-  <h2>New baseline: a real Boeing 747-100</h2>
+  <h2>New baseline: Boeing 747-100</h2>
   <div class="b-grid">
     <div>
       <div class="photo">
         <img src="photo_747_sca905.jpg" alt="NASA Boeing 747-100 taking off from Edwards AFB">
         <div class="cred">NASA / Carla Thomas (public domain)</div>
       </div>
-      <div class="baseline">The invented "synthetic widebody" is replaced by a <b>real 747-100</b> with real
-        aerodynamic and engine data. This is the <b>baseline aircraft</b> for everything from here on,
-        including the wind-gust study.</div>
+      <div class="baseline"><b>New baseline aircraft data: Boeing 747-100.</b> The original "jumbo jet": it first
+        flew in 1969 and held the record for the most passengers of any airliner for 37 years. The one pictured
+        is NASA's Shuttle Carrier, which flew the Space Shuttle on its back.</div>
       <div class="kpis">
-        <div class="kpi"><b>710,000 lb</b><span>max takeoff weight</span></div>
-        <div class="kpi"><b>9,625 ft</b><span>BFL at 710,000 lb</span></div>
-        <div class="kpi"><b>146 / 158 / 161</b><span>V1 / VR / V2 [kt]</span></div>
+        <div class="kpi"><b>146 kt</b><span>V1</span></div>
+        <div class="kpi"><b>158 kt</b><span>VR</span></div>
+        <div class="kpi"><b>161 kt</b><span>V2</span></div>
       </div>
+      <div class="note" style="text-align:center; margin-top:4px">our model at 710,000 lb (max takeoff weight)</div>
     </div>
     <div>
-      <h3>Check against Boeing's published runway lengths</h3>
       <img src="fig_b747_validation.svg" style="width: 100%;" alt="Boeing published vs model runway length">
       <ul class="tight">
-        <li>Same trend over the whole weight range; the model is <b>5–9% conservative</b> (asks for more runway).</li>
+        <li>Boeing publishes the <b>field length</b> = max(BFL, 1.15 × all-engines distance), so that is what we compare.
+          Our model is <b>5–9% conservative</b> (asks for more runway).</li>
         <li>Nothing was tuned to match. Likely gap: no ground effect, rolling friction, slightly different engine version.</li>
       </ul>
     </div>
@@ -265,13 +266,13 @@
       <div class="m" style="font-size:14.5px; line-height:1.6">
         u<sub>w</sub>(t) = U<sub>0</sub> + ½U<sub>g</sub>[1 − cos(2π(t − t<sub>g</sub>)/T<sub>g</sub>)]
       </div>
-      <div class="note" style="font-size:12.5px">random: size U<sub>g</sub> · duration T<sub>g</sub> · start t<sub>g</sub></div>
+      <div class="note" style="font-size:12.5px">U<sub>0</sub> steady wind · random: size U<sub>g</sub> · duration T<sub>g</sub> · start t<sub>g</sub></div>
     </div>
     <div class="box">
       <h3>In the numerical solution</h3>
       <div class="flow">
-        <div class="st"><span class="n">1</span><span>Evaluate u<sub>w</sub>(t), u&#775;<sub>w</sub>(t) inside f(t, y): <b>RK4 / RK45 unchanged</b></span></div>
-        <div class="st"><span class="n">2</span><span>Gust start and end become <b>step boundaries</b></span></div>
+        <div class="st"><span class="n">1</span><span>Evaluate u<sub>w</sub>(t), u&#775;<sub>w</sub>(t) inside f(t, y): <b>RK4 unchanged</b></span></div>
+        <div class="st"><span class="n">2</span><span>Time steps land <b>exactly</b> on the gust start t<sub>g</sub> and end t<sub>g</sub> + T<sub>g</sub></span></div>
         <div class="st"><span class="n">3</span><span><b>Same gust</b> in the go and stop branches</span></div>
         <div class="st"><span class="n">4</span><span>V1 = <b>first</b> time the airspeed reaches it</span></div>
       </div>
