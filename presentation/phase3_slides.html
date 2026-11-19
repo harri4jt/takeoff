@@ -64,6 +64,27 @@
   .vars td:first-child { font-family: "DejaVu Serif", serif; white-space: nowrap; width: 58px; }
   .vars tr.sec td { font-weight: 700; color: var(--muted); padding-top: 5px; font-family: inherit; }
   .zero td { color: var(--muted); }
+  .flow { display: flex; flex-direction: column; gap: 7px; margin-top: 4px; }
+  .flow .st { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: center; font-size: 14.5px; line-height: 1.3; }
+  .flow .n { width: 24px; height: 24px; border-radius: 50%; background: var(--blue); color: white; font-weight: 700;
+             font-size: 13px; text-align: center; line-height: 24px; }
+
+  /* ---------- 747 baseline slides */
+  .b-grid { display: grid; grid-template-columns: 430px 1fr; gap: 24px; align-items: start; }
+  .photo { position: relative; border-radius: 12px; overflow: hidden; }
+  .photo img { display: block; width: 100%; }
+  .photo .cred { position: absolute; right: 8px; bottom: 6px; font-size: 10.5px; color: rgba(255,255,255,0.85); }
+  .baseline { margin-top: 14px; border-left: 5px solid var(--blue); background: #eaf2fc; border-radius: 8px;
+              padding: 10px 14px; font-size: 16px; line-height: 1.45; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+  .kpi { background: var(--soft); border-radius: 10px; padding: 8px 10px; text-align: center; }
+  .kpi b { display: block; font-size: 22px; color: var(--ink); }
+  .kpi span { font-size: 12.5px; color: var(--muted); }
+  .s-grid { display: grid; grid-template-columns: 330px 1fr; gap: 20px; }
+  .scan { border: 1.5px solid var(--line); border-radius: 10px; padding: 6px; background: white; }
+  .scan img { display: block; width: 100%; }
+  .scan .cap { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.35; }
+  .arrow { text-align: center; font-size: 14px; color: var(--blue); font-weight: 700; margin: 2px 0; }
 </style>
 </head>
 <body>
@@ -89,9 +110,71 @@
   <div class="runway"><div class="rw"></div><div class="keys"></div><div class="dash"></div></div>
 </section>
 
-<!-- ============================================================ 2: THE PROBLEM -->
+<!-- ============================================================ 2: 747 BASELINE -->
 <section class="slide">
-  <h2>Why wind matters: V1 barely moves, the BFL grows</h2>
+  <h2>New baseline: a real Boeing 747-100</h2>
+  <div class="b-grid">
+    <div>
+      <div class="photo">
+        <img src="photo_747_sca905.jpg" alt="NASA Boeing 747-100 taking off from Edwards AFB">
+        <div class="cred">NASA / Carla Thomas (public domain)</div>
+      </div>
+      <div class="baseline">The invented "synthetic widebody" is replaced by a <b>real 747-100</b> with real
+        aerodynamic and engine data. This is the <b>baseline aircraft</b> for everything from here on,
+        including the wind-gust study.</div>
+      <div class="kpis">
+        <div class="kpi"><b>710,000 lb</b><span>max takeoff weight</span></div>
+        <div class="kpi"><b>9,625 ft</b><span>BFL at 710,000 lb</span></div>
+        <div class="kpi"><b>146 / 158 / 161</b><span>V1 / VR / V2 [kt]</span></div>
+      </div>
+    </div>
+    <div>
+      <h3>Check against Boeing's published runway lengths</h3>
+      <img src="fig_b747_validation.svg" style="width: 100%;" alt="Boeing published vs model runway length">
+      <ul class="tight">
+        <li>Same trend over the whole weight range; the model is <b>5–9% conservative</b> (asks for more runway).</li>
+        <li>Nothing was tuned to match. Likely gap: no ground effect, rolling friction, slightly different engine version.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>2</span></div>
+</section>
+
+<!-- ============================================================ 3: DATA SOURCE -->
+<section class="slide">
+  <h2>Where the 747 data comes from</h2>
+  <div class="s-grid">
+    <div class="scan">
+      <img src="src_cr114494_lift.png" alt="Boeing chart: lift coefficient vs angle of attack">
+      <div class="cap">Boeing chart 2.0-7, "Lift coefficient, effect of angle of attack" (one of the source pages)</div>
+    </div>
+    <div>
+      <div class="box" style="margin-bottom:10px; padding:8px 14px">
+        <div style="font-size:14.5px; line-height:1.4"><b>NASA CR-114494 (1970)</b>, <i>The Simulation of a Jumbo Jet
+          Transport Aircraft, Vol. II: Modeling Data</i>: the data package Boeing gave NASA to build its 747
+          flight simulator. Includes the FAA-approved flight manual. Free on NASA's technical reports server.</div>
+      </div>
+      <div style="display:grid; grid-template-columns: 310px 1fr; gap: 14px; align-items: center;">
+        <div class="scan">
+          <img src="src_cr114494_thrust.png" style="height:195px; width:auto; margin:0 auto;" alt="Boeing chart: installed net thrust of the JT9D-3">
+          <div class="cap">Boeing chart 12.2-3, installed JT9D-3 engine thrust</div>
+        </div>
+        <ul class="tight" style="font-size:14.5px">
+          <li><b>Lift and drag</b> vs angle of attack, flaps 10 and 20, plus landing-gear drag</li>
+          <li><b>Thrust</b> per engine vs speed at the flight-manual takeoff setting</li>
+          <li><b>Stall and control speeds</b> from the flight manual</li>
+        </ul>
+      </div>
+      <div class="arrow">↓ digitized from the 300-dpi scans into the model's tables</div>
+      <img src="fig_b747_data.svg" style="width: 100%; max-height: 225px; object-fit: contain;" alt="digitized lift, drag and thrust tables">
+    </div>
+  </div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>3</span></div>
+</section>
+
+<!-- ============================================================ 4: THE PROBLEM -->
+<section class="slide">
+  <h2>Impact of wind</h2>
   <div class="tw-top">
     <img src="fig_tailwind.svg" style="width: 100%;" alt="airspeed and ground speed vs time, no wind and 15 kt tailwind">
     <div>
@@ -129,10 +212,10 @@
       </ul>
     </div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>2</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>4</span></div>
 </section>
 
-<!-- ============================================================ 3: GUSTS IN THE EOM -->
+<!-- ============================================================ 5: GUSTS IN THE EOM -->
 <section class="slide">
   <h2>Adding a gust to the equations of motion</h2>
   <div class="g-top">
@@ -140,8 +223,8 @@
       <h4>Ground roll <span>state y = [x, V], V = ground speed</span></h4>
       <div class="m">
         V<sub>a</sub> = V + <span class="new">u<sub>w</sub>(t)</span><br>
-        m dV/dt = T − D − μ(W − L)<br>
-        dx/dt = V
+        m V&#775; = T − D − μ(mg − L)<br>
+        x&#775; = V
       </div>
       <div class="note">V is already the ground (inertial) speed, so there are no new derivative terms.
         The gust only changes V<sub>a</sub>, and with it q̄ = ½ρV<sub>a</sub><sup>2</sup>, L, D and T.</div>
@@ -149,13 +232,13 @@
     <div class="box">
       <h4>Airborne <span>state y = [x, h, V<sub>a</sub>, γ], measured relative to the air</span></h4>
       <div class="m">
-        dx/dt = V<sub>a</sub> cos γ − <span class="new">u<sub>w</sub>(t)</span>,&nbsp;&nbsp; dh/dt = V<sub>a</sub> sin γ<br>
-        m dV<sub>a</sub>/dt = T − D − W sin γ <span class="new">+ m u̇<sub>w</sub> cos γ</span><br>
-        m V<sub>a</sub> dγ/dt = L − W cos γ <span class="new">− m u̇<sub>w</sub> sin γ</span>
+        x&#775; = V<sub>a</sub> cos γ − <span class="new">u<sub>w</sub>(t)</span>,&nbsp;&nbsp; h&#775; = V<sub>a</sub> sin γ<br>
+        m V&#775;<sub>a</sub> = T − D − mg sin γ <span class="new">+ m u&#775;<sub>w</sub> cos γ</span><br>
+        m V<sub>a</sub> γ&#775; = L − mg cos γ <span class="new">− m u&#775;<sub>w</sub> sin γ</span>
       </div>
       <div class="note">From Newton applied to the ground velocity (air-relative velocity + wind). A rising
         headwind adds airspeed without thrust; a rising tailwind takes it away.
-        <span class="new">Orange</span> = new terms; with u̇<sub>w</sub> = 0 we recover the current model.</div>
+        <span class="new">Orange</span> = new terms; with u&#775;<sub>w</sub> = 0 we recover the current model.</div>
     </div>
   </div>
   <div class="g-bot">
@@ -165,41 +248,36 @@
         <tr><td>x, h</td><td>distance along runway, height [ft]</td></tr>
         <tr><td>V, V<sub>a</sub></td><td>ground speed, airspeed [ft/s]</td></tr>
         <tr><td>γ</td><td>flight-path angle (relative to the air)</td></tr>
-        <tr><td>u<sub>w</sub>(t)</td><td>headwind (+), tailwind (−) [ft/s]</td></tr>
+        <tr><td>u<sub>w</sub>(t)</td><td>wind along the runway: headwind (+), tailwind (−)</td></tr>
         <tr><td>T, D, L</td><td>thrust; drag, lift = q̄S·C<sub>D</sub>, q̄S·C<sub>L</sub></td></tr>
-        <tr><td>W, m</td><td>weight; mass = W/g</td></tr>
+        <tr><td>m, g</td><td>mass, gravity (weight = mg)</td></tr>
         <tr><td>μ, ρ, S</td><td>friction coeff., air density, wing area</td></tr>
-        <tr class="sec"><td colspan="2">Set to zero to start</td></tr>
-        <tr class="zero"><td>ε = 0</td><td>thrust angle to the flight path (= α + engine incidence; a few deg, cos ε ≈ 1)</td></tr>
-        <tr class="zero"><td>φ = 0</td><td>runway slope (flat runway)</td></tr>
-        <tr class="zero"><td>w<sub>g</sub> = 0</td><td>vertical gust: along-runway wind only</td></tr>
+        <tr class="sec"><td colspan="2">Assumptions</td></tr>
+        <tr class="zero"><td>u<sub>w</sub> &lt; 0</td><td><b style="color:var(--orange)">tailwinds only</b>: they lengthen the runway</td></tr>
+        <tr class="zero"><td>ε = 0</td><td>thrust along the flight path (cos ε ≈ 1)</td></tr>
+        <tr class="zero"><td>φ = 0</td><td>flat runway (no slope)</td></tr>
+        <tr class="zero"><td>w<sub>g</sub> = 0</td><td>no vertical gusts</td></tr>
       </table>
     </div>
     <div class="box">
       <h3>Discrete "1 − cos" gust</h3>
-      <div class="m" style="font-size:15px; line-height:1.75">
-        u<sub>w</sub>(t) = U<sub>0</sub> + ½U<sub>g</sub>[1 − cos(2π(t − t<sub>g</sub>)/T<sub>g</sub>)]<br>
-        u̇<sub>w</sub>(t) = (πU<sub>g</sub>/T<sub>g</sub>) sin(2π(t − t<sub>g</sub>)/T<sub>g</sub>)<br>
-        <span class="note" style="font-family: inherit">for t<sub>g</sub> ≤ t ≤ t<sub>g</sub> + T<sub>g</sub>; otherwise u<sub>w</sub> = U<sub>0</sub>, u̇<sub>w</sub> = 0</span>
+      <img src="fig_gust_shape.svg" style="width: 100%; display:block; margin: -2px 0 2px;" alt="1 - cos gust shape">
+      <div class="m" style="font-size:14.5px; line-height:1.6">
+        u<sub>w</sub>(t) = U<sub>0</sub> + ½U<sub>g</sub>[1 − cos(2π(t − t<sub>g</sub>)/T<sub>g</sub>)]
       </div>
-      <div class="note">U<sub>0</sub> steady wind · U<sub>g</sub> gust size (− for a tailwind gust) ·
-        T<sub>g</sub> duration · t<sub>g</sub> start time. One smooth bump: u<sub>w</sub> and u̇<sub>w</sub>
-        are continuous. U<sub>g</sub>, T<sub>g</sub>, t<sub>g</sub> are what we make random.</div>
+      <div class="note" style="font-size:12.5px">random: size U<sub>g</sub> · duration T<sub>g</sub> · start t<sub>g</sub></div>
     </div>
     <div class="box">
-      <h3>Putting it in the numerical solution</h3>
-      <ul class="tight" style="font-size:13.8px">
-        <li>u<sub>w</sub>(t) and u̇<sub>w</sub>(t) are closed-form functions of t, evaluated inside f(t, y).
-          RK4/RK45 are unchanged and no new states are needed.</li>
-        <li>Make the gust's start and end step boundaries, as we already do for events, and keep the step
-          below about T<sub>g</sub>/10.</li>
-        <li>Measure t from brake release, and use the same gust in the go and stop branches.</li>
-        <li>V<sub>EF</sub>, V1 and VR are airspeed events, so a gust can push the airspeed across V1 early.
-          The first crossing counts.</li>
-      </ul>
+      <h3>In the numerical solution</h3>
+      <div class="flow">
+        <div class="st"><span class="n">1</span><span>Evaluate u<sub>w</sub>(t), u&#775;<sub>w</sub>(t) inside f(t, y): <b>RK4 / RK45 unchanged</b></span></div>
+        <div class="st"><span class="n">2</span><span>Gust start and end become <b>step boundaries</b></span></div>
+        <div class="st"><span class="n">3</span><span><b>Same gust</b> in the go and stop branches</span></div>
+        <div class="st"><span class="n">4</span><span>V1 = <b>first</b> time the airspeed reaches it</span></div>
+      </div>
     </div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>3</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/20/26 update</span><span>5</span></div>
 </section>
 
 </body>
