@@ -1,6 +1,6 @@
 """Run one BFL computation, print the summary and save figures to output/.
 
-python scripts/run_example.py                         # synthetic widebody
+python scripts/run_example.py                         # Boeing 747-100
 python scripts/run_example.py --aircraft <name> --headwind 10 --kcl 1.1
 """
 
@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument("--aircraft", default="generic_widebody_synthetic")
+    ap.add_argument("--aircraft", default="b747_100")
     ap.add_argument("--run-yaml", default=None, help="optional YAML with run settings")
     ap.add_argument("--kcl", type=float, default=None, help="CL multiplier")
     ap.add_argument("--kcd", type=float, default=None, help="CD multiplier")

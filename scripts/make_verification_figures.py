@@ -270,7 +270,7 @@ def fig5_ground_roll() -> None:
 
 
 def fig6_and_physics() -> None:
-    cfg = load_config("generic_widebody_synthetic")
+    cfg = load_config(ROOT / "tests" / "data" / "generic_widebody_synthetic")
     res = compute_bfl(cfg)
     sw = sweep_v1(cfg, n=21, k_vr=res.k_VR)
     ax = bfl_chart(sw, res)
@@ -342,7 +342,7 @@ def fig6_and_physics() -> None:
 
 def fig8_spline() -> None:
     """Hand-written natural cubic spline (Thomas solve) vs scipy on the synthetic CL table."""
-    path = ROOT / "aircraft" / "generic_widebody_synthetic" / "aero_takeoff.csv"
+    path = ROOT / "tests" / "data" / "generic_widebody_synthetic" / "aero_takeoff.csv"
     df = read_csv_table(path, ["alpha_deg", "CL", "CD"])
     x, y = df["alpha_deg"].to_numpy(float), df["CL"].to_numpy(float)
     ours = Interpolator1D(x, y, "cubic")

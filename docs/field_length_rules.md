@@ -2,10 +2,22 @@
 
 The tool can compute the runway two ways. **FAA Part 25** gives the *balanced field
 length* (BFL) used for civil transports. **MIL-STD-3013** gives the *critical field length*
-(CFL) used for military aircraft. Pick one with the **Field-length rules** switch (or
-`procedure.rules: part25 | mil3013` in a run file). The two use the same physics. What
-differs is the timing of the crew's actions, what counts as the end of the takeoff, and
-which margins are added.
+(CFL) used for military aircraft. The rule set is an **aircraft setting**: civil or
+military is a property of the program, not of one takeoff. Set it in `aircraft.yaml`
+(or in the aircraft builder):
+
+```yaml
+certification:
+  rules: mil3013     # part25 | mil3013
+  t_recog_s: 3.0     # optional: engine failure -> action delay (blank = rule default)
+```
+
+A run file can still override it with `procedure.rules`. The two rule sets use the same
+physics. What differs is the timing of the crew's actions, what counts as the end of the
+takeoff, and which margins are added.
+
+**Naming.** The app calls the result **BFL** under both rule sets, for consistency.
+Under MIL-STD-3013 the number is the critical field length.
 
 ## Side by side
 
@@ -25,8 +37,8 @@ which margins are added.
 
 Every one of these is an input. The rule set only supplies **defaults**. For example, the
 3-s recognition delay is the standard's default, and a program may argue for a different
-number (§3.2.10.2). Type it into **Engine failure → action delay**, or set
-`procedure.t_recog_s`.
+number (§3.2.10.2). Set `certification.t_recog_s` in the aircraft file (or
+`procedure.t_recog_s` in a run file).
 
 ## How it maps onto the solver
 
@@ -49,9 +61,11 @@ the same answer as a Part 25 run with those values typed in by hand.
 ## Runway condition presets
 
 MIL-STD-3013 §3.2.14 and Table II give friction values. The **Runway condition** dropdown
-fills both sliders from this table, and they stay editable. They apply under either rule set.
+fills both sliders with the rolling and braked values (without anti-skid), and they stay
+editable. They apply under either rule set. The table's anti-skid column is listed for
+reference only. To use it, type the value into the braking slider.
 
-| Condition | RCR | Rolling | Braked | Braked, anti-skid |
+| Condition | RCR | Rolling | Braked (used) | Braked, anti-skid (reference) |
 |---|---|---|---|---|
 | Dry | 23 | 0.025 (0.015 radial) | 0.30 | 0.38 (0.33 brake-limited) |
 | Wet | 15 | 0.050 | 0.20 | 0.25 |

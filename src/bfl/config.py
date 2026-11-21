@@ -38,13 +38,13 @@ class EnginesConfig(_Model):
     n_engines: int = Field(ge=1)
     thrust_mode: Literal["constant", "table"] = "constant"
     thrust_per_engine_lbf: float | None = Field(default=None, gt=0)
-    thrust_table: str | None = Field(
-        default=None, description="CSV file in the aircraft dir used for this run"
-    )
     thrust_tables: dict[str, str] = Field(
         default_factory=dict,
-        description="optional named alternatives (name -> CSV), e.g. different engines or "
-        "ratings; selectable in the app and compared in the trade study",
+        description="thrust tables (name -> CSV in the aircraft dir), e.g. different engines "
+        "or ratings; selectable in the app and compared in the trade study",
+    )
+    thrust_table: str | None = Field(
+        default=None, description="name of the default thrust table (a key of thrust_tables)"
     )
     idle_thrust_per_engine_lbf: float = Field(ge=0)
     thrust_incidence_deg: float = Field(
@@ -57,23 +57,49 @@ class EnginesConfig(_Model):
         "A tsfc_per_hr column in the thrust CSV overrides it",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_thrust_file(cls, data: Any) -> Any:
+        """Older files gave ``thrust_table: thrust.csv`` (a file, not a name): register it
+        under its stem so both forms load the same way."""
+        if isinstance(data, dict):
+            t = data.get("thrust_table")
+            tables = dict(data.get("thrust_tables") or {})
+            if t and t not in tables:
+                if str(t).lower().endswith(".csv"):
+                    name = next((k for k, v in tables.items() if v == t), Path(t).stem)
+                    tables.setdefault(name, t)
+                    data = {**data, "thrust_tables": tables, "thrust_table": name}
+            elif not t and len(tables) >= 1:
+                data = {**data, "thrust_table": next(iter(tables))}
+        return data
+
     @model_validator(mode="after")
     def _mode_fields(self) -> EnginesConfig:
         if self.thrust_mode == "constant" and self.thrust_per_engine_lbf is None:
             raise ValueError("thrust_mode 'constant' needs thrust_per_engine_lbf")
-        if self.thrust_mode == "table" and not self.thrust_table:
-            raise ValueError("thrust_mode 'table' needs thrust_table")
+        if self.thrust_mode == "table":
+            if not self.thrust_tables:
+                raise ValueError("thrust_mode 'table' needs thrust_tables (name: file.csv)")
+            if self.thrust_table not in self.thrust_tables:
+                raise ValueError(f"default thrust table '{self.thrust_table}' not listed")
         return self
 
+    @property
+    def thrust_file(self) -> str | None:
+        """CSV of the selected thrust table (None in constant-thrust mode)."""
+        if self.thrust_mode != "table":
+            return None
+        return self.thrust_tables[str(self.thrust_table)]
+
     def thrust_options(self) -> dict[str, str]:
-        """All selectable thrust tables (name -> CSV), the run's own table first."""
-        out: dict[str, str] = {}
-        if self.thrust_table:
-            name = next((k for k, v in self.thrust_tables.items() if v == self.thrust_table), None)
-            out[name or Path(self.thrust_table).stem] = self.thrust_table
-        for k, v in self.thrust_tables.items():
-            if v not in out.values():
-                out[k] = v
+        """All thrust tables (name -> CSV), the selected one first."""
+        out = (
+            {self.thrust_table: self.thrust_tables[self.thrust_table]}
+            if (self.thrust_table in self.thrust_tables)
+            else {}
+        )
+        out.update({k: v for k, v in self.thrust_tables.items() if k not in out})
         return out
 
 
@@ -87,8 +113,13 @@ class AttitudeConfig(_Model):
 
 
 class AeroConfig(_Model):
-    configurations: dict[str, str] = Field(description="config name -> CSV file")
-    takeoff_configuration: str = "takeoff"
+    configurations: dict[str, str] = Field(
+        description="aero tables (name -> CSV in the aircraft dir), e.g. flap settings; "
+        "selectable in the app and compared in the trade study"
+    )
+    takeoff_configuration: str = Field(
+        default="takeoff", description="name of the default aero table (a key of configurations)"
+    )
     delta_CD_engine_out: float = Field(default=0.0, ge=0)
     CLmax: dict[str, float] = Field(
         default_factory=dict,
@@ -157,6 +188,21 @@ class GearConfig(_Model):
     max_brake_energy_MJ: float | None = Field(default=None, gt=0, description="whole aircraft")
 
 
+RuleSet = Literal["part25", "mil3013"]
+
+
+class CertificationConfig(_Model):
+    """Which field-length rules the aircraft is designed to (a property of the program)."""
+
+    rules: RuleSet = Field(default="part25", description="part25 (civil) or mil3013 (military)")
+    t_recog_s: float | None = Field(
+        default=None,
+        ge=0,
+        description="engine failure -> action delay; None -> rule default (Part 25: 1 s to V1, "
+        "MIL-STD-3013: 3 s to brakes). Programs may argue their own value",
+    )
+
+
 class AircraftConfig(_Model):
     name: str
     synthetic: bool = False
@@ -171,6 +217,7 @@ class AircraftConfig(_Model):
     speeds: SpeedsConfig = SpeedsConfig()
     ground_effect: GroundEffectConfig = GroundEffectConfig()
     gear: GearConfig = GearConfig()
+    certification: CertificationConfig = CertificationConfig()
     directory: str = Field(default="", description="filled by the loader")
 
 
@@ -196,8 +243,6 @@ class EnvironmentConfig(_Model):
             raise ValueError("give temperature_F or isa_delta_F, not both")
         return self
 
-
-RuleSet = Literal["part25", "mil3013"]
 
 # Values a rule set supplies when the corresponding procedure field is left at None.
 # Part 25: 14 CFR 25.107/109/113. MIL: MIL-STD-3013 (2003, 2008-A) sec. 3.2.10, with the
@@ -233,8 +278,16 @@ RULE_PRESETS: dict[str, dict[str, Any]] = {
 class ProcedureConfig(_Model):
     """Takeoff procedure. Fields left at None take the value of the chosen rule set."""
 
-    rules: RuleSet = Field(default="part25", description="part25 (BFL) or mil3013 (CFL)")
+    rules: RuleSet | None = Field(
+        default=None, description="part25 / mil3013; None -> aircraft.certification.rules"
+    )
     k_VR: float = Field(default=1.10, gt=1.0, description="VR / V_S")
+    optimize_vr: bool = Field(
+        default=False,
+        description="choose the k_VR (>= the legal minimum) that minimizes the field length; "
+        "see docs/rotation_speed.md",
+    )
+    k_VR_max: float = Field(default=1.6, gt=1.0, description="upper bound of the VR search")
     rotation_rate_deg_s: float = Field(default=3.0, gt=0)
     tailstrike_margin_deg: float = Field(default=1.0, ge=0)
     screen_height_ft: float | None = Field(default=None, gt=0, description="35 / 50 ft")
@@ -263,11 +316,17 @@ class ProcedureConfig(_Model):
         default=None, description="None -> rule default (Part 25: aircraft default; MIL: off)"
     )
 
-    def resolved(self) -> ProcedureConfig:
-        """Copy with every None filled from the rule-set preset."""
-        preset = RULE_PRESETS[self.rules]
+    def resolved(
+        self, rules: RuleSet = "part25", t_recog_s: float | None = None
+    ) -> ProcedureConfig:
+        """Copy with every None filled: the rule set from ``rules`` (the aircraft's), then
+        the delay from ``t_recog_s`` (the aircraft's), then the rule-set preset."""
         data = self.model_dump()
-        for k, v in preset.items():
+        if data["rules"] is None:
+            data["rules"] = rules
+        if data["t_recog_s"] is None and t_recog_s is not None:
+            data["t_recog_s"] = t_recog_s
+        for k, v in RULE_PRESETS[data["rules"]].items():
             if data.get(k) is None:
                 data[k] = v
         return ProcedureConfig.model_validate(data)
@@ -335,12 +394,14 @@ class RunConfig(_Model):
 
     @property
     def chute_active(self) -> bool:
-        flag = self.procedure.resolved().chute_enabled
+        flag = self.resolved().procedure.chute_enabled
         return self.aircraft.chute.enabled if flag is None else flag
 
     def resolved(self) -> RunConfig:
-        """Copy with the rule-set defaults filled into the procedure (idempotent)."""
-        return self.model_copy(update={"procedure": self.procedure.resolved()})
+        """Copy with the aircraft's rule set and delay, then the rule-set defaults, filled
+        into the procedure (idempotent)."""
+        c = self.aircraft.certification
+        return self.model_copy(update={"procedure": self.procedure.resolved(c.rules, c.t_recog_s)})
 
 
 # ------------------------------------------------------------------------------------

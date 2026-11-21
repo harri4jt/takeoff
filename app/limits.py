@@ -46,6 +46,8 @@ def warnings(scalars: dict[str, Any], own: dict[str, Any] | None = None) -> list
         if not ac.get("warn"):
             continue
         for key, meta in data["metrics"].items():
+            if not (meta or {}).get("warn", True):
+                continue
             ref, val = ac.get(key), scalars.get(key)
             if ref is None or val is None:
                 continue

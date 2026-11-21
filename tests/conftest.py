@@ -7,7 +7,8 @@ import yaml
 
 from bfl import compute_bfl, load_config
 
-SYNTH = "generic_widebody_synthetic"
+# test-only aircraft (not in aircraft/, so the app never lists it)
+SYNTH = str(Path(__file__).resolve().parent / "data" / "generic_widebody_synthetic")
 
 
 @pytest.fixture(scope="session")

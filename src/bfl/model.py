@@ -112,7 +112,7 @@ def build_model(cfg: RunConfig) -> VehicleModel:
     if eng.thrust_mode == "constant":
         thrust = ConstantThrust(float(eng.thrust_per_engine_lbf))
     else:
-        path = d / str(eng.thrust_table)
+        path = d / str(eng.thrust_file)
         thrust = load_thrust_table(path, sol.interpolation, sol.out_of_range)
         tsfc = load_tsfc_column(path, sol.interpolation, sol.out_of_range)
     if tsfc is None and eng.tsfc_per_hr > 0.0:

@@ -25,16 +25,15 @@ from . import builder, compute, datapages, figures, limits, pages, trade  # noqa
 
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_AIRCRAFT = "b747_100"
-SYNTHETIC_AIRCRAFT = {"generic_widebody_synthetic"}
 
-# MIL-STD-3013 Table II (dry value for bias-ply tyres): (rolling, braked, braked w/ anti-skid)
+# MIL-STD-3013 Table II (braked values without anti-skid): (label, rolling, braked)
 RUNWAY_CONDITIONS = {
-    "dry": ("Dry (RCR 23)", 0.025, 0.30, 0.38),
-    "wet": ("Wet (RCR 15)", 0.050, 0.20, 0.25),
-    "wet_snow": ("Wet snow (RCR 11)", 0.090, 0.14, 0.18),
-    "wet_ice": ("Wet ice (RCR 7)", 0.050, 0.09, 0.12),
+    "dry": ("Dry (RCR 23)", 0.025, 0.30),
+    "wet": ("Wet (RCR 15)", 0.050, 0.20),
+    "wet_snow": ("Wet snow (RCR 11)", 0.090, 0.14),
+    "wet_ice": ("Wet ice (RCR 7)", 0.050, 0.09),
 }
-RULE_DELAY = {"part25": 1.0, "mil3013": 3.0}
+RULE_NAMES = {"part25": "FAA Part 25", "mil3013": "MIL-STD-3013"}
 TITLE = "Takeoff Performance Explorer"
 HIDDEN = {"display": "none"}
 GRAPH_CFG = {"displaylogo": False, "responsive": True}
@@ -171,14 +170,20 @@ def section(title: str, children: list) -> html.Div:
     )
 
 
-def aircraft_options(show_synthetic: bool) -> list[dict]:
+def collapsible(title: str, children: list, open_: bool = False) -> html.Details:
+    return html.Details(
+        className="ctl-section adv",
+        open=open_,
+        children=[html.Summary(title, className="sec-title"), *children],
+    )
+
+
+def aircraft_options(*_ignored) -> list[dict]:
     try:
         names = list_aircraft()
     except FileNotFoundError:
         names = []
-    return [
-        {"label": n, "value": n} for n in names if show_synthetic or n not in SYNTHETIC_AIRCRAFT
-    ]
+    return [{"label": n, "value": n} for n in names]
 
 
 def labeled(label: str, child, unit: str = "", row_id: str | None = None, hint: str = ""):
@@ -191,61 +196,76 @@ def labeled(label: str, child, unit: str = "", row_id: str | None = None, hint: 
     return html.Div(className="ctl-row", id=row_id or f"row-{id(child)}", children=kids)
 
 
+AIRCRAFT_OUTPUTS = (
+    "weight", "aircraft-note", "thrust-table.options", "thrust-table", "aero-config.options",
+    "aero-config", "row-tables", "ground-effect.options", "ground-effect", "chute.options",
+    "chute",
+)  # fmt: skip
+
+
+def aircraft_ui(name: str | None) -> tuple:
+    """Everything the Aircraft section shows for one aircraft (order: AIRCRAFT_OUTPUTS).
+    Used by the callback and to build the initial layout, so the first automatic run
+    already uses the default aircraft's settings."""
+    ge_off = [{"label": " Ground effect (Raymer)", "value": "on", "disabled": True}]
+    chute_off = [{"label": " Drag chute", "value": "on", "disabled": True}]
+    try:
+        ac = load_aircraft(name)
+    except Exception as exc:  # noqa: BLE001
+        return (
+            None,
+            f"Cannot load this aircraft (incomplete template?): {exc.__class__.__name__}",
+            [], None, [], None, HIDDEN, ge_off, [], chute_off, [],
+        )  # fmt: skip
+    cert = ac.certification
+    mil = cert.rules == "mil3013"
+    delay = cert.t_recog_s if cert.t_recog_s is not None else (3.0 if mil else 1.0)
+    note = f"Rules: {RULE_NAMES[cert.rules]} · {delay:g} s engine-failure delay (aircraft settings)"
+    if ac.synthetic:
+        note = "SYNTHETIC data: not a real airplane · " + note
+    t_opts = [{"label": k, "value": k} for k in ac.engines.thrust_options()]
+    a_opts = [{"label": k, "value": k} for k in ac.aero.configurations]
+    ge = ac.ground_effect
+    has_geo = ge.span_ft is not None and ge.wing_height_ft is not None
+    ge_opts = [
+        {
+            "label": " Ground effect (Raymer)" + ("" if has_geo else ": needs span & wing height"),
+            "value": "on",
+            "disabled": not has_geo,
+        }
+    ]
+    has_chute = ac.chute.area_ft2 > 0 and ac.chute.CD > 0
+    chute_opts = [
+        {
+            "label": " Drag chute" + ("" if mil else " (outside Part 25)"),
+            "value": "on",
+            "disabled": not has_chute,
+        }
+    ]
+    return (
+        ac.weight.default_weight_lbf,
+        note,
+        t_opts,
+        ac.engines.thrust_table if t_opts else None,
+        a_opts,
+        ac.aero.takeoff_configuration,
+        {} if max(len(t_opts), len(a_opts)) > 1 else HIDDEN,
+        ge_opts,
+        ["on"] if ge.enabled else [],
+        chute_opts,
+        ["on"] if (has_chute and ac.chute.enabled and not mil) else [],
+    )
+
+
 def controls() -> html.Div:
-    opts = aircraft_options(False)
+    opts = aircraft_options()
     names = [o["value"] for o in opts]
     default = DEFAULT_AIRCRAFT if DEFAULT_AIRCRAFT in names else (names[0] if names else None)
+    init = dict(zip(AIRCRAFT_OUTPUTS, aircraft_ui(default), strict=True))
     return html.Div(
         className="card sidebar",
         children=[
             html.H3("Inputs"),
-            html.Div(
-                className="ctl-row",
-                children=[
-                    html.Div(
-                        className="ctl-head",
-                        children=html.Span("Demo scenario", className="ctl-name"),
-                    ),
-                    dcc.Dropdown(
-                        id="preset",
-                        clearable=False,
-                        value="standard",
-                        searchable=False,
-                        options=[{"label": lab, "value": k} for k, (lab, _) in PRESETS.items()],
-                    ),
-                ],
-            ),
-            section(
-                "Field-length rules",
-                [
-                    dcc.RadioItems(
-                        id="rules",
-                        value="part25",
-                        className="seg rules-seg",
-                        inline=True,
-                        options=[
-                            {"label": "FAA Part 25", "value": "part25"},
-                            {"label": "MIL-STD-3013", "value": "mil3013"},
-                        ],
-                    ),
-                    labeled(
-                        "Engine failure → action delay",
-                        dcc.Input(
-                            id="t-recog",
-                            type="number",
-                            min=0,
-                            step=0.1,
-                            value=1.0,
-                            debounce=True,
-                            className="num-input",
-                        ),
-                        "s",
-                        "row-t-recog",
-                        hint="",
-                    ),
-                    html.Div(id="rules-note", className="hint"),
-                ],
-            ),
             section(
                 "Aircraft",
                 [
@@ -259,47 +279,50 @@ def controls() -> html.Div:
                                 clearable=False,
                                 searchable=False,
                             ),
-                            dcc.Checklist(
-                                id="show-synthetic",
-                                value=[],
-                                className="checks small",
-                                options=[{"label": " show synthetic test aircraft", "value": "on"}],
-                            ),
-                            html.Div(id="aircraft-note", className="note-synthetic"),
+                            html.Div(init["aircraft-note"], id="aircraft-note", className="hint"),
                         ],
                     ),
+                    labeled(
+                        "Takeoff weight",
+                        dcc.Input(id="weight", type="number", debounce=True, className="num-input"),
+                        "lbf",
+                        "row-weight",
+                    ),  # fmt: skip
                     html.Div(
-                        className="ctl-row",
+                        id="row-tables",
+                        style=init["row-tables"],
                         children=[
-                            html.Div(
-                                className="ctl-head",
-                                children=[
-                                    html.Span("Takeoff weight", className="ctl-name"),
-                                    html.Span("lbf", className="ctl-val"),
-                                ],
+                            labeled(
+                                "Aero table",
+                                dcc.Dropdown(
+                                    id="aero-config",
+                                    clearable=False,
+                                    searchable=False,
+                                    options=init["aero-config.options"],
+                                    value=init["aero-config"],
+                                ),
+                                row_id="row-aero",
                             ),
-                            dcc.Input(
-                                id="weight", type="number", debounce=True, className="num-input"
+                            labeled(
+                                "Thrust table",
+                                dcc.Dropdown(
+                                    id="thrust-table",
+                                    clearable=False,
+                                    searchable=False,
+                                    options=init["thrust-table.options"],
+                                    value=init["thrust-table"],
+                                ),
+                                row_id="row-thrust",
                             ),
                         ],
-                    ),
-                    labeled(
-                        "Thrust table",
-                        dcc.Dropdown(id="thrust-table", clearable=False, searchable=False),
-                        row_id="row-thrust",
-                    ),
-                    labeled(
-                        "Aero table",
-                        dcc.Dropdown(id="aero-config", clearable=False, searchable=False),
-                        row_id="row-aero",
                     ),
                     slider("k_cl"),
                     slider("k_cd"),
                     dcc.Checklist(
                         id="ground-effect",
-                        value=[],
+                        value=init["ground-effect"],
                         className="checks",
-                        options=[{"label": " Ground effect (Raymer)", "value": "on"}],
+                        options=init["ground-effect.options"],
                     ),
                     html.Div(
                         ["Lift & drag curves: ", html.I("Engineering details › Aircraft data")],
@@ -307,73 +330,52 @@ def controls() -> html.Div:
                     ),
                 ],
             ),
-            section(
+            collapsible(
                 "Runway & weather",
                 [
+                    labeled(
+                        "Demo scenario",
+                        dcc.Dropdown(
+                            id="preset",
+                            clearable=False,
+                            value="standard",
+                            searchable=False,
+                            options=[{"label": lab, "value": k} for k, (lab, _) in PRESETS.items()],
+                        ),
+                        row_id="row-preset",
+                    ),
                     *[slider(i) for i in ("headwind", "slope", "temperature", "elevation")],
                     labeled(
                         "Runway condition",
-                        html.Div(
-                            className="cond-row",
-                            children=[
-                                dcc.Dropdown(
-                                    id="runway-cond",
-                                    value="custom",
-                                    clearable=False,
-                                    searchable=False,
-                                    options=[
-                                        *[
-                                            {"label": v[0], "value": k}
-                                            for k, v in RUNWAY_CONDITIONS.items()
-                                        ],
-                                        {"label": "Custom", "value": "custom"},
-                                    ],
-                                ),
-                                dcc.Checklist(
-                                    id="antiskid",
-                                    value=["on"],
-                                    className="checks",
-                                    options=[{"label": " anti-skid", "value": "on"}],
-                                ),
+                        dcc.Dropdown(
+                            id="runway-cond",
+                            value="custom",
+                            clearable=False,
+                            searchable=False,
+                            options=[
+                                *[
+                                    {"label": v[0], "value": k}
+                                    for k, v in RUNWAY_CONDITIONS.items()
+                                ],
+                                {"label": "Custom", "value": "custom"},
                             ],
                         ),
                         row_id="row-cond",
-                        hint="Presets from MIL-STD-3013 Table II; editing a slider → Custom.",
+                        hint="Presets from MIL-STD-3013 Table II; moving a slider → Custom.",
                     ),
                     slider("mu_brake"),
                     slider("mu_roll"),
-                    labeled(
-                        "Runway available (optional)",
-                        dcc.Input(
-                            id="runway-avail",
-                            type="number",
-                            min=0,
-                            step=100,
-                            debounce=True,
-                            placeholder="for refusal speed",
-                            className="num-input",
-                        ),
-                        "ft",
-                        "row-avail",
-                    ),
                 ],
             ),
-            html.Details(
-                className="ctl-section adv",
-                children=[
-                    html.Summary("Procedure & solver", className="sec-title"),
+            collapsible(
+                "Procedure & solver",
+                [
                     slider("rotation_rate"),
                     dcc.Checklist(
                         id="chute",
-                        value=[],
+                        value=init["chute"],
                         className="checks",
-                        options=[
-                            {
-                                "label": " Drag chute (outside Part 25)",
-                                "value": "on",
-                                "disabled": True,
-                            }
-                        ],
+                        options=init["chute.options"],
                     ),
                     dcc.Checklist(
                         id="enforce-v2",
@@ -381,6 +383,17 @@ def controls() -> html.Div:
                         className="checks",
                         options=[{"label": " Enforce V2 ≥ 1.2 V_S (raises VR)", "value": "on"}],
                     ),
+                    dcc.Checklist(
+                        id="optimize-vr",
+                        value=[],
+                        className="checks",
+                        options=[
+                            {
+                                "label": " Optimize VR (rotate later if that shortens the field)",
+                                "value": "on",
+                            }
+                        ],
+                    ),  # fmt: skip
                 ],
             ),
             html.Button("Run", id="run", n_clicks=0, className="btn btn-primary btn-run"),
@@ -611,8 +624,7 @@ def topbar() -> html.Div:
                 children=[
                     html.Span(TITLE, className="brand-title"),
                     html.Span(
-                        "balanced / critical field length · engine-out go/stop · "
-                        "Part 25 & MIL-STD-3013",
+                        "balanced field length · engine-out go/stop · Part 25 & MIL-STD-3013",
                         className="brand-sub",
                     ),
                 ],
@@ -692,7 +704,8 @@ def readout(d: dict | None, base: dict | None) -> list:
 
     if s["balanced"] and mil:
         bfl_tip = (
-            f"MIL-STD-3013: the critical engine fails at V_CEF = {s['v_ef_kts']:.0f} kt. "
+            f"MIL-STD-3013 (its 'critical field length', called BFL here): the critical "
+            f"engine fails at V_CEF = {s['v_ef_kts']:.0f} kt. "
             f"The aircraft accelerates for {s['t_recog_s']:g} s on the remaining engines "
             f"(to {s['v1_kts']:.0f} kt), then brakes are applied. At this V_CEF the stop and "
             f"the engine-out climb to {h} need the same runway: {s['bfl_ft']:,.0f} ft. "
@@ -725,7 +738,7 @@ def readout(d: dict | None, base: dict | None) -> list:
         )
     else:
         faa_tip = (
-            f"The larger of the critical field length ({s['bfl_ft']:,.0f} ft) and the "
+            f"The larger of the balanced field length ({s['bfl_ft']:,.0f} ft) and the "
             f"all-engines total takeoff distance to {h} ({s['aeo_distance_ft']:,.0f} ft), "
             f"with no extra factor. {governs}"
         )
@@ -759,8 +772,19 @@ def readout(d: dict | None, base: dict | None) -> list:
         )
 
     chips = []
+    vo = s.get("vr_optimization")
     if not s["balanced"]:
-        chips.append("Unbalanced field")
+        chips.append(
+            "Unbalanced field"
+            + ("" if vo else ": try 'Optimize VR' under Procedure (a later rotation may help)")
+        )
+    if vo and vo["k_VR_new"] > vo["k_VR_old"] + 1e-9:
+        chips.append(
+            f"VR optimized: k_VR {vo['k_VR_old']:.2f} → {vo['k_VR_new']:.2f}, field "
+            f"{vo['field_length_min_vr_ft']:,.0f} → {vo['field_length_opt_ft']:,.0f} ft"
+        )
+    elif vo:
+        chips.append("VR optimization: the lowest legal VR is already best")
     if s["chute_used"]:
         chips.append("Drag chute credited" + ("" if mil else " (outside Part 25)"))
     if any(a.get("reason") == "touchback" for a in d["vr_adjustments"]):
@@ -917,118 +941,45 @@ def create_app() -> Dash:
         def _show(v, fmt=fmt):
             return "" if v is None else fmt(v)
 
-    @app.callback(
-        Output("aircraft", "options"),
-        Input("show-synthetic", "value"),
-        Input("aircraft-saved", "data"),
-    )
-    def on_show_synthetic(v, _saved):
-        return aircraft_options("on" in (v or []))
+    @app.callback(Output("aircraft", "options"), Input("aircraft-saved", "data"))
+    def on_saved(_saved):
+        return aircraft_options()
 
     @app.callback(
         Output("weight", "value"),
         Output("aircraft-note", "children"),
         Output("thrust-table", "options"),
         Output("thrust-table", "value"),
-        Output("row-thrust", "style"),
         Output("aero-config", "options"),
         Output("aero-config", "value"),
-        Output("row-aero", "style"),
+        Output("row-tables", "style"),
         Output("ground-effect", "options"),
         Output("ground-effect", "value"),
+        Output("chute", "options"),
+        Output("chute", "value"),
         Input("aircraft", "value"),
     )
     def on_aircraft(name):
-        ge_off = [{"label": " Ground effect (Raymer)", "value": "on", "disabled": True}]
-        try:
-            ac = load_aircraft(name)
-        except Exception as exc:  # noqa: BLE001
-            return (
-                None,
-                f"Cannot load this aircraft (incomplete template?): {exc.__class__.__name__}",
-                [], None, HIDDEN, [], None, HIDDEN, ge_off, [],
-            )  # fmt: skip
-        note = "SYNTHETIC data: not a real airplane" if ac.synthetic else ""
-        thr = ac.engines.thrust_options()
-        t_opts = [{"label": k, "value": v} for k, v in thr.items()]
-        a_opts = [{"label": k, "value": k} for k in ac.aero.configurations]
-        ge = ac.ground_effect
-        has_geo = ge.span_ft is not None and ge.wing_height_ft is not None
-        ge_opts = [
-            {
-                "label": " Ground effect (Raymer)"
-                + ("" if has_geo else ": needs span & wing height"),
-                "value": "on",
-                "disabled": not has_geo,
-            }
-        ]
-        return (
-            ac.weight.default_weight_lbf,
-            note,
-            t_opts,
-            ac.engines.thrust_table,
-            {} if len(t_opts) > 1 else HIDDEN,
-            a_opts,
-            ac.aero.takeoff_configuration,
-            {} if len(a_opts) > 1 else HIDDEN,
-            ge_opts,
-            ["on"] if ge.enabled else [],
-        )
-
-    @app.callback(
-        Output("chute", "options"),
-        Output("chute", "value"),
-        Output("t-recog", "value"),
-        Output("rules-note", "children"),
-        Input("aircraft", "value"),
-        Input("rules", "value"),
-    )
-    def on_rules(name, rules):
-        mil = rules == "mil3013"
-        try:
-            ac = load_aircraft(name)
-            has_chute = ac.chute.area_ft2 > 0 and ac.chute.CD > 0
-            default_on = ac.chute.enabled and not mil
-        except Exception:  # noqa: BLE001
-            has_chute, default_on = False, False
-        label = " Drag chute" + ("" if mil else " (outside Part 25)")
-        opts = [{"label": label, "value": "on", "disabled": not has_chute}]
-        note = (
-            "Critical field length: engine fails at V_CEF, brakes after the delay, no "
-            "distance pad, go to 50 ft, chute optional."
-            if mil
-            else "Balanced field length: V_EF → V1 after the delay, +2 s pad on the stop, "
-            "go to 35 ft, field ≥ 1.15 × all-engines."
-        )
-        no_t = ctx.triggered_id == "aircraft"
-        return (
-            opts,
-            (["on"] if default_on else []),
-            (no_update if no_t else RULE_DELAY[rules]),
-            note,
-        )
+        return aircraft_ui(name)
 
     @app.callback(
         Output("runway-cond", "value"),
         Output("mu_roll", "value"),
         Output("mu_brake", "value"),
         Input("runway-cond", "value"),
-        Input("antiskid", "value"),
         Input("mu_roll", "value"),
         Input("mu_brake", "value"),
         prevent_initial_call=True,
     )
-    def on_friction(cond, antiskid, mu_roll, mu_brake):
-        trig = ctx.triggered_id
-        if trig in ("runway-cond", "antiskid"):
+    def on_friction(cond, mu_roll, mu_brake):
+        if ctx.triggered_id == "runway-cond":
             if cond not in RUNWAY_CONDITIONS:
                 return no_update, no_update, no_update
-            _, roll, brake, brake_as = RUNWAY_CONDITIONS[cond]
-            return no_update, roll, (brake_as if "on" in (antiskid or []) else brake)
+            _, roll, brake = RUNWAY_CONDITIONS[cond]
+            return no_update, roll, brake
         if cond in RUNWAY_CONDITIONS:  # a slider moved: does it still match the preset?
-            _, roll, brake, brake_as = RUNWAY_CONDITIONS[cond]
-            b = brake_as if "on" in (antiskid or []) else brake
-            if abs((mu_roll or 0) - roll) > 1e-9 or abs((mu_brake or 0) - b) > 1e-9:
+            _, roll, brake = RUNWAY_CONDITIONS[cond]
+            if abs((mu_roll or 0) - roll) > 1e-9 or abs((mu_brake or 0) - brake) > 1e-9:
                 return "custom", no_update, no_update
         return no_update, no_update, no_update
 
@@ -1057,9 +1008,7 @@ def create_app() -> Dash:
         State("weight", "value"),
         State("chute", "value"),
         State("enforce-v2", "value"),
-        State("rules", "value"),
-        State("t-recog", "value"),
-        State("runway-avail", "value"),
+        State("optimize-vr", "value"),
         State("thrust-table", "value"),
         State("aero-config", "value"),
         State("ground-effect", "value"),
@@ -1068,15 +1017,13 @@ def create_app() -> Dash:
         if not aircraft:
             return no_update
         vals = dict(zip(SLIDER_IDS, rest[: len(SLIDER_IDS)], strict=True))
-        weight, chute, enforce, rules, t_recog, avail, thrust, aero, ge = rest[len(SLIDER_IDS) :]
+        weight, chute, enforce, opt_vr, thrust, aero, ge = rest[len(SLIDER_IDS) :]
         ui = {
             **vals,
             "weight": weight,
             "chute": "on" in (chute or []),
             "enforce_v2": "on" in (enforce or []),
-            "rules": rules or "part25",
-            "t_recog": t_recog,
-            "runway_avail": avail or None,
+            "optimize_vr": "on" in (opt_vr or []),
             "thrust_table": thrust,
             "aero_config": aero,
             "ground_effect": "on" in (ge or []),

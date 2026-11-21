@@ -15,7 +15,7 @@ from bfl.model import build_model
 from bfl.phases import airspeed_event, run_segment
 from bfl.units import G0_FTPS2
 
-from .conftest import make_simple_aircraft
+from .conftest import SYNTH, make_simple_aircraft
 
 
 # ---------------------------------------------------------------------------------
@@ -93,7 +93,7 @@ def test_sweep_monotonic(base_cfg):
     assert np.all(np.diff(df["d_stop_ft"]) > 0)
 
 
-@pytest.mark.parametrize("aircraft", ["generic_widebody_synthetic", "b747_100", "sr71"])
+@pytest.mark.parametrize("aircraft", [SYNTH, "b747_100", "sr71"])
 def test_rk45_matches_rk4_reference(aircraft):
     """Default RK45 solve agrees with the fixed-step RK4 reference to well under 1 ft."""
     cfg = load_config(aircraft)
@@ -291,6 +291,7 @@ def test_sr71_loads_and_runs():
     r = compute_bfl(cfg)
     assert 165 < r.vr_kts < 195 and 180 < r.v_lof_kts < 215
     assert 4_000 < r.aeo_distance_ft < 9_000
-    assert r.chute_used
+    assert r.is_mil and not r.chute_used  # MIL rules (aircraft setting): chute off by default
+    assert compute_bfl(cfg.with_updates({"procedure.chute_enabled": True})).chute_used
     hot = compute_bfl(cfg.with_updates({"environment.temperature_F": 95.0}))
     assert hot.aeo_distance_ft > r.aeo_distance_ft * 1.1  # less thrust on a hot day

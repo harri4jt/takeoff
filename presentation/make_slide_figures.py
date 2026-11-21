@@ -25,6 +25,7 @@ from bfl.rootfind import safeguarded_secant, secant
 from bfl.units import G0_FTPS2
 
 OUT = Path(__file__).resolve().parent
+ROOT = OUT.parent
 BLUE, ORANGE, GREEN, RED, INK, MUTED, GRID = (
     "#2a78d6", "#eb6834", "#1baf7a", "#d7263d", "#0f1d2b", "#6b7785", "#e3e8ee",
 )
@@ -56,7 +57,7 @@ def save(fig, name: str) -> None:
 
 
 # ------------------------------------------------------------------------------------
-cfg = load_config("generic_widebody_synthetic")
+cfg = load_config(ROOT / "tests" / "data" / "generic_widebody_synthetic")
 captured = []
 _orig = bfl_mod.safeguarded_secant
 

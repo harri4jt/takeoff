@@ -37,9 +37,9 @@ DATA_PAGES = {
             ),
         ],  # fmt: skip
         "differences": [
-            "**No ground effect** in the baseline. With the Raymer ground-effect option on "
-            "(span 195.7 ft, wing height ~16 ft, estimated), the error drops by about half "
-            "(green dotted line).",
+            "**Ground effect** is the Raymer estimate (span 195.7 ft, wing height ~16 ft, "
+            "estimated), applied to drag only. It is part of the baseline. Without it the "
+            "model is up to 9 % long (grey dotted line).",
             "**Friction** is assumed (rolling 0.03, braking 0.30). Boeing's certified braking "
             "with anti-skid is not public; MIL-STD-3013 uses 0.38 for dry with anti-skid.",
             "**Engine version:** the model uses JT9D-3 thrust; Boeing's chart is for the JT9D-3A.",
@@ -48,9 +48,12 @@ DATA_PAGES = {
             "**Speeds and technique:** the model rotates at 3°/s to 1° below tail strike and "
             "raises VR until V2 ≥ 1.2 V_S. Boeing schedules VR/V2 from flight test, and uses "
             "flaps 10 at the heaviest weights.",
-            "**The lightest point** (500 klb) is the only one where the model is shorter than "
-            "Boeing. Boeing's curve flattens there, which suggests another limit (for example "
-            "a minimum-control-speed limited V1) that the model does not have.",
+            "**The lightest point** (500 klb) is the only one where the model is clearly "
+            "shorter than Boeing (−5.5 %). Boeing's curve flattens there, which suggests "
+            "another limit (for example a minimum-control-speed limited V1) that the model "
+            "does not have.",
+            "**Rotation speed:** the lowest legal VR is also the one that gives the shortest "
+            "field here (curve below), so optimizing VR changes nothing for the 747.",
             "**Digitizing** both the inputs and the Boeing curve adds roughly 1–2 %.",
         ],
         "not_tuned": "Nothing was tuned to match Boeing.",
@@ -90,12 +93,16 @@ DATA_PAGES = {
             "Only **speeds** are checked: no SR-71 runway-length data was available.",
             "**Drag is estimated.** No published low-speed SR-71/YF-12 polar was found "
             "(NASA TM X-3532, sometimes cited, covers the XB-70).",
-            "**The field never balances.** With one J58 out, the excess thrust at the 10° "
-            "takeoff attitude is tiny, so the go from VR is always longer than the stop. "
-            "Lowering the drag by 30 % does not change that, at any weight or under either "
-            "rule set. That matches the flight manual's procedure: abort below rotation speed, "
-            "continue above it.",
-            "The SR-71 is military: MIL-STD-3013 is the natural rule set (chute optional).",
+            "**At the lowest legal VR the field does not balance.** With one J58 out, the "
+            "drag at the 10° takeoff attitude nearly cancels the remaining thrust, so after "
+            "rotating at 184 kt the aircraft crawls to lift-off: 29,300 ft to 50 ft. "
+            "**Rotating later fixes it:** held on the runway (low drag) to about 212 kt, it "
+            "balances at about 11,700 ft (MIL-STD-3013; 10,000 ft under Part 25). Turn on "
+            "*Optimize VR* (Procedure & solver). The cost is a higher tire speed (229 vs 204 "
+            "kt) and more brake energy. See About › Rotation speed.",
+            "The VR check above uses the lowest legal VR, which matches the flight-test "
+            "all-engines rotation at about 180 KIAS.",
+            "The SR-71 is military: its aircraft file sets MIL-STD-3013 (chute optional, off).",
         ],
         "not_tuned": "Nothing was tuned to match the flight-test speeds.",
     },
@@ -188,6 +195,14 @@ def render(route: str) -> html.Div:
             html.H2("Validation"),
             html.Img(src=f"{gen}/validation.png?v={ver}", className="val-img") if st else None,
             _checks_table(ac),
+            *(
+                [
+                    html.H3("Field length vs rotation speed"),
+                    html.Img(src=f"{gen}/vr_scan.png?v={ver}", className="val-img"),
+                ]
+                if st and "vr_scan.png" in st.get("figures", [])
+                else []
+            ),
             html.H3("Why the model can differ"),
             dcc.Markdown("\n".join(f"- {d}" for d in pg["differences"])),
             html.P(pg["not_tuned"], className="hint"),

@@ -418,3 +418,26 @@ details.adv[open] > summary::before { content: "▾ "; }
   display: flex; align-items: center; gap: 4px; margin: 3px 0;
   font-size: inherit; color: var(--ink);
 }
+
+/* ---------------------------------------------------------------- dropdown stacking */
+/* .card's backdrop-filter makes each card its own stacking context, so an open dropdown
+   menu would be painted under the next card. Lift the card that has focus. */
+.card { position: relative; }
+.card:focus-within { z-index: 15; }
+
+/* ---------------------------------------------------------------- number inputs */
+/* No +/- steppers (they move weights by 1 lb): only count fields get them (class "spin"). */
+.dash-input-container:not(.spin) .dash-input-stepper { display: none; }
+.dash-input-container:not(.spin) input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.dash-input-container:not(.spin) input[type="number"]::-webkit-outer-spin-button,
+.dash-input-container:not(.spin) input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ---------------------------------------------------------------- combined doc pages */
+.doc-index { columns: 2; column-gap: 32px; font-size: 14px; margin: 8px 0 20px;
+             padding: 12px 12px 12px 32px; background: #f5f7fa; border-radius: 8px; }
+.doc-index li { margin: 3px 0; break-inside: avoid; }
+.doc-section { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 24px;
+               scroll-margin-top: 70px; }
+.doc-top-link { font-size: 12px; color: var(--muted); }
+@media (max-width: 700px) { .doc-index { columns: 1; } }
+.doc-section h1 { font-size: 24px; }

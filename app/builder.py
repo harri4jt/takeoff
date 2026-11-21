@@ -34,8 +34,18 @@ from bfl.propulsion import load_thrust_table
 
 from . import figures
 
-SKIP = {"directory"}
-CSV_FIELDS = {"engines.thrust_table"}
+SKIP = {"directory", "synthetic"}
+# Aero and thrust tables are set up the same way: a "name: file.csv" list, and a
+# dropdown that picks the default from that list (both are compared in the trade study).
+TABLE_LISTS = {"aero.configurations": "aero", "engines.thrust_tables": "thrust"}
+DEFAULT_KEYS = {"aero.takeoff_configuration": "aero.configurations",
+                "engines.thrust_table": "engines.thrust_tables"}  # fmt: skip
+LABELS = {
+    "aero.configurations": "aero tables",
+    "aero.takeoff_configuration": "default aero table",
+    "engines.thrust_tables": "thrust tables",
+    "engines.thrust_table": "default thrust table",
+}
 GROUP_TITLES = {
     "": "General",
     "geometry": "Geometry",
@@ -48,6 +58,7 @@ GROUP_TITLES = {
     "speeds": "Speeds",
     "ground_effect": "Ground effect (Raymer)",
     "gear": "Gear limits (optional)",
+    "certification": "Certification (field-length rules)",
 }
 
 
@@ -64,15 +75,17 @@ def _strip_optional(ann):
 
 def _kind(path: str, ann) -> str:
     ann, _ = _strip_optional(ann)
-    if path in CSV_FIELDS:
-        return "csv"
+    if path in DEFAULT_KEYS:
+        return "key"
     if typing.get_origin(ann) is Literal:
         return "choice"
     if typing.get_origin(ann) is dict:
         return "dict"
     if ann is bool:
         return "bool"
-    if ann in (int, float):
+    if ann is int:
+        return "int"
+    if ann is float:
         return "number"
     return "text"
 
@@ -150,7 +163,7 @@ def _from_widget(f: dict, v: Any) -> Any:
                 except ValueError:
                     out[a.strip()] = b
         return out
-    if k in ("text", "csv"):
+    if k in ("text", "key"):
         return v if v not in ("", None) else None
     return v
 
@@ -230,10 +243,15 @@ def _widget(f: dict):
     if k == "choice":
         return dcc.Dropdown(id=fid, value=v, clearable=False, searchable=False,
                             options=[{"label": c, "value": c} for c in f["choices"]])  # fmt: skip
-    if k == "csv":
-        return dcc.Dropdown(id=fid, value=v, options=[], placeholder="pick an uploaded CSV")
+    if k == "key":
+        return dcc.Dropdown(id=fid, value=v, options=[], clearable=False,
+                            placeholder="pick one of the tables above")  # fmt: skip
     if k == "dict":
-        return dcc.Textarea(id=fid, value=v, className="bf-dict", placeholder="name: value")
+        ph = "name: file.csv" if f["path"] in TABLE_LISTS else "name: value"
+        return dcc.Textarea(id=fid, value=v, className="bf-dict", placeholder=ph)
+    if k == "int":  # counts: steppers make sense here
+        return dcc.Input(id=fid, type="number", value=v, step=1, debounce=True,
+                         className="num-input spin")  # fmt: skip
     if k == "number":
         return dcc.Input(id=fid, type="number", value=v, debounce=True, className="num-input")
     return dcc.Input(id=fid, type="text", value=v, debounce=True, className="num-input")
@@ -242,7 +260,7 @@ def _widget(f: dict):
 def _form() -> list:
     groups: dict[str, list] = {}
     for f in FIELDS:
-        label = f["name"] + (" *" if f["required"] else "")
+        label = LABELS.get(f["path"], f["name"]) + (" *" if f["required"] else "")
         row = html.Div(
             className="bf-row",
             title=f["help"],
@@ -278,10 +296,10 @@ def layout() -> html.Div:
                         "Fill in the form (fields marked * are required; hover a field for "
                         "help), drop in the table CSVs, and download the aircraft as a .zip "
                         "or save it into `aircraft/`. Someone else can drop that "
-                        "`aircraft.yaml` and its CSVs back in here to load it. One takeoff "
-                        "aero table is enough; list alternatives under "
-                        "`aero.configurations` and `engines.thrust_tables` to compare "
-                        "them in the trade study.",
+                        "`aircraft.yaml` and its CSVs back in here to load it. Aero and "
+                        "thrust tables work the same way: list one or more as "
+                        "`name: file.csv` and pick the default; the others can be "
+                        "selected on the simulator and compared in the trade study.",
                         className="hint",
                     ),
                     html.Div(
@@ -389,10 +407,7 @@ def _validate(data: dict, csvs: dict) -> tuple[AircraftConfig | None, list[str]]
             loc = ".".join(str(x) for x in er["loc"])
             errs.append(f"{loc}: {er['msg']}")
     if cfg is not None:
-        need = set(cfg.aero.configurations.values())
-        if cfg.engines.thrust_mode == "table" and cfg.engines.thrust_table:
-            need.add(cfg.engines.thrust_table)
-        need |= set(cfg.engines.thrust_tables.values())
+        need = set(cfg.aero.configurations.values()) | set(cfg.engines.thrust_tables.values())
         missing = sorted(n for n in need if n not in csvs)
         errs += [f"table file '{m}' not uploaded" for m in missing]
         for n, text in csvs.items():
@@ -447,13 +462,16 @@ def register(app) -> None:
         ]
         return values, csvs, chips
 
-    @app.callback(
-        Output({"type": "bf", "path": "engines.thrust_table"}, "options"),
-        Input("bf-csvs", "data"),
-    )
-    def on_csv_options(csvs):
-        names = [n for n, t in (csvs or {}).items() if check_csv(n, t)["kind"] == "thrust"]
-        return [{"label": n, "value": n} for n in names]
+    for key_path, list_path in DEFAULT_KEYS.items():
+
+        @app.callback(
+            Output({"type": "bf", "path": key_path}, "options"),
+            Input({"type": "bf", "path": list_path}, "value"),
+        )
+        def on_table_names(text):
+            names = [ln.split(":", 1)[0].strip() for ln in (text or "").splitlines()
+                     if ":" in ln and ln.split(":", 1)[0].strip()]  # fmt: skip
+            return [{"label": n, "value": n} for n in names]
 
     @app.callback(
         Output("bf-valid", "children"),
@@ -466,10 +484,13 @@ def register(app) -> None:
     def on_check(values, csvs, ids):
         data = _collect(values, ids)
         _, errs = _validate(data, csvs or {})
-        aero_files = [n for n, t in (csvs or {}).items() if check_csv(n, t)["kind"] == "aero"]
+        kinds = {n: check_csv(n, t)["kind"] for n, t in (csvs or {}).items()}
+        aero_files = [n for n, k in kinds.items() if k == "aero"]
+        thrust_files = [n for n, k in kinds.items() if k == "thrust"]
         hint = html.Div(
-            "Uploaded aero tables: " + (", ".join(aero_files) or "none")
-            + " → list them under aero.configurations as  name: file.csv",
+            f"Uploaded aero tables: {', '.join(aero_files) or 'none'} · thrust tables: "
+            f"{', '.join(thrust_files) or 'none'}. List them under 'aero tables' / 'thrust "
+            "tables' as  name: file.csv, then pick the default of each.",
             className="hint",
         )  # fmt: skip
         if errs:

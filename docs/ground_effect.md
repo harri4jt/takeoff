@@ -67,8 +67,10 @@ so the induced factor used is $K\,k_{CD}/k_{CL}^2$.
 On the 747-100 (span 195.7 ft, wing height ~16 ft, estimated, $h/b \approx 0.08$) the fit gives
 $C_{D0} \approx 0.072$, $K \approx 0.037$ ($R^2 \approx 0.95$, gear down, flaps 20). Ground
 effect removes about 57 % of the induced drag on the runway. The FAA field length at
-710,000 lb drops from about 10,000 ft to about 9,500 ft, which closes roughly half of the
-gap to Boeing's published value. See the 747 data page.
+710,000 lb drops from about 10,000 ft to about 9,500 ft. Over Boeing's weight range the
+error goes from −4 … +9 % to −5.5 … +4.4 %. **Ground effect is on in the 747's
+baseline** (`ground_effect.enabled: true`). The no-ground-effect result is kept on its data
+page as a what-if.
 
 ## Compared with MIL-STD-3013's method
 

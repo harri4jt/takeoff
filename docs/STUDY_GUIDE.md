@@ -50,9 +50,9 @@ Run everything from the project root with the `bfl` env active.
 ## 2. Units and configuration (`units.py`, `config.py`, `model.py`)
 
 - [ ] Find where every input is converted to ft–slug–s (only `model.build_model`).
-- [ ] Open `aircraft/generic_widebody_synthetic/aircraft.yaml` and find each number in
+- [ ] Open `tests/data/generic_widebody_synthetic/aircraft.yaml` and find each number in
       `build_model`.
-- [ ] Try `load_config("generic_widebody_synthetic", overrides={"multipliers.k_CL": 1.1})`.
+- [ ] Try `load_config("tests/data/generic_widebody_synthetic", overrides={"multipliers.k_CL": 1.1})`.
 
 **Be able to answer**
 - [ ] What is a slug and why use it? (m = W/g₀ with W in lbf.)

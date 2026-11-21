@@ -61,7 +61,8 @@ Page numbers are the documents' own (e.g. "2.0-7"), not PDF page numbers.
 
 ### Simplifications
 
-- The basic CL and CD are free-air values, so there is no ground effect. Stabilizer
+- The basic CL and CD are free-air values. Ground effect is added by the Raymer method
+  (drag only, see `docs/ground_effect.md`), which is on in `aircraft.yaml`. Stabilizer
   trim drag and the Mach/aeroelastic corrections in [H&N] are left out (they are
   small at takeoff speeds).
 - Digitizing accuracy is about ±0.01 in CL, ±0.002 in CD (±0.003 at the drag
@@ -73,29 +74,32 @@ Page numbers are the documents' own (e.g. "2.0-7"), not PDF page numbers.
 
 [ACAP] 3.3.1 gives the FAR takeoff field length (the larger of 1.15 × the all-engines
 distance to 35 ft and the engine-failure distance) for the 747-100, standard day.
-Sea-level curve against the model (flaps 20, defaults otherwise, fuel burn on).
+Sea-level curve against the model (flaps 20, Raymer ground effect, defaults otherwise,
+fuel burn on).
 `tests/test_validation.py` runs this, checks every point is within ±12 %, and writes the
 figures shown on the app's 747 data page. `python scripts/validate_b747.py` does the same
 from the command line:
 
-| Weight (klb) | Boeing (ft) | Model (ft) | Error | + ground effect (ft) | Error |
+| Weight (klb) | Boeing (ft) | Model (ft) | Error | what-if: no ground effect (ft) | Error |
 |---:|---:|---:|---:|---:|---:|
-| 500 | 4,880 | 4,669 | −4.3% | 4,612 | −5.5% |
-| 540 | 5,180 | 5,437 | +5.0% | 5,285 | +2.0% |
-| 580 | 5,880 | 6,352 | +8.0% | 6,067 | +3.2% |
-| 620 | 6,750 | 7,360 | +9.0% | 7,023 | +4.0% |
-| 660 | 7,750 | 8,470 | +9.3% | 8,072 | +4.2% |
-| 690 | 8,720 | 9,373 | +7.5% | 8,923 | +2.3% |
-| 705 | 9,230 | 9,848 | +6.7% | 9,371 | +1.5% |
+| 500 | 4,880 | 4,612 | −5.5% | 4,669 | −4.3% |
+| 540 | 5,180 | 5,285 | +2.0% | 5,437 | +5.0% |
+| 580 | 5,880 | 6,067 | +3.2% | 6,352 | +8.0% |
+| 620 | 6,750 | 7,023 | +4.0% | 7,360 | +9.0% |
+| 660 | 7,750 | 8,072 | +4.2% | 8,470 | +9.3% |
+| 690 | 8,720 | 8,923 | +2.3% | 9,373 | +7.5% |
+| 705 | 9,230 | 9,371 | +1.5% | 9,848 | +6.7% |
 
-The model is 5–9% conservative over most of the weight range. In the model the
-all-engines case (1.15 × AEO distance) sets the field length at every weight.
-Nothing was tuned to match. Sensitivities found while checking:
+The model is 1.5–4.4% conservative over most of the weight range (−5.5 % at 500 klb).
+In the model the all-engines case (1.15 × AEO distance) sets the field length at every
+weight. Nothing was tuned to match. Sensitivities found while checking:
 
-- Rolling friction μ = 0.03 (project default) → 0.02 brings the error to +3–6%.
-- **Ground effect** (Raymer, optional, span 195.7 ft, wing height 16 ft **estimated**)
-  cuts the error roughly in half. It is off by default; turn it on with
-  `ground_effect.enabled` or the app's checkbox.
+- Rolling friction μ = 0.03 (project default) → 0.02 shortens the field by about 3 %.
+- **Ground effect** (Raymer, span 195.7 ft, wing height 16 ft **estimated**) cuts the
+  error roughly in half compared with no ground effect. It is on in the baseline; turn it
+  off with `ground_effect.enabled: false` or the app's checkbox.
+- **Rotation speed:** the field length rises with VR, so the lowest legal VR is optimal
+  (`procedure.optimize_vr` finds the same VR).
 - JT9D-3 thrust is used, while Boeing's chart is for the JT9D-3A.
 - Fuel burn (TSFC 0.36 /hr, **estimate**) is about 0.1 % of the weight and moves the
   result by ~0.1 %.

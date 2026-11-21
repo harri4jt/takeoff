@@ -19,7 +19,9 @@ weight:
 engines:
   n_engines: 4
   thrust_mode: table
-  thrust_table: thrust.csv      # per engine vs TAS, EPR 1.42, SL ISA (see README)
+  thrust_tables:
+    JT9D-3: thrust.csv          # per engine vs TAS, EPR 1.42, SL ISA (see README)
+  thrust_table: JT9D-3          # default thrust table
   idle_thrust_per_engine_lbf: 2000.0   # ESTIMATE (not from a source), see README
   thrust_incidence_deg: 0.0     # not given; thrust line taken along the body axis
   tsfc_per_hr: 0.36             # ESTIMATE: JT9D-3 class takeoff TSFC (fuel burn ~0.1% of TOGW)
@@ -50,7 +52,11 @@ chute:
 speeds:
   V_mcg_kts: 106.0              # AFM minimum control speeds, CR-114494 p.15.0-23 (SL, 15 C)
 
-ground_effect:                  # Raymer method; OFF by default (the 747 what-if is on its data page)
-  enabled: false
+ground_effect:                  # Raymer method; on in the baseline (validation: docs/ground_effect.md)
+  enabled: true
   span_ft: 195.7                # 195 ft 8 in, Boeing D6-58326 sec. 2
   wing_height_ft: 16.0          # ESTIMATE: quarter-chord MAC height on the gear
+
+certification:
+  rules: part25                 # civil transport: FAA Part 25 balanced field length
+  # t_recog_s: 1.0              # engine failure -> V1 delay; blank = rule default (1 s)

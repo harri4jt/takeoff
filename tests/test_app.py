@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 import yaml
 
+from .conftest import SYNTH
+
 pytest.importorskip("dash")
 
 from bfl import list_aircraft, load_config  # noqa: E402
@@ -19,7 +21,7 @@ def test_app_builds_and_pages_render():
     builder.layout()
     for route in datapages.ROUTES:
         datapages.render(route)
-    for route, *_ in pages.PAGES:
+    for route in sorted(pages.ROUTES):
         pages.render(route)
 
 
@@ -67,18 +69,45 @@ def test_limit_warnings(tmp_path, monkeypatch):
     assert w == ["Tire speed 160 kt exceeds Ref (150 kt)"]
     assert limits.warnings({"max_tire_speed_kts": 140.0}) == []
     assert len(limits.strips({"max_tire_speed_kts": 160.0})[0]["refs"]) == 2
+    # a metric with warn: false is drawn on the scale but never warns
+    p.write_text(p.read_text().replace("unit: kt}", "unit: kt, warn: false}"))
+    assert limits.warnings({"max_tire_speed_kts": 160.0}) == []
+    assert len(limits.strips({"max_tire_speed_kts": 160.0})) == 1
+
+
+def test_reference_file_warns_on_gear_not_field_length():
+    from app import limits
+
+    data = limits.load()
+    assert data["metrics"]["field_length_ft"].get("warn") is False
+    assert limits.warnings({"field_length_ft": 1e6}) == []
+    assert limits.warnings({"max_tire_speed_kts": 1e3})
 
 
 def test_trade_map_and_figure():
     from app import compute, figures
 
-    cfg = load_config("generic_widebody_synthetic")
+    cfg = load_config(SYNTH)
     k = (0.9, 1.0, 1.1)
     m = compute.trade_map(cfg.model_dump_json(), k, k)
     z = m["z"]["bfl_ft"]
     assert len(z) == 3 and all(v is not None for row in z for v in row)
     assert z[2][1] < z[0][1]  # more lift, shorter field
     assert z[1][2] > z[1][0]  # more drag, longer field
+    tires = m["z"]["max_tire_speed_kts"]
+    assert tires[2][1] < tires[0][1]  # more lift, earlier lift-off
     maps = [{**m, "title": "a"}, {**m, "title": "b"}]
     figures.trade(maps, "bfl_ft", "BFL", "bands", [9000, 10000])
     figures.trade(maps, "bfl_ft", "BFL", "viridis", None)
+    figures.trade(maps, "max_tire_speed_kts", "Max ground speed [kt]", "viridis", None,
+                  unit="kt")  # fmt: skip
+
+
+def test_docs_pages_and_links():
+    from app import pages
+
+    for route in ("/about", "/methods", "/rules", "/runge-kutta"):
+        pages.render(route)
+    assert pages.OLD_ROUTES["/rules"] == "/about#rules"
+    assert pages._rewrite("[x](field_length_rules.md)") == "[x](/about#rules)"
+    assert pages._rewrite("[x](methods/root_finding.md)") == "[x](/methods#root-finding)"

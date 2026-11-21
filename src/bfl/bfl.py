@@ -16,6 +16,7 @@ import pandas as pd
 
 from .config import RunConfig
 from .model import VehicleModel, build_model
+from .optimize import golden_section
 from .results import BFLResult
 from .rootfind import safeguarded_secant
 from .takeoff import (
@@ -366,8 +367,104 @@ def compute_bfl(config: RunConfig) -> BFLResult:
        [V1_min, VR]. Each f evaluation runs an inner secant solve for V_EF and
        simulates both branches.
     On a touchback the whole solve is rerun with k_VR += vr_step.
+    3. (if procedure.optimize_vr) search k_VR >= the value from 1-2 for the one that
+       minimizes the field length (scan, then golden section); see _optimize_vr.
     """
     config = config.resolved()
+    result = _compute_min_vr(config)
+    if config.procedure.optimize_vr:
+        result = _optimize_vr(config, result)
+    return result
+
+
+_VR_SCAN_STEP = 0.05
+_VR_XTOL = 0.002
+
+
+def _optimize_vr(config: RunConfig, base: BFLResult) -> BFLResult:
+    """Rotate later if that shortens the field length.
+
+    VR is the same for the all-engines and the engine-out takeoff, and every k_VR
+    above the legal minimum (V2 rule, touchback) is allowed. A later rotation keeps
+    the aircraft on the runway at low drag for longer, which helps when the one-engine
+    excess thrust at the rotated attitude is small (SR-71), but it lengthens the
+    all-engines distance and raises V1 for everyone else (747). FL(k_VR) is scanned
+    upward in steps of 0.05 until it has risen twice in a row past its best point,
+    then the best bracket is refined by golden section. Failed solves count as +inf.
+    """
+    proc = config.procedure
+    k_lo = base.k_VR
+    k_hi = max(k_lo, proc.k_VR_max)
+    fast = config.with_updates({"solver.trajectory_dt_s": None})
+    seen: dict[float, float] = {}
+
+    def fl(k: float) -> float:
+        k = round(k, 6)
+        if k not in seen:
+            if k == round(k_lo, 6):
+                seen[k] = base.field_length_ft
+            else:
+                try:
+                    seen[k] = _solve_at(fast.with_updates({"procedure.k_VR": k})).field_length_ft
+                except Exception:  # noqa: BLE001 - e.g. table range; treat as infeasible
+                    seen[k] = math.inf
+        return seen[k]
+
+    ks = [k_lo]
+    best = fl(k_lo)
+    k_best = k_lo
+    worse = 0
+    k = k_lo
+    while k + _VR_SCAN_STEP <= k_hi + 1e-12 and worse < 2:
+        k += _VR_SCAN_STEP
+        ks.append(k)
+        v = fl(k)
+        if v < best:
+            best, k_best, worse = v, k, 0
+        elif math.isfinite(best):
+            worse += 1
+    a = max(k_lo, k_best - _VR_SCAN_STEP)
+    b = min(k_hi, k_best + _VR_SCAN_STEP)
+    if b - a > _VR_XTOL:
+        golden_section(fl, a, b, xtol=_VR_XTOL)
+    k_opt = min(seen, key=seen.__getitem__)
+    info = {
+        "reason": "optimize_vr",
+        "k_VR_old": k_lo,
+        "k_VR_new": k_opt,
+        "field_length_min_vr_ft": base.field_length_ft,
+        "field_length_opt_ft": seen[k_opt],
+        "evaluations": len(seen),
+        "scan": sorted((k, v) for k, v in seen.items()),
+    }
+    if k_opt <= k_lo + 1e-9 or seen[k_opt] >= base.field_length_ft - 0.5:
+        base.vr_optimization = {
+            **info,
+            "k_VR_new": k_lo,
+            "field_length_opt_ft": base.field_length_ft,
+        }
+        base.warnings.append(
+            f"VR optimization: the lowest legal VR (k_VR = {k_lo:.3f}) already gives the "
+            f"shortest field ({len(seen)} solves)"
+        )
+        return base
+    result = _solve_at(config.with_updates({"procedure.k_VR": k_opt}))
+    result.vr_adjustments = base.vr_adjustments + [info] + result.vr_adjustments
+    result.vr_optimization = info
+    result.warnings = (
+        base.warnings
+        + [
+            f"VR optimized: k_VR {k_lo:.3f} -> {result.k_VR:.3f} (VR {base.vr_kts:.0f} -> "
+            f"{result.vr_kts:.0f} kt) shortens the field length {base.field_length_ft:,.0f} -> "
+            f"{result.field_length_ft:,.0f} ft ({len(seen)} solves)"
+        ]
+        + [w for w in result.warnings if w not in base.warnings]
+    )
+    return result
+
+
+def _compute_min_vr(config: RunConfig) -> BFLResult:
+    """compute_bfl steps 1-2: the solve at the lowest legal rotation speed."""
     proc = config.procedure
     if not proc.enforce_v2_min:
         result = _solve_at(config)

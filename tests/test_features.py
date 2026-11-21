@@ -10,8 +10,9 @@ import pytest
 
 from bfl import compute_bfl, load_config
 from bfl.aero import fit_parabolic_polar, load_aero_table, raymer_phi
-from bfl.config import RULE_PRESETS
+from bfl.config import RULE_PRESETS, EnginesConfig
 from bfl.model import build_model
+from bfl.optimize import golden_section
 
 from .conftest import SYNTH
 
@@ -19,6 +20,19 @@ from .conftest import SYNTH
 # ---------------------------------------------------------------------------------
 # rule sets
 # ---------------------------------------------------------------------------------
+def test_rules_come_from_the_aircraft(base_cfg):
+    """certification.rules / t_recog_s are the aircraft's; procedure.* still overrides."""
+    mil_ac = base_cfg.with_updates({"aircraft.certification.rules": "mil3013"})
+    p = mil_ac.resolved().procedure
+    assert p.is_mil and p.t_recog_s == 3.0 and p.screen_height_ft == 50.0
+    own = mil_ac.with_updates({"aircraft.certification.t_recog_s": 2.5}).resolved().procedure
+    assert own.t_recog_s == 2.5
+    back = mil_ac.with_updates({"procedure.rules": "part25"}).resolved().procedure
+    assert not back.is_mil and back.t_recog_s == 1.0
+    assert load_config("sr71").resolved().procedure.is_mil
+    assert not load_config("b747_100").resolved().procedure.is_mil
+
+
 def test_rule_presets_resolve(base_cfg):
     p = base_cfg.procedure.resolved()
     assert p.t_recog_s == 1.0 and p.t_v1_allowance_s == 2.0 and p.screen_height_ft == 35.0
@@ -41,7 +55,8 @@ def test_mil_equals_part25_with_matching_overrides(base_cfg):
     assert mil.bfl_ft == pytest.approx(p25.bfl_ft, abs=1e-6)
     assert mil.v_ef_kts == pytest.approx(p25.v_ef_kts, abs=1e-9)
     assert mil.is_mil and not p25.is_mil
-    assert mil.names["bfl_short"] == "CFL"
+    assert mil.names["bfl_short"] == "BFL"  # MIL's CFL is labelled BFL for consistency
+    assert mil.names["v_ef"].startswith("V_CEF")
 
 
 def test_mil_field_has_no_aeo_factor(base_cfg):
@@ -62,7 +77,9 @@ def test_mil_chute_optional_default_off():
     cfg = load_config("sr71", overrides={"procedure.rules": "mil3013"})
     assert not cfg.chute_active
     assert cfg.with_updates({"procedure.chute_enabled": True}).chute_active
-    assert load_config("sr71").chute_active  # Part 25: aircraft default (on, flagged)
+    assert not load_config("sr71").chute_active  # the SR-71 file sets MIL rules
+    p25 = load_config("sr71", overrides={"procedure.rules": "part25"})
+    assert p25.chute_active  # Part 25: aircraft default (on, flagged)
 
 
 def test_sr71_mil_result_finite():
@@ -180,9 +197,59 @@ def test_gear_outputs(base_result):
     assert base_result.brake_energy_MJ < 0.5 * m * v * v * 1.3558e-6
 
 
-def test_thrust_options(base_cfg):
-    eng = base_cfg.aircraft.engines
-    assert list(eng.thrust_options().values())[0] == eng.thrust_table
-    two = eng.model_copy(update={"thrust_tables": {"derated": "thrust.csv", "other": "x.csv"}})
-    opts = two.thrust_options()
-    assert opts["derated"] == "thrust.csv" and opts["other"] == "x.csv" and len(opts) == 2
+def test_thrust_tables_are_named_like_aero_tables(base_cfg):
+    """thrust_table names one of thrust_tables (as takeoff_configuration names an aero
+    table); the older 'thrust_table: file.csv' form is registered under the file stem."""
+    eng = base_cfg.aircraft.engines  # the synthetic YAML still uses the old form
+    assert eng.thrust_tables == {"thrust": "thrust.csv"} and eng.thrust_table == "thrust"
+    assert eng.thrust_file == "thrust.csv"
+    two = EnginesConfig.model_validate(
+        {**eng.model_dump(), "thrust_tables": {"a": "x.csv", "b": "thrust.csv"},
+         "thrust_table": "b"}
+    )  # fmt: skip
+    assert list(two.thrust_options()) == ["b", "a"] and two.thrust_file == "thrust.csv"
+    with pytest.raises(ValueError, match="not listed"):
+        EnginesConfig.model_validate({**two.model_dump(), "thrust_table": "c"})
+    b747 = load_config("b747_100").aircraft.engines
+    assert b747.thrust_table == "JT9D-3" and b747.thrust_file == "thrust.csv"
+    # selecting a table by name is what the app and the trade study do
+    sel = base_cfg.with_updates({"aircraft.engines.thrust_tables": {"thrust": "thrust.csv",
+                                                                     "copy": "thrust.csv"},
+                                 "aircraft.engines.thrust_table": "copy"})  # fmt: skip
+    assert compute_bfl(sel).bfl_ft == pytest.approx(compute_bfl(base_cfg).bfl_ft)
+
+
+# ---------------------------------------------------------------------------------
+# rotation speed
+# ---------------------------------------------------------------------------------
+def test_golden_section():
+    r = golden_section(lambda x: (x - 1.3) ** 2, 0.0, 2.0, xtol=1e-6)
+    assert r.x == pytest.approx(1.3, abs=1e-6)
+    k = golden_section(lambda x: max(2.0 - x, 0.5 * x), 0.0, 3.0, xtol=1e-6)  # a kink
+    assert k.x == pytest.approx(4.0 / 3.0, abs=1e-6)
+    # one new evaluation per iteration after the first two
+    assert len(k.x_history) == k.iterations + 2
+
+
+def test_optimize_vr_sr71_balances():
+    """The SR-71 does not balance at its lowest legal VR; a later rotation fixes it."""
+    cfg = load_config("sr71")
+    lo = compute_bfl(cfg)
+    opt = compute_bfl(cfg.with_updates({"procedure.optimize_vr": True}))
+    assert not lo.balanced and opt.balanced
+    assert opt.k_VR > lo.k_VR + 0.1
+    assert opt.field_length_ft < 0.5 * lo.field_length_ft
+    vo = opt.vr_optimization
+    assert vo["k_VR_old"] == pytest.approx(lo.k_VR) and vo["k_VR_new"] == opt.k_VR
+    # it is a minimum: nudging k_VR either way does not help
+    for dk in (-0.01, 0.01):
+        nb = compute_bfl(cfg.with_updates({"procedure.k_VR": opt.k_VR + dk,
+                                           "procedure.enforce_v2_min": False}))  # fmt: skip
+        assert nb.field_length_ft >= opt.field_length_ft - 1.0
+
+
+def test_optimize_vr_keeps_lowest_vr_when_best(base_cfg):
+    lo = compute_bfl(base_cfg)
+    opt = compute_bfl(base_cfg.with_updates({"procedure.optimize_vr": True}))
+    assert opt.k_VR == lo.k_VR and opt.field_length_ft == lo.field_length_ft
+    assert opt.vr_optimization["evaluations"] > 3

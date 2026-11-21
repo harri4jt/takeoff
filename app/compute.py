@@ -55,10 +55,15 @@ def build_config(aircraft: str, ui: dict[str, Any]) -> RunConfig:
         "procedure.rotation_rate_deg_s": ui["rotation_rate"],
         "procedure.chute_enabled": bool(ui["chute"]),
         "procedure.enforce_v2_min": bool(ui.get("enforce_v2", True)),
-        "procedure.rules": ui.get("rules", "part25"),
-        "procedure.t_recog_s": ui.get("t_recog"),
-        "environment.runway_available_ft": ui.get("runway_avail"),
+        "procedure.optimize_vr": bool(ui.get("optimize_vr", False)),
     }
+    for key, path in (
+        ("rules", "procedure.rules"),
+        ("t_recog", "procedure.t_recog_s"),
+        ("runway_avail", "environment.runway_available_ft"),
+    ):
+        if ui.get(key) is not None:  # not on the main page any more; API callers only
+            overrides[path] = ui[key]
     if ui.get("thrust_table"):
         overrides["aircraft.engines.thrust_table"] = ui["thrust_table"]
     if ui.get("aero_config"):
@@ -110,7 +115,7 @@ def _run_cached(cfg_json: str) -> dict[str, Any]:
         "x_rest_ft": x_rest,
         "allowance_ft": res.d_stop_ft - x_rest,
         "sqrt_sigma": sqrt_sigma,
-        "v2_min_ratio": cfg.procedure.resolved().v2_min_ratio,
+        "v2_min_ratio": cfg.resolved().procedure.v2_min_ratio,
         "solve_time_s": t_solve,
         "method": cfg.solver.method,
         "k_CL": cfg.multipliers.k_CL,
@@ -130,16 +135,23 @@ def run(aircraft: str, ui: dict[str, Any]) -> dict[str, Any]:
 # ------------------------------------------------------------------------------------
 # lazy details
 # ------------------------------------------------------------------------------------
-TRADE_METRICS = ("bfl_ft", "field_length_ft", "aeo_distance_ft")
+TRADE_METRICS = ("bfl_ft", "field_length_ft", "aeo_distance_ft", "max_tire_speed_kts")
 
 
 def _trade_cell(args: tuple[str, float, float]) -> tuple | None:
-    """(BFL/CFL, field length, AEO distance) at one (k_CL, k_CD); None if it fails."""
+    """(BFL, field length, AEO distance, max tire speed, balanced) at one (k_CL, k_CD);
+    None if it fails."""
     cfg_json, k_cl, k_cd = args
     cfg = RunConfig.model_validate_json(cfg_json)
     try:
         r = compute_bfl(cfg.with_updates({"multipliers.k_CL": k_cl, "multipliers.k_CD": k_cd}))
-        return (r.bfl_ft, r.field_length_ft, r.aeo_distance_ft, bool(r.balanced))
+        return (
+            r.bfl_ft,
+            r.field_length_ft,
+            r.aeo_distance_ft,
+            r.max_tire_speed_kts,
+            bool(r.balanced),
+        )
     except Exception:  # noqa: BLE001 - a failed cell is shown blank
         return None
 
@@ -171,7 +183,7 @@ def trade_map(cfg_json: str, kcl: tuple[float, ...], kcd: tuple[float, ...]) -> 
     for m, name in enumerate(TRADE_METRICS):
         flat = [None if v is None else v[m] for v in vals]
         out["z"][name] = [flat[i * n : (i + 1) * n] for i in range(len(kcl))]
-    bal = [None if v is None else v[3] for v in vals]
+    bal = [None if v is None else v[len(TRADE_METRICS)] for v in vals]
     out["balanced"] = [bal[i * n : (i + 1) * n] for i in range(len(kcl))]
     out["time_s"] = time.perf_counter() - t0
     return out

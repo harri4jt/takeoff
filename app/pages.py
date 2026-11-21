@@ -16,24 +16,46 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 VERIFICATION_DIR = ROOT / "output" / "verification"
 
-# (route, menu title, markdown file, menu section)
-PAGES: list[tuple[str, str, Path, str]] = [
-    ("/how-it-works", "How it works (start here)", DOCS / "methods" / "overview.md", "Guides"),
-    ("/assumptions", "Assumptions & V-speed glossary", DOCS / "assumptions.md", "Guides"),
-    ("/rules", "Field-length rules: Part 25 vs MIL", DOCS / "field_length_rules.md", "Guides"),
-    ("/ground-effect", "Ground effect (Raymer)", DOCS / "ground_effect.md", "Guides"),
-    ("/physics", "Physics & equations", DOCS / "equations.md", "Guides"),
-    ("/runge-kutta", "Runge–Kutta integrators", DOCS / "methods" / "runge_kutta.md",
-     "About the method"),
-    ("/events", "Event location", DOCS / "methods" / "event_location.md", "About the method"),
-    ("/root-finding", "Root finding (secant)", DOCS / "methods" / "root_finding.md",
-     "About the method"),
-    ("/interpolation", "Interpolation & splines", DOCS / "methods" / "interpolation.md",
-     "About the method"),
-    ("/verification", "Verification gallery", DOCS / "methods" / "verification.md",
-     "About the method"),
-]  # fmt: skip
-ROUTE_BY_STEM = {p.stem: route for route, _, p, _ in PAGES}
+# Two documentation pages. Each is a list of sections: (anchor, index title, markdown file).
+DOC_PAGES: dict[str, tuple[str, str, list[tuple[str, str, Path]]]] = {
+    "/about": (
+        "About",
+        "What the tool computes, the rules and models behind it, and the assumptions.",
+        [
+            ("how-it-works", "How it works", DOCS / "methods" / "overview.md"),
+            ("rules", "Field-length rules: Part 25 vs MIL", DOCS / "field_length_rules.md"),
+            ("rotation-speed", "Rotation speed and VR optimization",
+             DOCS / "rotation_speed.md"),
+            ("ground-effect", "Ground effect (Raymer)", DOCS / "ground_effect.md"),
+            ("assumptions", "Assumptions & V-speed glossary", DOCS / "assumptions.md"),
+            ("physics", "Physics & equations", DOCS / "equations.md"),
+        ],
+    ),
+    "/methods": (
+        "Methods",
+        "The numerical methods (all hand-written) and how they were verified.",
+        [
+            ("runge-kutta", "Runge–Kutta integrators", DOCS / "methods" / "runge_kutta.md"),
+            ("events", "Event location", DOCS / "methods" / "event_location.md"),
+            ("root-finding", "Root finding (secant)", DOCS / "methods" / "root_finding.md"),
+            ("interpolation", "Interpolation & splines",
+             DOCS / "methods" / "interpolation.md"),
+            ("verification", "Verification gallery", DOCS / "methods" / "verification.md"),
+        ],
+    ),
+}  # fmt: skip
+# old one-page-per-file routes and markdown file stems -> page#section
+SECTION_ROUTE = {
+    anchor: f"{route}#{anchor}" for route, (_, _, secs) in DOC_PAGES.items() for anchor, *_ in secs
+}
+SECTION_ROUTE["how-it-works"] = "/about#how-it-works"
+ROUTE_BY_STEM = {
+    path.stem: f"{route}#{anchor}"
+    for route, (_, _, secs) in DOC_PAGES.items()
+    for anchor, _, path in secs
+}
+OLD_ROUTES = {f"/{a}": r for a, r in SECTION_ROUTE.items()}
+ROUTES = set(DOC_PAGES) | set(OLD_ROUTES)
 
 _IMG = re.compile(r"\]\((?:\.\./)*output/verification/")
 _MDLINK = re.compile(r"\]\((?:[\w./]*/)?([\w-]+)\.md(#[\w-]*)?\)")
@@ -44,43 +66,60 @@ def _rewrite(text: str) -> str:
 
     def link(m: re.Match) -> str:
         route = ROUTE_BY_STEM.get(m.group(1))
-        return f"]({route}{m.group(2) or ''})" if route else m.group(0)
+        if not route:
+            return m.group(0)
+        return f"]({route.split('#')[0]}{m.group(2)})" if m.group(2) else f"]({route})"
 
     return _MDLINK.sub(link, text)
 
 
 def render(pathname: str) -> html.Div:
-    idx = next((i for i, p in enumerate(PAGES) if p[0] == pathname), None)
-    if idx is None:
+    route = OLD_ROUTES.get(pathname, pathname).split("#")[0]
+    if route not in DOC_PAGES:
         return html.Div(
             className="doc",
             children=[html.H1("Page not found"), dcc.Link("Back to the simulator", href="/")],
         )
-    route, title, path, _ = PAGES[idx]
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        text = f"# {title}\n\n`{path.relative_to(ROOT)}` is missing."
-    if route == "/verification" and not VERIFICATION_DIR.exists():
-        text = (
-            "> The figures are generated files. Run `python scripts/make_verification_figures.py` "
-            "once, then reload this page.\n\n" + text
+    title, blurb, sections = DOC_PAGES[route]
+    index = html.Ol(
+        className="doc-index",
+        children=[html.Li(html.A(t, href=f"#{a}")) for a, t, _ in sections],
+    )
+    body = []
+    for anchor, sec_title, path in sections:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            text = f"# {sec_title}\n\n`{path.relative_to(ROOT)}` is missing."
+        if anchor == "verification" and not VERIFICATION_DIR.exists():
+            text = (
+                "> The figures are generated files. Run "
+                "`python scripts/make_verification_figures.py` once, then reload this page.\n\n"
+                + text
+            )
+        body.append(
+            html.Section(
+                id=anchor,
+                className="doc-section",
+                children=[
+                    dcc.Markdown(_rewrite(text), mathjax=True, link_target="_self"),
+                    html.A("↑ index", href="#doc-top", className="doc-top-link"),
+                ],
+            )
         )
-    prev_ = PAGES[idx - 1] if idx > 0 else None
-    next_ = PAGES[idx + 1] if idx + 1 < len(PAGES) else None
+    other = "/methods" if route == "/about" else "/about"
     return html.Div(
         className="doc",
         children=[
-            dcc.Markdown(_rewrite(text), mathjax=True, link_target="_self"),
+            html.H1(title, id="doc-top"),
+            html.P(blurb, className="hint"),
+            index,
+            *body,
             html.Div(
                 className="doc-nav",
                 children=[
-                    dcc.Link(f"← {prev_[1]}", href=prev_[0])
-                    if prev_
-                    else dcc.Link("← Simulator", href="/"),
-                    dcc.Link(f"{next_[1]} →", href=next_[0])
-                    if next_
-                    else dcc.Link("Simulator →", href="/"),
+                    dcc.Link("← Simulator", href="/"),
+                    dcc.Link(f"{DOC_PAGES[other][0]} →", href=other),
                 ],
             ),
         ],
@@ -98,10 +137,6 @@ def menu_links() -> list:
         html.Div("Aircraft data & validation", className="nav-head"),
         *[dcc.Link(p["menu"], href=p["route"]) for p in DATA_PAGES.values()],
     ]
-    section = None
-    for route, title, _, sec in PAGES:
-        if sec != section:
-            out.append(html.Div(sec, className="nav-head"))
-            section = sec
-        out.append(dcc.Link(title, href=route))
+    out.append(html.Div("Documentation", className="nav-head"))
+    out += [dcc.Link(title, href=route) for route, (title, _, _) in DOC_PAGES.items()]
     return out

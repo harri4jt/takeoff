@@ -105,6 +105,7 @@ class BFLResult:
     density_slugft3: float
     v1_solver_history: list[dict[str, float]] = field(default_factory=list)
     vr_adjustments: list[dict[str, Any]] = field(default_factory=list)
+    vr_optimization: dict[str, Any] | None = None
     warnings: list[str] = field(default_factory=list)
     aircraft_name: str = ""
     synthetic: bool = False
@@ -177,11 +178,12 @@ class BFLResult:
         if self.is_mil:
             return {
                 "rules": "MIL-STD-3013",
-                "bfl": "Critical field length (CFL)",
-                "bfl_short": "CFL",
+                # MIL-STD-3013 calls it the critical field length; BFL here for consistency
+                "bfl": "Balanced field length (BFL)",
+                "bfl_short": "BFL",
                 "v1": "V_brake (brakes on)",
                 "v_ef": "V_CEF (critical engine failure)",
-                "field": "Runway required (max of CFL, AEO to 50 ft)",
+                "field": "Runway required (max of BFL, AEO to 50 ft)",
                 "v2": "V_obs (at 50 ft, OEI)",
             }
         return {
@@ -233,6 +235,7 @@ class BFLResult:
         out["faa_field_length_ft"] = self.field_length_ft
         out["v2_over_vs"] = self.v2_over_vs
         out["polar_fit"] = self.polar_fit
+        out["vr_optimization"] = self.vr_optimization
         return out
 
     def summary(self) -> str:
@@ -266,6 +269,13 @@ class BFLResult:
         row("  V_LOF (liftoff, OEI)", f"{self.v_lof_kts:.1f} kt")
         row(f"  {n['v2']}", f"{self.v2_kts:.1f} kt")
         row("  V2 / V_S  (rule wants >= 1.2)", f"{self.v2_over_vs:.3f}")
+        vo = self.vr_optimization
+        if vo is not None:
+            row(
+                "  VR optimization",
+                f"k_VR {vo['k_VR_old']:.3f} -> {vo['k_VR_new']:.3f}, "
+                f"{vo['field_length_min_vr_ft']:,.0f} -> {vo['field_length_opt_ft']:,.0f} ft",
+            )
         if self.refusal_v1_kts is not None:
             row(
                 f"  refusal speed ({self.runway_available_ft:,.0f} ft)",

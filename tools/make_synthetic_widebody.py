@@ -1,4 +1,4 @@
-"""Generate the SYNTHETIC aero and thrust tables for aircraft/generic_widebody_synthetic.
+"""Generate the SYNTHETIC aero and thrust tables for tests/data/generic_widebody_synthetic.
 
 These numbers are invented, order-of-magnitude values for a fictional 4-engine
 widebody. They are NOT data for any real airplane.
@@ -16,7 +16,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-OUT = Path(__file__).resolve().parents[1] / "aircraft" / "generic_widebody_synthetic"
+OUT = Path(__file__).resolve().parents[1] / "tests" / "data" / "generic_widebody_synthetic"
 
 # --- synthetic aero parameters (takeoff flaps, gear down) ----------------------------
 CL0 = 0.55  # CL at alpha = 0 with takeoff flaps

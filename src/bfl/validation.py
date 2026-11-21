@@ -155,7 +155,7 @@ def _thrust_figure(aircraft: str, title: str, out: Path) -> str:
     plt = _plt()
     cfg = load_config(aircraft)
     d = Path(cfg.aircraft.directory)
-    df = read_csv_table(d / str(cfg.aircraft.engines.thrust_table), ["airspeed_kts", "thrust_lbf"])
+    df = read_csv_table(d / str(cfg.aircraft.engines.thrust_file), ["airspeed_kts", "thrust_lbf"])
     fig, ax = plt.subplots(figsize=(5.2, 3.6))
     if "temperature_F" in df.columns:
         for i, (t, g) in enumerate(df.groupby("temperature_F")):
@@ -175,21 +175,23 @@ def _thrust_figure(aircraft: str, title: str, out: Path) -> str:
 # Boeing 747-100
 # ------------------------------------------------------------------------------------
 def validate_b747(write: bool = True) -> Status:
+    """Ground effect (Raymer) is part of the 747 baseline; the no-ground-effect run is
+    kept as a what-if so its effect stays visible."""
     rows = []
     for w, ref in BOEING_747_SL:
         cfg = load_config("b747_100", overrides={"environment.weight_lbf": w * 1000.0})
         r = compute_bfl(cfg)
-        g = compute_bfl(cfg.with_updates({"aircraft.ground_effect.enabled": True}))
+        g = compute_bfl(cfg.with_updates({"aircraft.ground_effect.enabled": False}))
         rows.append((w, ref, r.field_length_ft, r.bfl_ft, g.field_length_ft))
     lo, hi = B747_TOL_PCT
     checks = []
-    for w, ref, far, _bfl, _ge in rows:
+    for w, ref, far, _bfl, _noge in rows:
         err = 100.0 * (far / ref - 1.0)
         checks.append(
             Check(f"{w:.0f} klb", far, ref, "ft", lo, hi, lo <= err <= hi, f"{err:+.1f} %")
         )
     errs = [100.0 * (r[2] / r[1] - 1.0) for r in rows]
-    ge_errs = [100.0 * (r[4] / r[1] - 1.0) for r in rows]
+    noge_errs = [100.0 * (r[4] / r[1] - 1.0) for r in rows]
     status = Status(
         aircraft="b747_100",
         passed=all(c.passed for c in checks),
@@ -200,11 +202,11 @@ def validate_b747(write: bool = True) -> Status:
         git_hash=_git_hash(),
         extra={
             "error_pct_range": [min(errs), max(errs)],
-            "ground_effect_error_pct_range": [min(ge_errs), max(ge_errs)],
+            "no_ground_effect_error_pct_range": [min(noge_errs), max(noge_errs)],
             "rows": [
                 {"weight_klb": w, "boeing_ft": ref, "model_field_ft": far, "model_bfl_ft": bfl,
-                 "model_field_ground_effect_ft": ge}
-                for w, ref, far, bfl, ge in rows
+                 "model_field_no_ground_effect_ft": ng}
+                for w, ref, far, bfl, ng in rows
             ],
         },
     )  # fmt: skip
@@ -216,17 +218,18 @@ def validate_b747(write: bool = True) -> Status:
         w = [r[0] for r in rows]
         band_lo = [r[1] * (1 + lo / 100) for r in rows]
         band_hi = [r[1] * (1 + hi / 100) for r in rows]
-        ax.fill_between(w, band_lo, band_hi, color="#2a78d6", alpha=0.10, label="tolerance band")
+        ax.fill_between(w, band_lo, band_hi, color="#2a78d6", alpha=0.10, label="±12 % band")
         ax.plot(w, [r[1] for r in rows], "o-", color="k", label="Boeing D6-58326 (SL, std day)")
-        ax.plot(w, [r[2] for r in rows], "s-", color="#2a78d6", label="model: FAA field length")
-        ax.plot(w, [r[3] for r in rows], "^--", color="#eb6834", label="model: BFL")
         ax.plot(
             w,
-            [r[4] for r in rows],
-            ":",
-            color="#1baf7a",
-            label="what-if: field length + Raymer ground effect",
+            [r[2] for r in rows],
+            "s-",
+            color="#2a78d6",
+            lw=2,
+            label="model: FAA field length (Raymer ground effect)",
         )
+        ax.plot(w, [r[4] for r in rows], ":", color="#9a9893", lw=1.2,
+                label="what-if: no ground effect")  # fmt: skip
         ax.set(
             xlabel="brake-release weight [1000 lb]",
             ylabel="runway length [ft]",
@@ -240,9 +243,62 @@ def validate_b747(write: bool = True) -> Status:
             "validation.png",
             _aero_figure("b747_100", "747-100 aero tables (CR-114494)", out),
             _thrust_figure("b747_100", "JT9D-3 at takeoff EPR, SL ISA", out),
+            _vr_figure("b747_100", load_config("b747_100"), "747-100 at 710 klb, SL ISA", out),
         ]
         _write("b747_100", status)
     return status
+
+
+def vr_scan(cfg, k_hi: float = 1.45, step: float = 0.025) -> list[dict[str, float]]:
+    """Field length vs k_VR from the lowest legal value upward (VR not optimized)."""
+    base = compute_bfl(cfg.with_updates({"procedure.optimize_vr": False}))
+    fast = cfg.with_updates({"procedure.optimize_vr": False, "procedure.enforce_v2_min": False,
+                             "solver.trajectory_dt_s": None})  # fmt: skip
+    rows = []
+    for k in np.arange(base.k_VR, k_hi + 1e-9, step):
+        try:
+            r = compute_bfl(fast.with_updates({"procedure.k_VR": float(k)}))
+        except Exception:  # noqa: BLE001 - e.g. past the end of the thrust table
+            continue
+        rows.append({"k_VR": r.k_VR, "vr_kts": r.vr_kts, "field_ft": r.field_length_ft,
+                     "bfl_ft": r.bfl_ft, "aeo_ft": r.field_length_aeo_factor * r.aeo_distance_ft,
+                     "balanced": bool(r.balanced)})  # fmt: skip
+    return rows
+
+
+def _vr_figure(aircraft: str, cfg, title: str, out: Path) -> str:
+    plt = _plt()
+    rows = vr_scan(cfg)
+    opt = compute_bfl(cfg.with_updates({"procedure.optimize_vr": True}))
+    fig, ax = plt.subplots(figsize=(6.2, 3.8))
+    vr = [r["vr_kts"] for r in rows]
+    ax.plot(
+        vr,
+        [r["field_ft"] for r in rows],
+        "-",
+        color="#2a78d6",
+        lw=2,
+        label="runway required (field length)",
+    )
+    ax.plot(vr, [r["bfl_ft"] for r in rows], "--", color="#eb6834", label="BFL (go/stop)")
+    ax.plot(vr, [r["aeo_ft"] for r in rows], ":", color="#555", label="all engines (× factor)")
+    ax.plot(
+        [rows[0]["vr_kts"]],
+        [rows[0]["field_ft"]],
+        "o",
+        color="k",
+        ms=6,
+        label=f"lowest legal VR: {rows[0]['field_ft']:,.0f} ft",
+    )
+    ax.plot([opt.vr_kts], [opt.field_length_ft], "*", color="#1baf7a", ms=13,
+            label=f"optimized VR: {opt.field_length_ft:,.0f} ft")  # fmt: skip
+    ax.set(xlabel="rotation speed VR [KEAS]", ylabel="distance [ft]", title=title)
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    name = "vr_scan.png"
+    fig.savefig(out / name)
+    plt.close(fig)
+    return name
 
 
 # ------------------------------------------------------------------------------------
@@ -273,7 +329,13 @@ def validate_sr71(write: bool = True) -> Status:
             abs(vlof - YF12_VLOF_KIAS) <= t,
         ),
     ]
-    mil = compute_bfl(cfg.with_updates({"procedure.rules": "mil3013"}))
+    p25 = cfg.with_updates({"procedure.rules": "part25"})
+    runs = {
+        "mil3013": r,
+        "mil3013_opt_vr": compute_bfl(cfg.with_updates({"procedure.optimize_vr": True})),
+        "part25": compute_bfl(p25),
+        "part25_opt_vr": compute_bfl(p25.with_updates({"procedure.optimize_vr": True})),
+    }
     status = Status(
         aircraft="sr71",
         passed=all(c.passed for c in checks),
@@ -284,12 +346,14 @@ def validate_sr71(write: bool = True) -> Status:
         git_hash=_git_hash(),
         notes=[
             "No published SR-71 runway-length data was available, so only speeds are checked.",
-            "Drag is an estimate; the field never balances (engine-out go governs).",
+            "Drag is an estimate. At the lowest legal VR the field does not balance; with a "
+            "later rotation (procedure.optimize_vr) it does.",
         ],
         extra={
             "weight_lbf": SR71_WEIGHT_LBF,
-            "part25": {"bfl_ft": r.bfl_ft, "balanced": r.balanced, "aeo_ft": r.aeo_distance_ft},
-            "mil3013": {"cfl_ft": mil.bfl_ft, "balanced": mil.balanced, "aeo_ft": mil.aeo_distance_ft},  # noqa: E501
+            **{k: {"bfl_ft": v.bfl_ft, "field_ft": v.field_length_ft, "balanced": v.balanced,
+                   "aeo_ft": v.aeo_distance_ft, "vr_kts": v.vr_kts, "v1_kts": v.v1_kts}
+               for k, v in runs.items()},
         },
     )  # fmt: skip
     if write:
@@ -315,6 +379,7 @@ def validate_sr71(write: bool = True) -> Status:
             "validation.png",
             _aero_figure("sr71", "SR-71A: lift from Fig. 6-2, drag ESTIMATED", out),
             _thrust_figure("sr71", "J58 max afterburner, SL (Fig. 1-3, as TAS)", out),
+            _vr_figure("sr71", cfg, "SR-71A at 140 klb, MIL-STD-3013, SL ISA", out),
         ]
         _write("sr71", status)
     return status
@@ -322,4 +387,4 @@ def validate_sr71(write: bool = True) -> Status:
 
 VALIDATORS = {"b747_100": validate_b747, "sr71": validate_sr71}
 
-__all__ = ["validate_b747", "validate_sr71", "read_status", "data_hash", "VALIDATORS"]
+__all__ = ["validate_b747", "validate_sr71", "vr_scan", "read_status", "data_hash", "VALIDATORS"]

@@ -42,8 +42,8 @@ def names(s: dict) -> dict[str, str]:
     if s.get("rules") == "mil3013":
         return {
             "rules": "MIL-STD-3013",
-            "bfl": "Critical field length",
-            "bfl_short": "CFL",
+            "bfl": "Balanced field length",  # MIL "critical field length", called BFL here
+            "bfl_short": "BFL",
             "field": "Runway required",
             "field_short": "Runway req.",
             "v1": "brakes on",
@@ -1293,6 +1293,7 @@ def trade(
     mode: str = "bands",
     thresholds: list[float] | None = None,
     base_point: tuple[float, float] | None = (1.0, 1.0),
+    unit: str = "ft",
 ) -> go.Figure:
     """One map per (aero, thrust) combination, k_CD on x, k_CL on y, shared colour scale."""
     n = len(maps)
@@ -1337,7 +1338,7 @@ def trade(
         r, c = k // cols_n + 1, k % cols_n + 1
         z = np.array([[np.nan if v is None else v for v in row] for row in m["z"][metric]], float)
         x, y = m["k_CD"], m["k_CL"]
-        text = [[("—" if np.isnan(v) else f"{v:,.0f} ft") for v in row] for row in z]
+        text = [[("—" if np.isnan(v) else f"{v:,.0f} {unit}") for v in row] for row in z]
         hover = "k_CD %{x:.3f}<br>k_CL %{y:.3f}<br>" + metric_label + " %{text}<extra></extra>"
         if banded:
             u = np.interp(z, knots_z, knots_u)

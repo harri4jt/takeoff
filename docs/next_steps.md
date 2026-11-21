@@ -286,3 +286,45 @@ Everything in the round-3 list is in, except as noted:
 - **E cleanup:** sensitivity tab and integrator toggle removed, methods pages grouped under
   "About the method", synthetic aircraft hidden behind a checkbox, 747 is the default.
   Further stripping is still open for discussion.
+
+---
+
+## Round 4 (2026-11-20): panel cleanup, VR optimization, SR-71
+
+**SR-71 airspeeds.** The thrust chart is in KIAS. `tools/make_sr71_tables.py` resamples it to
+TAS with IAS = TAS·√(288.15 K / T) at sea-level pressure, which is exactly √σ. At 15 °C,
+σ = 1, so IAS = TAS and the conversion cannot be the problem.
+
+**Why the SR-71 did not balance: the rotation speed.** At the lowest legal VR (184 kt,
+140 klb) the engine-out aircraft rotates to 10° and then crawls to lift-off against almost as
+much drag as thrust. Holding it on the runway to ~212 kt and then rotating gives a balanced
+field of 11,688 ft (MIL) / 10,035 ft (Part 25) instead of 29,269 / 26,863 ft. For the 747
+the field length rises monotonically with VR (also at k_CL 0.75 / k_CD 1.25), so its lowest
+legal VR is already optimal. See `docs/rotation_speed.md` and the VR curves on both data pages.
+
+Done:
+- [x] `procedure.optimize_vr` (scan + hand-written golden section, `bfl/optimize.py`); app
+      checkbox under Procedure; trade-study override; result chip; VR-scan figure on both
+      data pages; tests.
+- [x] Rules and the engine-failure delay are aircraft settings (`certification.rules`,
+      `certification.t_recog_s`). The 747 is Part 25; the SR-71 is MIL-STD-3013. Removed from
+      the main panel; shown as a note under the aircraft.
+- [x] CFL is labelled BFL everywhere in the app.
+- [x] Runway & weather is collapsible, with the demo scenario at its top. Anti-skid dropped:
+      the runway presets use the braked values without anti-skid.
+- [x] Runway-available input removed from the app (still `environment.runway_available_ft`).
+- [x] Aero and thrust tables are both dropdowns, shown together when either has more than one.
+- [x] No field-length warnings against reference aircraft (`warn: false` per metric in
+      `app/reference_aircraft.yaml`). Tire-speed and brake-energy warnings stay.
+- [x] Number inputs have no +/− steppers, except count fields (n_engines, grid points).
+- [x] Builder: the "Start from" dropdown is no longer hidden behind the next card. Aero and
+      thrust tables are set up the same way (`name: file.csv` list + default dropdown):
+      `engines.thrust_tables` + `engines.thrust_table` (a name; the old file form still loads).
+- [x] Synthetic widebody moved to `tests/data/` (tests and verification figures only).
+- [x] 747: Raymer ground effect is on in the baseline (−5.5 … +4.4 % vs Boeing); the data
+      page shows the no-ground-effect result as a grey what-if.
+- [x] Docs merged into two pages, About and Methods, each with a section index.
+- [x] Trade study: viridis by default; band edges only when banded; "Max ground speed
+      (tires) [kt]" metric; overrides for everything on the main panel (weight, temperature,
+      elevation, wind, slope, runway condition, μ, rotation rate, ground effect, chute, V2
+      rule, optimize VR).
