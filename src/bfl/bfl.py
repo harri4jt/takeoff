@@ -177,7 +177,11 @@ def _solve(ctx: _Context) -> BFLResult:
         f(v1)
     go, stop, prefix = cache[v1]
     warnings.extend(prefix.warnings)
-    trajectories = _display_trajectories(ctx, v1) or (go.trajectory(), stop.trajectory(), aeo.trajectory())
+    trajectories = _display_trajectories(ctx, v1) or (
+        go.trajectory(),
+        stop.trajectory(),
+        aeo.trajectory(),
+    )
 
     proc = cfg.procedure
     bfl = max(go.distance_ft, stop.distance_ft)
@@ -270,8 +274,14 @@ def _refusal_speed(
         v1 = ctx.v_r  # can stop from any speed up to VR
     else:
         v1 = safeguarded_secant(
-            g, ctx.v1_min, ctx.v_r, xtol=1e-9, ftol=s.v1_tol_ft, maxiter=s.v1_maxiter,
-            fa=g_lo, fb=g_hi,
+            g,
+            ctx.v1_min,
+            ctx.v_r,
+            xtol=1e-9,
+            ftol=s.v1_tol_ft,
+            maxiter=s.v1_maxiter,
+            fa=g_lo,
+            fb=g_hi,
         ).root
         if v1 not in out:
             g(v1)

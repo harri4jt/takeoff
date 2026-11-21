@@ -1,0 +1,34 @@
+# =====================================================================================
+#  Reference aircraft for the gear / limits comparison in the app.
+#  EDIT FREELY: add aircraft, change numbers, add metrics.
+#
+#  metrics:   one entry per result quantity the app knows (key = result scalar name):
+#               max_tire_speed_kts  highest ground speed on the tires (any branch)
+#               brake_energy_MJ     energy absorbed by the brakes in the rejected takeoff
+#               fuel_used_go_lbf    fuel burned in the engine-out continued takeoff
+#               field_length_ft     runway required (rule-set dependent)
+#  aircraft:  name, warn (true -> exceeding any of its values raises a warning), values.
+#
+#  !! ALL VALUES BELOW ARE PLACEHOLDERS (rough, unsourced) - replace before relying on them.
+# =====================================================================================
+metrics:
+  max_tire_speed_kts: {label: "Tire speed (max ground speed)", unit: "kt"}
+  brake_energy_MJ:    {label: "Brake energy, rejected takeoff", unit: "MJ"}
+  field_length_ft:    {label: "Runway required", unit: "ft"}
+
+aircraft:
+  - name: "747-100"
+    warn: true
+    max_tire_speed_kts: 204      # PLACEHOLDER (235 mph tire rating)
+    brake_energy_MJ: 1100        # PLACEHOLDER
+    field_length_ft: 10500       # PLACEHOLDER
+  - name: "Narrowbody twin (A320 class)"
+    warn: false
+    max_tire_speed_kts: 195      # PLACEHOLDER (225 mph)
+    brake_energy_MJ: 250         # PLACEHOLDER
+    field_length_ft: 7000        # PLACEHOLDER
+  - name: "Fighter (F-16 class)"
+    warn: false
+    max_tire_speed_kts: 217      # PLACEHOLDER (250 mph)
+    brake_energy_MJ: 60          # PLACEHOLDER
+    field_length_ft: 4000        # PLACEHOLDER

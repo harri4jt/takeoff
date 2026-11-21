@@ -28,13 +28,36 @@ EVENT_LABELS = {
     "VR": "rotate (VR)",
     "liftoff": "lift-off",
     "theta_target": "pitch hold",
-    "screen_height": "35 ft",
+    "screen_height": "screen height",
     "brakes": "brakes",
     "idle": "idle",
     "spoilers": "spoilers",
     "chute_deploy": "chute",
     "stopped": "stopped",
 }
+
+
+def names(s: dict) -> dict[str, str]:
+    """Rule-set dependent labels for a result's scalars."""
+    if s.get("rules") == "mil3013":
+        return {
+            "rules": "MIL-STD-3013",
+            "bfl": "Critical field length",
+            "bfl_short": "CFL",
+            "field": "Runway required",
+            "field_short": "Runway req.",
+            "v1": "brakes on",
+            "v_ef": "V_CEF",
+        }
+    return {
+        "rules": "FAA Part 25",
+        "bfl": "Balanced field length",
+        "bfl_short": "BFL",
+        "field": "FAA takeoff field length",
+        "field_short": "FAA field",
+        "v1": "V1",
+        "v_ef": "V_EF",
+    }
 
 
 def _ok(d: Data | None) -> bool:
@@ -208,9 +231,11 @@ def scene(
     mode "aeo":     the all-engines takeoff and the 15 % margin that gives the FAA length.
     """
     s = cur["scalars"]
+    nm = names(s)
     aeo_mode = mode == "aeo"
     has_base = show_base and _ok(base)
-    screen = 35.0
+    screen = float(s.get("screen_height_ft", 35.0))
+    factor = float(s.get("field_length_aeo_factor", 1.15))
     exag = float(exaggeration)
 
     # ---- geometry ------------------------------------------------------------------
@@ -259,7 +284,7 @@ def scene(
     note(
         x_lo,
         screen * exag,
-        "35 ft screen height",
+        f"{screen:.0f} ft {'obstacle' if s.get('rules') == 'mil3013' else 'screen height'}",
         xanchor="left",
         yanchor="bottom",
         font={"color": MUTED, "size": 11},
@@ -284,7 +309,8 @@ def scene(
             note(
                 x_ef,
                 0.97 * y_top,
-                f"<b>engine fails</b> · {s['v_ef_kts']:.0f} kt",
+                f"<b>engine fails</b> · {s['v_ef_kts']:.0f} kt"
+                + (" (V_CEF)" if s.get("rules") == "mil3013" else ""),
                 xanchor="right",
                 yanchor="top",
                 xshift=-4,
@@ -302,7 +328,11 @@ def scene(
             note(
                 x_v1,
                 0.97 * y_top,
-                f"<b>V1</b> decision · {s['v1_kts']:.0f} kt",
+                (
+                    f"<b>brakes on</b> · {s['v1_kts']:.0f} kt"
+                    if s.get("rules") == "mil3013"
+                    else f"<b>V1</b> decision · {s['v1_kts']:.0f} kt"
+                ),
                 xanchor="left",
                 yanchor="top",
                 xshift=4,
@@ -331,7 +361,7 @@ def scene(
             )
     else:
         x_aeo = s["aeo_distance_ft"]
-        x_115 = 1.15 * x_aeo
+        x_115 = factor * x_aeo
         y_b = 0.82 * y_top  # above the climb-out, clear of the aircraft
         shape(type="line", x0=x_aeo, x1=x_115, y0=y_b, y1=y_b, line={"color": FAA_C, "width": 2})
         for xx in (x_aeo, x_115):
@@ -351,18 +381,23 @@ def scene(
             y1=y_b,
             line={"color": FAA_C, "width": 1, "dash": "dot"},
         )
-        governs = "" if x_115 >= s["bfl_ft"] else "<br>(BFL is longer and governs)"
+        governs = "" if x_115 >= s["bfl_ft"] else f"<br>({nm['bfl_short']} is longer and governs)"
+        margin = (
+            f"<b>+{100 * (factor - 1):.0f} % margin</b> · {x_115 - x_aeo:,.0f} ft"
+            if factor > 1.0
+            else "<b>no margin</b> (MIL-STD-3013)"
+        )
         note(
             0.5 * (x_aeo + x_115),
             y_b + 0.05 * y_top,
-            f"<b>+15 % margin</b> · {x_115 - x_aeo:,.0f} ft{governs}",
+            f"{margin}{governs}",
             yanchor="bottom",
             font={"color": "#14663a", "size": 12},
         )
         note(
             x_aeo,
             y_b,
-            f"all engines at 35 ft<br><b>{x_aeo:,.0f} ft</b>",
+            f"all engines at {screen:.0f} ft<br><b>{x_aeo:,.0f} ft</b>",
             xanchor="right",
             xshift=-6,
             font={"color": "#14663a", "size": 11},
@@ -509,7 +544,7 @@ def scene(
     note(
         s["bfl_ft"],
         0.72,
-        f"<b>BFL {s['bfl_ft']:,.0f} ft</b>",
+        f"<b>{nm['bfl_short']} {s['bfl_ft']:,.0f} ft</b>",
         row=2,
         xanchor="right",
         xshift=-5,
@@ -521,7 +556,7 @@ def scene(
     note(
         s["faa_field_length_ft"],
         0.72,
-        f"<b>FAA field {s['faa_field_length_ft']:,.0f} ft</b>",
+        f"<b>{nm['field_short']} {s['faa_field_length_ft']:,.0f} ft</b>",
         row=2,
         xanchor="left",
         xshift=5,
@@ -541,7 +576,11 @@ def scene(
     frame_ms = 1000.0 * dt_frame / speed
     times = np.arange(0.0, t_end + dt_frame, dt_frame)
 
-    names = {"aeo": "All engines", "stop": "Reject (stop)", "go": "Continue (go, 1 engine out)"}
+    branch_names = {
+        "aeo": "All engines",
+        "stop": "Reject (stop)",
+        "go": "Continue (go, 1 engine out)",
+    }
     colors = {"aeo": AEO_C, "stop": STOP_C, "go": GO_C}
     movers = []  # (states, color, name, show legend)
     if has_base:
@@ -549,7 +588,7 @@ def scene(
             (_states(base[b], times, exag), GHOST, "baseline", i == 0)
             for i, b in enumerate(branches)
         ]
-    movers += [(_states(cur[b], times, exag), colors[b], names[b], True) for b in branches]
+    movers += [(_states(cur[b], times, exag), colors[b], branch_names[b], True) for b in branches]
 
     dyn: list[int] = []
     for (x, y, th), color, name, legend in movers:
@@ -765,7 +804,8 @@ def scene(
         row=2,
         col=1,
     )
-    ticks = [0, 10, 20, 35] if exag >= 6 else [0, 35]
+    hs = int(round(screen))
+    ticks = [0, 10, 20, hs] if exag >= 6 else [0, hs]
     fig.update_yaxes(
         range=[y_bot, y_top],
         tickvals=[v * exag for v in ticks],
@@ -798,12 +838,12 @@ _SPEED_LABELS = {
     ("go", "V1"): ("V1", -60, -34),
     ("go", "VR"): ("VR", -48, -52),
     ("go", "liftoff"): ("V_LOF", -20, -70),
-    ("go", "screen_height"): ("V2 (35 ft)", 40, -40),
+    ("go", "screen_height"): ("V2 / V_obs", 40, -40),
     ("stop", "idle"): ("idle", 50, 6),
     ("stop", "spoilers"): ("spoilers", 60, 24),
     ("stop", "chute_deploy"): ("chute", 55, -14),
     ("stop", "stopped"): ("stopped", -10, -36),
-    ("aeo", "screen_height"): ("AEO at 35 ft", 50, 20),
+    ("aeo", "screen_height"): ("AEO at screen", 50, 20),
 }
 
 
@@ -920,8 +960,12 @@ def forces_angles(cur: Data, base: Data | None, tab: str, branch: str) -> go.Fig
                 opacity=0.55 if dash else 1.0,
             )
     _event_lines(fig, cur[branch])
-    names = {"go": "continued takeoff", "stop": "rejected takeoff", "aeo": "all-engines takeoff"}
-    title = ("Forces" if tab == "forces" else "Angles") + f" vs time ({names[branch]})"
+    branch_names = {
+        "go": "continued takeoff",
+        "stop": "rejected takeoff",
+        "aeo": "all-engines takeoff",
+    }
+    title = ("Forces" if tab == "forces" else "Angles") + f" vs time ({branch_names[branch]})"
     _base_layout(fig, title, 460)
     fig.update_layout(margin={"t": 90})
     fig.update_xaxes(title="time since brake release [s]")
@@ -1021,7 +1065,7 @@ def v1_trade(
         fig.add_scatter(
             x=sw["v1_kts"],
             y=sw["d_go_ft"],
-            name="Go: continue to 35 ft" + sfx,
+            name="Go: continue to screen height" + sfx,
             mode="lines",
             line={"color": GO_C, "width": 2.5, "dash": dash},
             hovertemplate="%{y:,.0f} ft",
@@ -1075,53 +1119,6 @@ def v1_trade(
     _base_layout(fig, "The V1 trade: go and stop distance vs decision speed", 440)
     fig.update_xaxes(title="V1 [KEAS]")
     fig.update_yaxes(title="distance from brake release [ft]", tickformat=",")
-    return fig
-
-
-def heatmap(hm: dict, cur: Data, base: Data | None = None) -> go.Figure:
-    k = hm["k"]
-    z = np.array([[np.nan if v is None else v for v in row] for row in hm["z"]], dtype=float)
-    fig = go.Figure()
-    fig.add_heatmap(
-        x=k,
-        y=k,
-        z=z,
-        colorscale="Viridis",
-        reversescale=False,
-        colorbar={"title": {"text": "BFL [ft]"}, "tickformat": ","},
-        hovertemplate="k_CD %{x}<br>k_CL %{y}<br>BFL %{z:,.0f} ft<extra></extra>",
-        xgap=2,
-        ygap=2,
-    )
-    lo, hi = np.nanmin(z), np.nanmax(z)
-    for i, kcl in enumerate(k):
-        for j, kcd in enumerate(k):
-            v = z[i, j]
-            txt = "—" if np.isnan(v) else f"{v / 1000:.1f}k"
-            frac = 0.5 if np.isnan(v) or hi == lo else (v - lo) / (hi - lo)
-            fig.add_annotation(
-                x=kcd,
-                y=kcl,
-                text=txt,
-                showarrow=False,
-                font={"size": 12, "color": INK if frac > 0.62 else "white"},
-            )
-    pts = [(cur, "current", "circle-open", "white")]
-    if _ok(base):
-        pts.insert(0, (base, "baseline", "x-thin-open", "#ffb3b3"))
-    for d, name, sym, col in pts:
-        fig.add_scatter(
-            x=[d["k_CD"]],
-            y=[d["k_CL"]],
-            mode="markers",
-            name=name,
-            marker={"symbol": sym, "size": 22, "line": {"color": col, "width": 3}},
-            hovertemplate=f"{name}: k_CD %{{x}}, k_CL %{{y}}<extra></extra>",
-        )
-    _base_layout(fig, "Aero sensitivity: BFL over lift × drag multipliers", 480)
-    fig.update_layout(hovermode="closest", legend={"y": -0.16})
-    fig.update_xaxes(title="k_CD (drag multiplier)", tickvals=k, gridcolor="rgba(0,0,0,0)")
-    fig.update_yaxes(title="k_CL (lift multiplier)", tickvals=k, gridcolor="rgba(0,0,0,0)")
     return fig
 
 
@@ -1245,4 +1242,143 @@ def aircraft(ad: dict) -> go.Figure:
     fig.update_yaxes(title="CD", row=1, col=2)
     fig.update_yaxes(title="CL", row=2, col=1)
     fig.update_yaxes(title="lbf", tickformat=",", rangemode="tozero", row=2, col=2)
+    return fig
+
+
+def limit_strips(strips: list[dict]) -> go.Figure:
+    """One horizontal scale per metric: reference aircraft as ticks, this design as a marker."""
+    n = len(strips)
+    if n == 0:
+        return empty("No metrics in app/reference_aircraft.yaml", 200)
+    fig = make_subplots(rows=n, cols=1, vertical_spacing=0.32 / max(n, 1),
+                        subplot_titles=[f"{st['label']} [{st['unit']}]" for st in strips])  # fmt: skip  # noqa: E501
+    for i, st in enumerate(strips, start=1):
+        vals = [v for _, v, _ in st["refs"]] + [st["value"]]
+        lo, hi = min(vals), max(vals)
+        pad = 0.12 * (hi - lo or hi or 1.0)
+        fig.add_shape(type="line", x0=lo - pad, x1=hi + pad, y0=0, y1=0, row=i, col=1,
+                      line={"color": GRID, "width": 6})  # fmt: skip
+        for j, (name, v, warn) in enumerate(st["refs"]):
+            fig.add_scatter(
+                x=[v], y=[0], mode="markers+text", row=i, col=1, showlegend=False,
+                marker={"symbol": "line-ns", "size": 22, "line": {"width": 3,
+                        "color": "#a14a00" if warn else GHOST}},
+                text=[name], textposition="top center" if j % 2 == 0 else "bottom center",
+                textfont={"size": 10, "color": MUTED},
+                hovertemplate=f"{name}: %{{x:,.0f}} {st['unit']}<extra></extra>",
+            )  # fmt: skip
+        over = any(warn and st["value"] > v for _, v, warn in st["refs"])
+        fig.add_scatter(
+            x=[st["value"]], y=[0], mode="markers", row=i, col=1, showlegend=False,
+            marker={"symbol": "diamond", "size": 15, "color": BFL_C if over else C1,
+                    "line": {"color": "white", "width": 2}},
+            hovertemplate=f"this design: %{{x:,.0f}} {st['unit']}<extra></extra>",
+        )  # fmt: skip
+        fig.update_yaxes(visible=False, range=[-1, 1], row=i, col=1)
+        fig.update_xaxes(range=[lo - pad, hi + pad], tickformat=",", row=i, col=1)
+    _base_layout(fig, "", 120 + 110 * n)
+    fig.update_layout(hovermode="closest", margin={"l": 30, "r": 30, "t": 40, "b": 30})
+    for a in fig.layout.annotations:
+        a.font = {"size": 12, "color": INK}
+    return fig
+
+
+BAND_COLORS = ["#1baf7a", "#eda100", "#d7263d", "#7a1f2b", "#5c636e"]
+
+
+def trade(
+    maps: list[dict],
+    metric: str,
+    metric_label: str,
+    mode: str = "bands",
+    thresholds: list[float] | None = None,
+    base_point: tuple[float, float] | None = (1.0, 1.0),
+) -> go.Figure:
+    """One map per (aero, thrust) combination, k_CD on x, k_CL on y, shared colour scale."""
+    n = len(maps)
+    cols_n = min(n, 3)
+    rows = math.ceil(n / cols_n)
+    fig = make_subplots(
+        rows=rows, cols=cols_n, subplot_titles=[m["title"] for m in maps],
+        horizontal_spacing=0.07, vertical_spacing=0.14 if rows > 1 else 0.08,
+        shared_xaxes=False, shared_yaxes=False,
+    )  # fmt: skip
+    allz = np.concatenate(
+        [np.array([[np.nan if v is None else v for v in r] for r in m["z"][metric]], float).ravel()
+         for m in maps]
+    )  # fmt: skip
+    if np.all(np.isnan(allz)):
+        return empty("No cell solved: check the inputs", 400)
+    zmin, zmax = float(np.nanmin(allz)), float(np.nanmax(allz))
+    if zmax <= zmin:
+        zmax = zmin + 1.0
+    th = [t for t in sorted(t for t in (thresholds or []) if t > 0) if zmin < t < zmax]
+    banded = mode == "bands" and bool(thresholds)
+    nb = len(th) + 1
+    if banded:
+        # Uneven band edges: map z piecewise-linearly onto u, with edge k at u = k, and
+        # draw filled contours of u at the integers. Colours are fixed per band, so the
+        # same band has the same colour in every map.
+        all_th = sorted(t for t in (thresholds or []) if t > 0)
+        first = sum(1 for t in all_th if t <= zmin)  # bands entirely below the data
+        cols = (BAND_COLORS[: len(all_th)] + [GHOST])[first : first + nb]
+        knots_z = [zmin, *th, zmax]
+        knots_u = list(range(nb + 1))
+        scale = []
+        for i, c in enumerate(cols):
+            scale += [[i / nb, c], [(i + 1) / nb, c]]
+        cax = {"colorscale": scale, "cmin": 0, "cmax": nb,
+               "colorbar": {"title": {"text": metric_label}, "tickvals": list(range(1, nb)),
+                            "ticktext": [f"{t:,.0f}" for t in th]}}  # fmt: skip
+    else:
+        cax = {"colorscale": "Viridis", "cmin": zmin, "cmax": zmax,
+               "colorbar": {"title": {"text": metric_label}, "tickformat": ","}}  # fmt: skip
+    for k, m in enumerate(maps):
+        r, c = k // cols_n + 1, k % cols_n + 1
+        z = np.array([[np.nan if v is None else v for v in row] for row in m["z"][metric]], float)
+        x, y = m["k_CD"], m["k_CL"]
+        text = [[("—" if np.isnan(v) else f"{v:,.0f} ft") for v in row] for row in z]
+        hover = "k_CD %{x:.3f}<br>k_CL %{y:.3f}<br>" + metric_label + " %{text}<extra></extra>"
+        if banded:
+            u = np.interp(z, knots_z, knots_u)
+            u[np.isnan(z)] = np.nan
+            fig.add_contour(
+                x=x, y=y, z=u, text=text, hovertemplate=hover, coloraxis="coloraxis",
+                row=r, col=c, showlegend=False,
+                contours={"coloring": "fill", "start": 1, "end": max(nb - 1, 1), "size": 1,
+                          "showlines": True},
+                line={"color": "white", "width": 1.5}, connectgaps=False,
+            )  # fmt: skip
+        else:
+            fig.add_contour(
+                x=x, y=y, z=z, text=text, coloraxis="coloraxis", hovertemplate=hover,
+                row=r, col=c, showlegend=False,
+                contours={"coloring": "heatmap", "showlabels": True, "labelformat": ",.0f",
+                          "labelfont": {"size": 10, "color": "white"}},
+                line={"width": 0.6, "color": "rgba(255,255,255,0.6)"}, ncontours=12,
+            )  # fmt: skip
+        miss = [(x[j], y[i]) for i in range(len(y)) for j in range(len(x)) if np.isnan(z[i, j])]
+        if miss:
+            fig.add_scatter(x=[p[0] for p in miss], y=[p[1] for p in miss], mode="markers",
+                            marker={"symbol": "x-thin", "size": 9, "line": {"width": 1.5,
+                                    "color": INK}},
+                            hovertemplate="no solution<extra></extra>", showlegend=False,
+                            row=r, col=c)  # fmt: skip
+        if base_point is not None:
+            fig.add_scatter(x=[base_point[1]], y=[base_point[0]], mode="markers",
+                            marker={"symbol": "circle-open", "size": 14, "color": "white",
+                                    "line": {"width": 3}},
+                            hovertemplate="base case<extra></extra>", showlegend=False,
+                            row=r, col=c)  # fmt: skip
+        fig.update_xaxes(title_text="k_CD (drag ×)", row=r, col=c, constrain="domain")
+        fig.update_yaxes(title_text="k_CL (lift ×)" if c == 1 else None, row=r, col=c)
+    _base_layout(fig, "", 140 + 360 * rows)
+    fig.update_layout(
+        coloraxis=cax,
+        hovermode="closest",
+        showlegend=False,
+        margin={"l": 64, "r": 24, "t": 48, "b": 56},
+    )
+    for a in fig.layout.annotations:
+        a.font = {"size": 12, "color": INK}
     return fig

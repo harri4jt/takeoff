@@ -1,8 +1,8 @@
 """Bridge between the UI and the bfl package. The app ONLY calls the public bfl API.
 
 Results are cached on the JSON of the full validated RunConfig, so moving a slider
-back to a previous value is instant. The expensive "details" (V1 sweep, the k_CL x k_CD
-heatmap) are computed lazily, only when the details panel is opened.
+back to a previous value is instant. The expensive extras (V1 sweep, trade-study grids)
+are computed only when asked for.
 """
 
 from __future__ import annotations
@@ -37,7 +37,6 @@ TRAJ_COLS = {
     "F": "F_friction_lbf",
     "phase": "phase",
 }
-HEAT_VALUES = [0.8, 0.9, 1.0, 1.1, 1.2]
 MAX_ROWS = 1500
 
 
@@ -56,7 +55,16 @@ def build_config(aircraft: str, ui: dict[str, Any]) -> RunConfig:
         "procedure.rotation_rate_deg_s": ui["rotation_rate"],
         "procedure.chute_enabled": bool(ui["chute"]),
         "procedure.enforce_v2_min": bool(ui.get("enforce_v2", True)),
+        "procedure.rules": ui.get("rules", "part25"),
+        "procedure.t_recog_s": ui.get("t_recog"),
+        "environment.runway_available_ft": ui.get("runway_avail"),
     }
+    if ui.get("thrust_table"):
+        overrides["aircraft.engines.thrust_table"] = ui["thrust_table"]
+    if ui.get("aero_config"):
+        overrides["aircraft.aero.takeoff_configuration"] = ui["aero_config"]
+    if "ground_effect" in ui:
+        overrides["aircraft.ground_effect.enabled"] = bool(ui["ground_effect"])
     return load_config(aircraft, overrides=overrides)
 
 
@@ -102,7 +110,7 @@ def _run_cached(cfg_json: str) -> dict[str, Any]:
         "x_rest_ft": x_rest,
         "allowance_ft": res.d_stop_ft - x_rest,
         "sqrt_sigma": sqrt_sigma,
-        "v2_min_ratio": cfg.procedure.v2_min_ratio,
+        "v2_min_ratio": cfg.procedure.resolved().v2_min_ratio,
         "solve_time_s": t_solve,
         "method": cfg.solver.method,
         "k_CL": cfg.multipliers.k_CL,
@@ -122,12 +130,16 @@ def run(aircraft: str, ui: dict[str, Any]) -> dict[str, Any]:
 # ------------------------------------------------------------------------------------
 # lazy details
 # ------------------------------------------------------------------------------------
-def _heat_cell(args: tuple[str, float, float]) -> float | None:
+TRADE_METRICS = ("bfl_ft", "field_length_ft", "aeo_distance_ft")
+
+
+def _trade_cell(args: tuple[str, float, float]) -> tuple | None:
+    """(BFL/CFL, field length, AEO distance) at one (k_CL, k_CD); None if it fails."""
     cfg_json, k_cl, k_cd = args
     cfg = RunConfig.model_validate_json(cfg_json)
     try:
         r = compute_bfl(cfg.with_updates({"multipliers.k_CL": k_cl, "multipliers.k_CD": k_cd}))
-        return r.bfl_ft
+        return (r.bfl_ft, r.field_length_ft, r.aeo_distance_ft, bool(r.balanced))
     except Exception:  # noqa: BLE001 - a failed cell is shown blank
         return None
 
@@ -142,20 +154,27 @@ def _pool() -> ProcessPoolExecutor:
     return _POOL
 
 
-@lru_cache(maxsize=32)
-def heatmap(cfg_json: str) -> dict[str, Any]:
-    """BFL on a k_CL x k_CD grid (RK45, no display re-run)."""
+@lru_cache(maxsize=16)
+def trade_map(cfg_json: str, kcl: tuple[float, ...], kcd: tuple[float, ...]) -> dict[str, Any]:
+    """Full solves on a k_CL x k_CD grid for one configuration (parallel, RK45, no
+    display re-run). z[metric][i][j]: row i = k_CL, column j = k_CD."""
     fast = RunConfig.model_validate_json(cfg_json).with_updates({"solver.trajectory_dt_s": None})
     fj = fast.model_dump_json()
-    jobs = [(fj, kcl, kcd) for kcl in HEAT_VALUES for kcd in HEAT_VALUES]
+    jobs = [(fj, a, b) for a in kcl for b in kcd]
     t0 = time.perf_counter()
     try:
-        vals = list(_pool().map(_heat_cell, jobs))
+        vals = list(_pool().map(_trade_cell, jobs, chunksize=4))
     except Exception:  # noqa: BLE001 - e.g. no multiprocessing available: run serially
-        vals = [_heat_cell(j) for j in jobs]
-    n = len(HEAT_VALUES)
-    z = [vals[i * n : (i + 1) * n] for i in range(n)]  # rows = k_CL, cols = k_CD
-    return {"k": HEAT_VALUES, "z": z, "time_s": time.perf_counter() - t0}
+        vals = [_trade_cell(j) for j in jobs]
+    n = len(kcd)
+    out: dict[str, Any] = {"k_CL": list(kcl), "k_CD": list(kcd), "z": {}, "balanced": []}
+    for m, name in enumerate(TRADE_METRICS):
+        flat = [None if v is None else v[m] for v in vals]
+        out["z"][name] = [flat[i * n : (i + 1) * n] for i in range(len(kcl))]
+    bal = [None if v is None else v[3] for v in vals]
+    out["balanced"] = [bal[i * n : (i + 1) * n] for i in range(len(kcl))]
+    out["time_s"] = time.perf_counter() - t0
+    return out
 
 
 @lru_cache(maxsize=32)

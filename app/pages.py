@@ -18,35 +18,21 @@ VERIFICATION_DIR = ROOT / "output" / "verification"
 
 # (route, menu title, markdown file, menu section)
 PAGES: list[tuple[str, str, Path, str]] = [
-    ("/how-it-works", "How it works (start here)", DOCS / "methods" / "overview.md", "Overview"),
-    ("/assumptions", "Assumptions & V-speed glossary", DOCS / "assumptions.md", "Overview"),
-    ("/physics", "Physics & equations", DOCS / "equations.md", "Overview"),
-    (
-        "/runge-kutta",
-        "Runge–Kutta integrators",
-        DOCS / "methods" / "runge_kutta.md",
-        "Numerical methods",
-    ),
-    ("/events", "Event location", DOCS / "methods" / "event_location.md", "Numerical methods"),
-    (
-        "/root-finding",
-        "Root finding (secant)",
-        DOCS / "methods" / "root_finding.md",
-        "Numerical methods",
-    ),
-    (
-        "/interpolation",
-        "Interpolation & splines",
-        DOCS / "methods" / "interpolation.md",
-        "Numerical methods",
-    ),
-    (
-        "/verification",
-        "Verification gallery",
-        DOCS / "methods" / "verification.md",
-        "Numerical methods",
-    ),
-]
+    ("/how-it-works", "How it works (start here)", DOCS / "methods" / "overview.md", "Guides"),
+    ("/assumptions", "Assumptions & V-speed glossary", DOCS / "assumptions.md", "Guides"),
+    ("/rules", "Field-length rules: Part 25 vs MIL", DOCS / "field_length_rules.md", "Guides"),
+    ("/ground-effect", "Ground effect (Raymer)", DOCS / "ground_effect.md", "Guides"),
+    ("/physics", "Physics & equations", DOCS / "equations.md", "Guides"),
+    ("/runge-kutta", "Runge–Kutta integrators", DOCS / "methods" / "runge_kutta.md",
+     "About the method"),
+    ("/events", "Event location", DOCS / "methods" / "event_location.md", "About the method"),
+    ("/root-finding", "Root finding (secant)", DOCS / "methods" / "root_finding.md",
+     "About the method"),
+    ("/interpolation", "Interpolation & splines", DOCS / "methods" / "interpolation.md",
+     "About the method"),
+    ("/verification", "Verification gallery", DOCS / "methods" / "verification.md",
+     "About the method"),
+]  # fmt: skip
 ROUTE_BY_STEM = {p.stem: route for route, _, p, _ in PAGES}
 
 _IMG = re.compile(r"\]\((?:\.\./)*output/verification/")
@@ -102,9 +88,15 @@ def render(pathname: str) -> html.Div:
 
 
 def menu_links() -> list:
+    from .datapages import DATA_PAGES
+
     out: list = [
-        html.Div("Simulator", className="nav-head"),
+        html.Div("Tools", className="nav-head"),
         dcc.Link("Takeoff simulator", href="/"),
+        dcc.Link("Trade study", href="/trade"),
+        dcc.Link("Aircraft builder", href="/builder"),
+        html.Div("Aircraft data & validation", className="nav-head"),
+        *[dcc.Link(p["menu"], href=p["route"]) for p in DATA_PAGES.values()],
     ]
     section = None
     for route, title, _, sec in PAGES:

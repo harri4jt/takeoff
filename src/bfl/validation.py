@@ -221,7 +221,11 @@ def validate_b747(write: bool = True) -> Status:
         ax.plot(w, [r[2] for r in rows], "s-", color="#2a78d6", label="model: FAA field length")
         ax.plot(w, [r[3] for r in rows], "^--", color="#eb6834", label="model: BFL")
         ax.plot(
-            w, [r[4] for r in rows], ":", color="#1baf7a", label="what-if: field length + Raymer ground effect"
+            w,
+            [r[4] for r in rows],
+            ":",
+            color="#1baf7a",
+            label="what-if: field length + Raymer ground effect",
         )
         ax.set(
             xlabel="brake-release weight [1000 lb]",
@@ -285,7 +289,7 @@ def validate_sr71(write: bool = True) -> Status:
         extra={
             "weight_lbf": SR71_WEIGHT_LBF,
             "part25": {"bfl_ft": r.bfl_ft, "balanced": r.balanced, "aeo_ft": r.aeo_distance_ft},
-            "mil3013": {"cfl_ft": mil.bfl_ft, "balanced": mil.balanced, "aeo_ft": mil.aeo_distance_ft},
+            "mil3013": {"cfl_ft": mil.bfl_ft, "balanced": mil.balanced, "aeo_ft": mil.aeo_distance_ft},  # noqa: E501
         },
     )  # fmt: skip
     if write:

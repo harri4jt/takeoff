@@ -75,7 +75,9 @@ def test_sr71_mil_result_finite():
 # ---------------------------------------------------------------------------------
 def test_refusal_speed_at_bfl_is_v1(base_cfg, base_result):
     """With the runway equal to the balanced stop distance, refusal speed = V1."""
-    r = compute_bfl(base_cfg.with_updates({"environment.runway_available_ft": base_result.d_stop_ft}))
+    r = compute_bfl(
+        base_cfg.with_updates({"environment.runway_available_ft": base_result.d_stop_ft})
+    )
     assert r.refusal_v1_kts == pytest.approx(base_result.v1_kts, abs=0.05)
     longer = compute_bfl(
         base_cfg.with_updates({"environment.runway_available_ft": base_result.d_stop_ft + 500})

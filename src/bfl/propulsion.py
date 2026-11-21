@@ -82,15 +82,21 @@ def load_tsfc_column(
         x, y, z = grid_from_long(df, "airspeed_kts", "temperature_F", "tsfc_per_hr")
         return _Tsfc2D(
             Interpolator2D(
-                [v * KTS_TO_FTPS for v in x], [F_to_R(t) for t in y], z, out_of_range,
+                [v * KTS_TO_FTPS for v in x],
+                [F_to_R(t) for t in y],
+                z,
+                out_of_range,
                 f"{name}:TSFC(V,temp)",
             )
         )
     df = df.sort_values("airspeed_kts")
     return _Tsfc1D(
         Interpolator1D(
-            [v * KTS_TO_FTPS for v in df["airspeed_kts"]], df["tsfc_per_hr"], method,
-            out_of_range, f"{name}:TSFC(V)",
+            [v * KTS_TO_FTPS for v in df["airspeed_kts"]],
+            df["tsfc_per_hr"],
+            method,
+            out_of_range,
+            f"{name}:TSFC(V)",
         )
     )
 
