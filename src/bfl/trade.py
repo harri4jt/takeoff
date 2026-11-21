@@ -106,7 +106,7 @@ def trade_study(
         outputs: result columns, any key of ``BFLResult.scalars()``, of
             ``LandingResult.scalars()`` (``landing_...``; the landing is then solved too),
             or ``runway_required_ft`` = max(takeoff field length, landing runway).
-        workers: parallel processes (default: CPU count - 1, at most 8; 1 = serial).
+        workers: parallel processes (default: CPU count - 1; 1 = serial).
         warm_start: pass each case's optimal k_VR to the next along the last input.
         executor: an existing executor to use instead of starting processes (the app
             keeps one alive between studies).
@@ -138,7 +138,7 @@ def trade_study(
                          warm_start))  # fmt: skip
 
     if workers is None:
-        workers = max(1, min(8, (os.cpu_count() or 2) - 1))
+        workers = max(1, (os.cpu_count() or 2) - 1)
     if executor is not None:
         chunks = list(executor.map(_solve_run, jobs))
     elif workers > 1 and len(jobs) > 1:

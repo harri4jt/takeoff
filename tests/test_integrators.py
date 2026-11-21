@@ -130,3 +130,23 @@ def test_nonterminal_events_recorded_and_direction():
     for e in sol.events:
         assert sol.t[e.index] == e.t
     assert np.all(np.diff(sol.t) > 0)
+
+
+def test_fast_steps_match_numpy_steps():
+    """The float-only steps used by integrate() are bit-for-bit the numpy steps."""
+    import numpy as np
+
+    from bfl.integrators import _dp45_fast, _rk4_fast, dp45_step, rk4_step
+
+    def f(t, y):
+        return np.array([y[1], -0.3 * y[1] - np.sin(y[0]) + 0.1 * t, 0.05 * y[0] * y[1]])
+
+    y = np.array([0.4, -1.2, 2.0])
+    for h in (0.01, 0.37, 1.3):
+        a = rk4_step(f, 0.2, y, h)[0]
+        b = _rk4_fast(f, 0.2, y, h)[0]
+        assert np.array_equal(a, np.array(b))
+        y5, err, k7 = dp45_step(f, 0.2, y, h)
+        y5f, errf, k7f = _dp45_fast(f, 0.2, y, h)
+        assert np.array_equal(y5, np.array(y5f)) and np.array_equal(err, np.array(errf))
+        assert np.array_equal(k7, np.array(k7f))

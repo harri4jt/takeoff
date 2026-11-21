@@ -200,7 +200,7 @@ _POOL: ProcessPoolExecutor | None = None
 def _pool() -> ProcessPoolExecutor:
     global _POOL
     if _POOL is None:
-        _POOL = ProcessPoolExecutor(max_workers=max(1, min(8, (os.cpu_count() or 2) - 1)))
+        _POOL = ProcessPoolExecutor(max_workers=max(1, (os.cpu_count() or 2) - 1))
     return _POOL
 
 

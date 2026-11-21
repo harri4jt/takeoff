@@ -31,6 +31,7 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
+from .integrators import takes_lists
 from .model import VehicleModel
 from .units import FTPS_TO_KTS, RAD_TO_DEG
 
@@ -117,13 +118,13 @@ def ground_terms(t: float, y, p: SegmentParams):
     return va, alpha, qbar, cl, cd, lift, drag, thrust, n_raw, n, f_fric, accel, d_chute
 
 
-def ground_rhs(t: float, y: np.ndarray, p: SegmentParams) -> np.ndarray:
-    """d/dt [x, V(, fuel)] on the runway."""
+def ground_rhs(t: float, y, p: SegmentParams) -> list[float]:
+    """d/dt [x, V(, fuel)] on the runway (a plain list: the integrator works in floats)."""
     r = ground_terms(t, y, p)
     if len(y) > 2:
         vm = p.vehicle
-        return np.array([y[1], r[11], vm.propulsion.fuel_flow_lbm_s(r[7], r[0], vm.temp_R)])
-    return np.array([y[1], r[11]])
+        return [y[1], r[11], vm.propulsion.fuel_flow_lbm_s(r[7], r[0], vm.temp_R)]
+    return [y[1], r[11]]
 
 
 def normal_force_raw(t: float, y, p: SegmentParams) -> float:
@@ -150,14 +151,14 @@ def air_terms(t: float, y, p: SegmentParams):
     return theta, alpha, qbar, cl, cd, lift, drag, thrust, vw, dx, dh, dva, dgam
 
 
-def air_rhs(t: float, y: np.ndarray, p: SegmentParams) -> np.ndarray:
+def air_rhs(t: float, y, p: SegmentParams) -> list[float]:
     """d/dt [x, h, V_a, gamma(, fuel)] in the air."""
     r = air_terms(t, y, p)
     if len(y) > 4:
         vm = p.vehicle
         ff = vm.propulsion.fuel_flow_lbm_s(r[7], y[2], vm.temp_R)
-        return np.array([r[9], r[10], r[11], r[12], ff])
-    return np.array([r[9], r[10], r[11], r[12]])
+        return [r[9], r[10], r[11], r[12], ff]
+    return [r[9], r[10], r[11], r[12]]
 
 
 # ------------------------------------------------------------------------------------
@@ -199,9 +200,9 @@ def approach_terms(t: float, y, p: SegmentParams):
     return alpha + gam, alpha, qbar, cl, cd, lift, drag, thrust, vw, dx, dh, dva, dgam
 
 
-def approach_rhs(t: float, y: np.ndarray, p: SegmentParams) -> np.ndarray:
+def approach_rhs(t: float, y, p: SegmentParams) -> list[float]:
     r = approach_terms(t, y, p)
-    return np.array([r[9], r[10], r[11], r[12]])
+    return [r[9], r[10], r[11], r[12]]
 
 
 def ground_to_air_state(t: float, y_ground, p: SegmentParams) -> np.ndarray:
@@ -213,7 +214,10 @@ def ground_to_air_state(t: float, y_ground, p: SegmentParams) -> np.ndarray:
     return np.array(out)
 
 
-RHS_BY_KIND = {"ground": ground_rhs, "air": air_rhs, "approach": approach_rhs}
+RHS_BY_KIND = {
+    kind: takes_lists(fn)
+    for kind, fn in (("ground", ground_rhs), ("air", air_rhs), ("approach", approach_rhs))
+}
 
 
 def airspeed(kind: str, t: float, y, p: SegmentParams) -> float:

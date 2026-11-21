@@ -146,7 +146,75 @@ def dp45_step(
     return y5, err, k7
 
 
+# ---- the same two steps on plain Python floats (used by integrate) ---------------
+# The state vectors here have 2-5 components, where numpy's per-call overhead dwarfs the
+# arithmetic. These do exactly the same floating-point operations, in the same order,
+# component by component, so the results are bit-for-bit those of the numpy versions
+# above (checked by tests/test_integrators.py::test_fast_steps_match_numpy_steps).
+def _floats(v) -> list[float]:
+    return v.tolist() if isinstance(v, np.ndarray) else [float(x) for x in v]
+
+
+def takes_lists(fn):
+    """Mark a right-hand side (and its events) as happy with plain lists for y.
+
+    Unmarked functions get numpy arrays, as always; marked ones skip the conversion
+    (the model's own right-hand sides, see dynamics.py)."""
+    fn.takes_lists = True
+    return fn
+
+
+def _list_rhs(rhs):
+    """``rhs`` called with lists: as is if marked, else with y converted to an array."""
+    if getattr(rhs, "takes_lists", False):
+        return rhs
+
+    def wrapped(t, y, *args):
+        return rhs(t, np.asarray(y, dtype=float), *args)
+
+    wrapped.takes_lists = True
+    return wrapped
+
+
+def _rk4_fast(rhs, t, y, h, args=(), k1=None):
+    y = _floats(y)
+    k1 = _floats(rhs(t, y, *args)) if k1 is None else k1
+    hh = 0.5 * h
+    k2 = _floats(rhs(t + hh, [a + hh * b for a, b in zip(y, k1, strict=True)], *args))
+    k3 = _floats(rhs(t + hh, [a + hh * b for a, b in zip(y, k2, strict=True)], *args))
+    k4 = _floats(rhs(t + h, [a + h * b for a, b in zip(y, k3, strict=True)], *args))
+    h6 = h / 6.0
+    y_new = [
+        a + h6 * (b + 2.0 * (c + d) + e) for a, b, c, d, e in zip(y, k1, k2, k3, k4, strict=True)
+    ]
+    return y_new, None, None
+
+
+def _dp45_fast(rhs, t, y, h, args=(), k1=None):
+    y = _floats(y)
+    k1 = _floats(rhs(t, y, *args)) if k1 is None else k1
+    n = range(len(y))
+    k2 = _floats(rhs(t + _C2 * h, [y[i] + h * (_A21 * k1[i]) for i in n], *args))
+    k3 = _floats(rhs(t + _C3 * h, [y[i] + h * (_A31 * k1[i] + _A32 * k2[i]) for i in n], *args))
+    k4 = _floats(rhs(t + _C4 * h,
+                     [y[i] + h * (_A41 * k1[i] + _A42 * k2[i] + _A43 * k3[i]) for i in n],
+                     *args))  # fmt: skip
+    k5 = _floats(rhs(t + _C5 * h,
+                     [y[i] + h * (_A51 * k1[i] + _A52 * k2[i] + _A53 * k3[i] + _A54 * k4[i])
+                      for i in n], *args))  # fmt: skip
+    k6 = _floats(rhs(t + h,
+                     [y[i] + h * (_A61 * k1[i] + _A62 * k2[i] + _A63 * k3[i] + _A64 * k4[i]
+                                  + _A65 * k5[i]) for i in n], *args))  # fmt: skip
+    y5 = [y[i] + h * (_B1 * k1[i] + _B3 * k3[i] + _B4 * k4[i] + _B5 * k5[i] + _B6 * k6[i])
+          for i in n]  # fmt: skip
+    k7 = _floats(rhs(t + h, y5, *args))
+    err = [h * (_E1 * k1[i] + _E3 * k3[i] + _E4 * k4[i] + _E5 * k5[i] + _E6 * k6[i]
+                + _E7 * k7[i]) for i in n]  # fmt: skip
+    return y5, err, k7
+
+
 _STEPPERS = {"rk4": rk4_step, "rk45": dp45_step}
+_FAST = {rk4_step: _rk4_fast, dp45_step: _dp45_fast}
 
 
 def get_stepper(method: str):
@@ -188,9 +256,16 @@ def locate_in_step(
 
     Returns (t*, y*, number_of_rhs_evaluations_used).
     """
-    if k1 is None:
-        k1 = rhs(t_n, y_n, *args)
-    cache: dict[float, np.ndarray] = {}
+    stages = 4 if stepper is rk4_step else 7
+    if stepper in _FAST:
+        stepper = _FAST[stepper]
+        if not getattr(rhs, "takes_lists", False):
+            g_user = g
+            g = lambda t, y: g_user(t, np.asarray(y, dtype=float))  # noqa: E731
+        rhs = _list_rhs(rhs)
+    y_n = _floats(y_n)
+    k1 = _floats(rhs(t_n, y_n, *args)) if k1 is None else _floats(k1)
+    cache: dict[float, list[float]] = {}
 
     def phi(s: float) -> float:
         ys = stepper(rhs, t_n, y_n, s, args, k1)[0]
@@ -205,8 +280,7 @@ def locate_in_step(
     y_star = cache.get(s_star)
     if y_star is None:
         y_star = stepper(rhs, t_n, y_n, s_star, args, k1)[0]
-    stages = 4 if stepper is rk4_step else 7
-    return t_n + s_star, y_star, stages * (len(cache) + 1)
+    return t_n + s_star, np.array(y_star), stages * (len(cache) + 1)
 
 
 def locate_in_solution(
@@ -304,25 +378,39 @@ def integrate(
         Solution with one row per accepted step plus every event point.
     """
     method = method.lower()
-    stepper = get_stepper(method)
+    public = get_stepper(method)
+    stepper = _FAST[public]
+    fast = getattr(rhs, "takes_lists", False)
+    rhs = _list_rhs(rhs)
+    if not fast:  # events of a user rhs get arrays too
+        events = [
+            Event(lambda t, y, f=ev.func: f(t, np.asarray(y, dtype=float)), ev.name,
+                  ev.direction, ev.terminal)
+            for ev in events
+        ]  # fmt: skip
     adaptive = method == "rk45"
-    y = np.asarray(y0, dtype=float).copy()
+    y = _floats(np.asarray(y0, dtype=float))
+    n_dim = len(y)
     t = float(t0)
     if t_max <= t:
         raise ValueError("t_max must exceed t0")
 
     ts: list[float] = [t]
-    ys: list[np.ndarray] = [y.copy()]
+    ys: list[list[float]] = [list(y)]
     records: list[EventRecord] = []
     g_vals = [ev(t, y) for ev in events]
     n_rhs = 0
     n_rej = 0
     n_steps = 0
 
-    k1 = rhs(t, y, *args)
+    k1 = _floats(rhs(t, y, *args))
     n_rhs += 1
     if adaptive:
-        h = h0 if h0 is not None else _initial_step(rhs, t, y, k1, args, rtol, atol)
+        h = (
+            h0
+            if h0 is not None
+            else _initial_step(rhs, t, np.array(y), np.array(k1), args, rtol, atol)
+        )
         n_rhs += 1
         h = min(max(h, h_min), h_max)
     else:
@@ -338,8 +426,12 @@ def integrate(
         y_new, err, k_last = stepper(rhs, t, y, h_try, args, k1)
         if adaptive:
             n_rhs += 6
-            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_new))
-            en = float(np.sqrt(np.mean((err / scale) ** 2)))
+            # RMS of err / (atol + rtol max(|y|, |y_new|)), as np.sqrt(np.mean(...))
+            acc = 0.0
+            for e_i, a_i, b_i in zip(err, y, y_new, strict=True):
+                r = e_i / (atol + rtol * max(abs(a_i), abs(b_i)))
+                acc += r * r
+            en = math.sqrt(acc / n_dim)
             if not math.isfinite(en):
                 en = 1e10
             if en > 1.0:
@@ -359,8 +451,9 @@ def integrate(
         for j, ev in enumerate(events):
             if _crossed(g_vals[j], g_new[j], ev.direction):
                 t_s, y_s, used = locate_in_step(
-                    rhs, stepper, t, y, h_try, ev, g_vals[j], g_new[j], args, k1, event_tol
+                    rhs, public, t, y, h_try, ev, g_vals[j], g_new[j], args, k1, event_tol
                 )
+                y_s = y_s.tolist()
                 n_rhs += used
                 hits.append((t_s, j, y_s))
         terminal_hit = None
@@ -370,7 +463,7 @@ def integrate(
                 ts.append(t_s)
                 ys.append(y_s)
                 records.append(
-                    EventRecord(events[j].name, t_s, y_s, len(ts) - 1, events[j].terminal)
+                    EventRecord(events[j].name, t_s, np.array(y_s), len(ts) - 1, events[j].terminal)
                 )
                 if events[j].terminal:
                     terminal_hit = events[j].name
@@ -398,7 +491,7 @@ def integrate(
             fac = fac_max if en == 0.0 else min(fac_max, max(fac_min, safety * en ** (-0.2)))
             h = min(h_max, h_try * fac) if h_try >= h else min(h_max, h * fac)
         else:
-            k1 = rhs(t, y, *args)
+            k1 = _floats(rhs(t, y, *args))
             n_rhs += 1
             h = dt
 
