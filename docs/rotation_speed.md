@@ -41,8 +41,8 @@ lower drag due to lift.
   ≈ 27,000 lb) almost cancels the remaining engine's ≈ 29,600 lb. Rotating at 184 kt leaves
   it crawling to lift-off for about a minute, so the field never balances. Holding the
   nose down to about 212 kt and then rotating gives a balanced field about 60 % shorter.
-  This is why the SR-71 looked "broken": the problem was the rotation schedule, not
-  the airspeed conversion or the data. The data page has the curve.
+  So the SR-71's unbalanced field at its lowest VR comes from the rotation schedule, not
+  from the data. The SR-71 data page has the curve.
 
 Holding a *lower* attitude does not help the SR-71: it then needs an even higher speed to
 lift off (225+ kt), and it runs past the end of the digitized thrust chart. The rotation
@@ -125,14 +125,18 @@ worse than golden section (`tests/test_features.py::test_brent_min`).
 Each evaluation is a whole BFL solve (about 6 go/stop pairs, 0.05–0.17 s here), so the cost
 is the number of solves.
 
-| | solves added | time (this machine) |
+| | solves added | time (8-core machine) |
 |---|---|---|
-| 747, before (scan + golden section, Δk 0.002) | 11 | 1.0 s |
-| 747, now (probe + first scan point) | 2 | 0.38 s (0.17 s without) |
-| SR-71, before | 16 | 1.1 s |
-| SR-71, now (probe, scan, Brent) | 10 | 0.63 s (0.05 s without) |
-| trade map 11×11, SR-71: off / cold / warm-started | – | 1.1 / 8.3 / 6.7 s |
-| trade map 11×11, 747: off / cold / warm-started | – | 1.7 / 4.3 / 3.6 s |
+| 747, first version (scan + golden section, Δk 0.002) | 11 | 1.0 s |
+| 747, now (probe + first scan point) | 2 | 0.10 s (0.05 s without) |
+| SR-71, first version | 16 | 1.1 s |
+| SR-71, now (probe, scan, Brent) | 10 | 0.33 s (0.03 s without) |
+| trade map 11×11, SR-71: off / cold / warm-started | – | 0.6 / 4.3 / 3.1 s |
+| trade map 11×11, 747: off / cold / warm-started | – | 1.0 / 2.1 / 1.6 s |
+
+The integrator itself was also made about twice as fast without changing any result
+(the RK steps work on plain floats instead of tiny numpy arrays; results are
+bit-for-bit identical, checked by a test).
 
 What each speed-up gives up:
 
@@ -149,8 +153,8 @@ What each speed-up gives up:
 
 Further speed-ups not taken:
 * A V1 warm start inside each solve (start the secant at the neighbour's V1 instead of
-  bracketing [V1_min, VR] afresh) would save about 2 of the ~6 go/stop pairs per solve.
-  This is a change to the core solver, kept separate from the optimizer.
+  bracketing [V1_min, VR] afresh) would save about 2 of the ~6 go/stop pairs per solve,
+  but changes results at the level of the V1 tolerance, so it is not used.
 * Looser RK45 tolerances or a coarser V1 tolerance change every result, not only the
   optimized ones.
 * Optimizing on a coarse grid and interpolating k_VR to the fine grid would be ~3× faster

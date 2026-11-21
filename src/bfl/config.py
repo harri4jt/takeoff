@@ -41,9 +41,13 @@ class WeightConfig(_Model):
 
 
 class EnginesConfig(_Model):
-    n_engines: int = Field(ge=1)
-    thrust_mode: Literal["constant", "table"] = "constant"
-    thrust_per_engine_lbf: float | None = Field(default=None, gt=0)
+    n_engines: int = Field(ge=1, description="number of engines (one fails in the BFL cases)")
+    thrust_mode: Literal["constant", "table"] = Field(
+        default="constant", description="constant: one thrust value; table: thrust CSV(s)"
+    )
+    thrust_per_engine_lbf: float | None = Field(
+        default=None, gt=0, description="takeoff thrust per engine [lbf] (constant mode)"
+    )
     thrust_tables: dict[str, str] = Field(
         default_factory=dict,
         description="thrust tables (name -> CSV in the aircraft dir), e.g. different engines "
@@ -52,7 +56,9 @@ class EnginesConfig(_Model):
     thrust_table: str | None = Field(
         default=None, description="name of the default thrust table (a key of thrust_tables)"
     )
-    idle_thrust_per_engine_lbf: float = Field(ge=0)
+    idle_thrust_per_engine_lbf: float = Field(
+        ge=0, description="idle thrust per engine [lbf], used in the stop and the landing"
+    )
     thrust_incidence_deg: float = Field(
         default=0.0, description="thrust line angle above the aero-table alpha reference line"
     )
@@ -126,7 +132,9 @@ class AeroConfig(_Model):
     takeoff_configuration: str = Field(
         default="takeoff", description="name of the default aero table (a key of configurations)"
     )
-    delta_CD_engine_out: float = Field(default=0.0, ge=0)
+    delta_CD_engine_out: float = Field(
+        default=0.0, ge=0, description="drag added when an engine fails (windmilling + trim)"
+    )
     CLmax: dict[str, float] = Field(
         default_factory=dict,
         description="optional CLmax per configuration for V_S (e.g. from certified stall "
@@ -147,15 +155,17 @@ class AeroConfig(_Model):
 
 class SpoilerConfig(_Model):
     delta_CL: float = Field(default=0.0, le=0, description="lift increment (negative = dump)")
-    delta_CD: float = Field(default=0.0, ge=0)
+    delta_CD: float = Field(default=0.0, ge=0, description="drag increment of the spoilers")
 
 
 class ChuteConfig(_Model):
-    enabled: bool = False
-    area_ft2: float = Field(default=0.0, ge=0)
-    CD: float = Field(default=0.0, ge=0)
+    enabled: bool = Field(default=False, description="credit the chute in the rejected takeoff")
+    area_ft2: float = Field(default=0.0, ge=0, description="chute reference area [ft^2]")
+    CD: float = Field(default=0.0, ge=0, description="chute drag coefficient on that area")
     deploy_delay_s: float = Field(default=1.0, ge=0, description="after V1")
-    inflation_time_s: float = Field(default=1.0, ge=0)
+    inflation_time_s: float = Field(
+        default=1.0, ge=0, description="deployment to full drag (linear ramp)"
+    )
 
 
 class SpeedsConfig(_Model):
@@ -170,7 +180,7 @@ class GroundEffectConfig(_Model):
     fit CD = CD0 + K CL^2 of the takeoff table unless given. See docs/ground_effect.md.
     """
 
-    enabled: bool = False
+    enabled: bool = Field(default=False, description="Raymer ground effect on the induced drag")
     span_ft: float | None = Field(default=None, gt=0, description="wing span b")
     wing_height_ft: float | None = Field(
         default=None, gt=0, description="wing (quarter-chord MAC) height above the runway, on gear"
@@ -280,9 +290,9 @@ LANDING_RULES: dict[str, dict[str, Any]] = {
 
 
 class AircraftConfig(_Model):
-    name: str
+    name: str = Field(description="display name, e.g. Boeing 747-100")
     synthetic: bool = False
-    description: str = ""
+    description: str = Field(default="", description="free text shown with the aircraft")
     geometry: GeometryConfig
     weight: WeightConfig
     engines: EnginesConfig

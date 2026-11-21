@@ -20,29 +20,37 @@ VERIFICATION_DIR = ROOT / "output" / "verification"
 DOC_PAGES: dict[str, tuple[str, str, list[tuple[str, str, Path]]]] = {
     "/about": (
         "About",
-        "What the tool computes, the rules and models behind it, and the assumptions.",
+        "What the tool answers, what it needs, how to use it, and what it assumes.",
         [
-            ("how-it-works", "How it works", DOCS / "methods" / "overview.md"),
-            ("python", "Using it from Python (trade-study scripts)", DOCS / "python_usage.md"),
-            ("rules", "Field-length rules: Part 25 vs MIL", DOCS / "field_length_rules.md"),
-            ("landing", "Landing distance", DOCS / "landing.md"),
+            ("overview", "Overview", DOCS / "overview.md"),
+            ("faq", "Questions and answers", DOCS / "faq.md"),
+            ("aircraft-data", "Aircraft data (files, tables, every field)",
+             DOCS / "aircraft_data.md"),
+            ("python", "Using it from Python (scripts, trade studies)",
+             DOCS / "python_usage.md"),
+            ("rules", "Field-length rules: Part 25 vs MIL-STD-3013",
+             DOCS / "field_length_rules.md"),
             ("rotation-speed", "Rotation speed and VR optimization",
              DOCS / "rotation_speed.md"),
+            ("landing", "Landing distance", DOCS / "landing.md"),
             ("ground-effect", "Ground effect (Raymer)", DOCS / "ground_effect.md"),
             ("assumptions", "Assumptions & V-speed glossary", DOCS / "assumptions.md"),
-            ("physics", "Physics & equations", DOCS / "equations.md"),
         ],
     ),
     "/methods": (
         "Methods",
-        "The numerical methods (all hand-written) and how they were verified.",
+        "How the numbers are computed (all methods hand-written) and the evidence that "
+        "they are right.",
         [
+            ("how-it-works", "How the solver works", DOCS / "methods" / "overview.md"),
+            ("physics", "Physics & equations", DOCS / "equations.md"),
             ("runge-kutta", "Runge–Kutta integrators", DOCS / "methods" / "runge_kutta.md"),
             ("events", "Event location", DOCS / "methods" / "event_location.md"),
             ("root-finding", "Root finding (secant)", DOCS / "methods" / "root_finding.md"),
             ("interpolation", "Interpolation & splines",
              DOCS / "methods" / "interpolation.md"),
-            ("verification", "Verification gallery", DOCS / "methods" / "verification.md"),
+            ("verification", "Verification and validation",
+             DOCS / "methods" / "verification.md"),
         ],
     ),
 }  # fmt: skip
@@ -50,7 +58,6 @@ DOC_PAGES: dict[str, tuple[str, str, list[tuple[str, str, Path]]]] = {
 SECTION_ROUTE = {
     anchor: f"{route}#{anchor}" for route, (_, _, secs) in DOC_PAGES.items() for anchor, *_ in secs
 }
-SECTION_ROUTE["how-it-works"] = "/about#how-it-works"
 ROUTE_BY_STEM = {
     path.stem: f"{route}#{anchor}"
     for route, (_, _, secs) in DOC_PAGES.items()
@@ -104,7 +111,12 @@ def render(pathname: str) -> html.Div:
                 id=anchor,
                 className="doc-section",
                 children=[
-                    dcc.Markdown(_rewrite(text), mathjax=True, link_target="_self"),
+                    dcc.Markdown(
+                        _rewrite(text),
+                        mathjax=True,
+                        link_target="_self",
+                        dangerously_allow_html=True,  # our own docs: <a id> anchors
+                    ),
                     html.A("↑ index", href="#doc-top", className="doc-top-link"),
                 ],
             )
@@ -133,7 +145,7 @@ def menu_links() -> list:
 
     out: list = [
         html.Div("Tools", className="nav-head"),
-        dcc.Link("Takeoff simulator", href="/"),
+        dcc.Link("Simulator", href="/"),
         dcc.Link("Trade study", href="/trade"),
         dcc.Link("Aircraft builder", href="/builder"),
         html.Div("Aircraft data & validation", className="nav-head"),

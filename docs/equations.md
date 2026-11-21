@@ -83,12 +83,12 @@ dx/dt   = V_a·cos γ − V_w
 ```
 At liftoff `V_a = V + V_w`, `γ = 0` and `h = 0`.
 
-**Assumption (Phase 1):** the airborne segment treats the ground as locally flat,
+**Assumption:** the airborne segment treats the ground as locally flat,
 with h measured above the liftoff point, even when the runway has a slope. With a
 slope, N = 0 means `L + T sin ε = W cos φ` instead of `W`. That leaves a residual
 `dγ/dt ∝ W(cos φ − 1)` of order 10⁻⁵ rad/s, which is negligible.
 
-**Phase 3 note:** with a time-varying wind, `dV_a/dt` and `dγ/dt` gain wind-rate
+**Not modelled: time-varying wind.** With a time-varying wind, `dV_a/dt` and `dγ/dt` gain wind-rate
 terms, or the state must be rewritten in the ground frame. With headwind `V_w(t)`
 (+ headwind) and updraft `w_g(t)` (+ up), Newton in the ground frame projected onto
 the air-relative path gives
@@ -101,6 +101,26 @@ A rising headwind adds airspeed (`+dV_w/dt·cos γ`). On the ground the equation
 their form, because V is already the ground speed; the wind enters only through
 `V_a = V + V_w` and `α = θ + w_g/V_a`. That change is confined to `air_terms` and
 `ground_to_air_state`.
+
+## 5a. Approach and flare (landing, state `[x, h, V_a, γ]`, `approach_rhs`)
+
+On the approach the manoeuvre sets the **load factor** n = L/W, not the pitch attitude:
+
+```
+glide : n = cos γ,   dV_a/dt = 0,   dγ/dt = 0          (steady; T is what holds it)
+flare : n = n_flare (constant g),  thrust idle
+final : n = cos γ (sink rate held),  thrust idle
+        dV_a/dt = (T − D)/m − g·sin γ
+        dγ/dt   = g·(n − cos γ)/V_a
+        dh/dt   = V_a·sin γ,     dx/dt = V_a·cos γ − V_w
+CL = n·W/(q̄·S)  →  α from the inverted lift curve  →  CD = CD_table(α) (+ ground effect)
+```
+The flare starts at the height where a constant-n pull-up at the approach speed turns
+the glide angle γ_A into the touchdown sink-rate angle γ_td:
+`h_flare = V_A²/(g(n − 1))·(cos γ_td − cos γ_A)`. Because the speed bleeds off in the
+flare, γ_td is reached slightly above the runway and held to touchdown (event h = 0).
+The ground roll then uses the §4 equations with idle thrust, μ_roll for the free roll,
+then μ_brake, spoilers, and (military) reverse thrust `T = −f_rev·T_max` and the chute.
 
 ## 6. Procedure (FAA Part 25 style)
 
@@ -149,6 +169,13 @@ The touchback event is `h + 0.01 ft` crossing zero downward. When it fires, the 
 BFL solve is rerun with `k_VR += 0.01`, up to `max_vr_retries` times. Each retry is
 recorded in `vr_adjustments` and `warnings`. The small tolerance stops a harmless
 ~10⁻⁹ ft dip right after liftoff (see §5) from triggering it.
+
+### 6.4 Landing sequence
+
+From 50 ft at V_A = ratio·V_S(landing configuration, landing weight): glide → flare →
+final → touchdown → free roll (`free_roll_s`) → brakes + spoilers (+ reversers, chute)
+→ V = 0. Landing distance = x at the stop (x = 0 at the 50 ft point). Runway required =
+field factor × landing distance (Part 121: 1/0.6). See [Landing](landing.md).
 
 ## 7. Analytic ground-roll check (verification 9.3)
 

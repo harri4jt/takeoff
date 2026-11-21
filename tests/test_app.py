@@ -140,3 +140,39 @@ def test_landing_animation_builds():
     # a run without a landing result shows a message instead of failing
     cur = dict(cur, landing_tr=None)
     assert figures.landing_scene(cur, None, []).layout.annotations
+
+
+def test_aircraft_field_reference_is_current():
+    """docs/aircraft_data.md lists every aircraft field, as the generator would write it."""
+    import importlib.util
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(
+        "make_docs", root / "tools" / "make_aircraft_field_docs.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.tables() in (root / "docs" / "aircraft_data.md").read_text(), (
+        "run: python tools/make_aircraft_field_docs.py"
+    )
+
+
+def test_every_doc_link_resolves():
+    """Links between the docs point at a page section or an existing file."""
+    import re
+    from pathlib import Path
+
+    from app import pages
+
+    root = Path(__file__).resolve().parents[1]
+    docs = list((root / "docs").rglob("*.md")) + [root / "README.md"]
+    shown = {path for _, (_, _, secs) in pages.DOC_PAGES.items() for _, _, path in secs}
+    for p in shown:
+        assert p.exists(), p
+    for p in docs:
+        text = p.read_text()
+        for target in re.findall(r"\]\(([^)#\s]+\.md)(?:#[\w-]+)?\)", text):
+            assert (p.parent / target).resolve().exists(), f"{p.name}: broken link {target}"
+        for anchor in re.findall(r"\]\(#(q-[\w-]+)\)", text):
+            assert f'id="{anchor}"' in text, f"{p.name}: missing anchor {anchor}"

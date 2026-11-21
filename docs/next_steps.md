@@ -424,3 +424,21 @@ credit, wet runway option, flare model detail (constant-g vs Raymer's flare radi
       against 3013B.
 - [ ] 747-100: a flaps 25/30 table and a check against the Boeing landing chart.
 - [ ] A "Landing" mode for the animation (the details tab has the plots).
+
+---
+
+## Round 8 (2026-11-21): scripting, speed, landing animation, documentation
+
+- [x] `bfl.analyze(aircraft, **inputs)`: takeoff + landing + runway required in one call;
+      short input names (`weight_lbf`, `k_CL`, `mu_brake`, `rules`, …) everywhere.
+- [x] Plain-English errors: every problem in an aircraft file listed at once (missing,
+      unknown with "did you mean", empty sections, wrong types, missing CSVs, bad YAML);
+      the same for script inputs.
+- [x] Landing weight capped at the takeoff weight.
+- [x] Integrator on plain floats: about 2× faster, bit-identical results; trade studies
+      use all cores but one.
+- [x] Landing animation (third scene mode).
+- [x] Documentation rewritten for a design-tool audience: About = overview, Q&A, aircraft
+      data (generated field reference), Python, rules, rotation speed, landing, ground
+      effect, assumptions; Methods = solver, physics, numerical methods, verification and
+      validation. README rewritten with "Ideas to consider later". Study guide removed.

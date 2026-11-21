@@ -1,34 +1,14 @@
-# How it works
+# How the solver works
 
-This tool answers one question: **how much runway does a big jet need if an engine can
-fail at the worst possible moment during takeoff?** Answering it takes a physics model
-(forces on the aircraft), an ODE integrator (to move it down the runway), event
-location (to find exactly when things happen), root finding (to find the "worst moment"),
-and interpolation (to read the aircraft's data tables). Every one of those numerical
-methods is hand-written in `src/bfl/`.
+Every result is a simulation, not a handbook formula: the aircraft is moved down the
+runway by integrating its equations of motion, with each procedural switch (engine
+failure, brakes, rotation, lift-off, flare, touchdown) located exactly as an event. The
+"worst moment" for the engine failure and the best rotation speed are found by root
+finding and minimization on top of those simulations. Every numerical method is
+hand-written in `src/bfl/` (scipy appears only in the tests, as an independent check).
 
-## The question, in aviation terms
-
-During the takeoff roll the crew has a **decision speed, V1**.
-
-* If an engine fails **before V1**, they **stop**: brakes, engines to idle, spoilers up.
-* If it fails **at or after V1**, they **go**: continue the takeoff on the remaining
-  engines and climb to a 35 ft "screen height".
-
-Choosing V1 is a trade:
-
-* **Low V1:** stopping is easy (you're slow), but going means accelerating a long way on
-  fewer engines. The *go* distance is long.
-* **High V1:** going is easy (you're nearly at rotation speed), but stopping from high
-  speed takes a lot of runway. The *stop* distance is long.
-
-The V1 at which **go distance = stop distance** is the *balanced* V1, and that distance
-is the **Balanced Field Length (BFL)**. With any other V1, one of the two failure
-cases needs more runway than the BFL. See the *V1 trade* tab in the simulator.
-
-The certification rules (FAA Part 25) also require the runway to be at least
-**1.15 × the all-engines takeoff distance**. The *FAA field length* is the larger of
-the two.
+For what the results mean, see the About page; for the equations of motion, see
+[Physics & equations](../equations.md).
 
 ## The computation, from the inside out
 
@@ -42,6 +22,10 @@ compute_bfl
 │     └─ stop branch: integrate to V = 0                           (RK4 / RK45 + events)
 └─ [default] scan + Brent's method on k_VR: minimize the field    (optimization)
       └─ each evaluation: everything above, at that k_VR
+
+compute_landing
+├─ glide → constant-g flare → final → touchdown                  (RK45 + events)
+└─ free roll → braking to a stop                                  (RK45 + events)
 ```
 
 1. **All-engines roll (computed once).** The aircraft accelerates from rest to the
@@ -89,7 +73,7 @@ orange box under the runway in the animation is that allowance.
 
 ## Next
 
-* [Assumptions & V-speed glossary](assumptions.md): what each V-speed means and every
-  modelling decision.
-* [Physics & equations](equations.md): the equations of motion and sign conventions.
-* [Verification gallery](verification.md): evidence that each method works.
+* [Physics & equations](../equations.md): the equations of motion and sign conventions.
+* [Runge–Kutta](runge_kutta.md), [Event location](event_location.md),
+  [Root finding](root_finding.md), [Interpolation](interpolation.md): one page each.
+* [Verification](verification.md): evidence that each method works.

@@ -1,9 +1,9 @@
-# Modelling decisions, assumptions and glossary
+# Assumptions and glossary
 
-This tool is meant as a **low-fidelity runway-length estimator**, roughly what a
-performance engineer at an airframer would use for a first estimate before any
-certified, flight-test-calibrated data exist. Each section below says what was
-chosen and why.
+The tool is a **conceptual-design runway estimator**: the kind of estimate a
+performance engineer makes before certified, flight-test-calibrated data exist. Each
+section below says what was chosen and why. The short list of what is *not* modelled is
+in [Questions and answers](faq.md#q-not).
 
 ## Glossary: the takeoff speeds
 
@@ -25,7 +25,7 @@ are equal. V_EF can never fall below the speed at brake release. If V1 is so low
 the aircraft passes it within t_recog even when the engine fails at brake release, the
 solver stops with an error rather than inventing a failure before the takeoff starts.
 
-## Decisions on the open questions
+## Modelling choices
 
 ### Airspeed or ground speed for V1? → airspeed (KEAS ≈ KCAS)
 
@@ -54,8 +54,7 @@ views are the same physics. The code compares like with like everywhere.
 ### Liftoff before θ_target → keep rotating in the air
 
 The aircraft keeps pitching up at the rotation rate after liftoff until it reaches
-θ_target = θ_tailstrike − 1°, then holds that attitude. This is the default behaviour
-you approved.
+θ_target = θ_tailstrike − 1°, then holds that attitude.
 
 ### Do k_CL and k_CD scale the spoiler / engine-out / chute increments? → no
 
@@ -70,8 +69,7 @@ increments model **devices and failures**, which are separate hardware:
   rudder/aileron deflection needed to fly straight with asymmetric thrust. It is
   applied from V_EF onwards in both branches.
 * **Drag chute** is a parachute. Transports don't use them and Part 25 gives them no
-  credit. It is included only for the SR-71 case in Phase 2 and is flagged whenever
-  it is used.
+  credit, so a civil run that uses one is flagged. Military rules may credit it.
 
 If you want, set the increments to 0 in `aircraft.yaml`; they are optional.
 
@@ -88,16 +86,14 @@ does the same thing:
    starts at the same airspeed, and nothing in it depends on where along the runway it
    is or on V1. So V2 depends on VR alone, and each function evaluation only has to
    simulate rotate → lift-off → 35 ft. The BFL is then solved once at that k_VR. (A
-   time-varying wind, as in Phase 3, would couple them again.)
+   time-varying wind would couple them again; it is not modelled.)
 
-For the synthetic aircraft this moves k_VR from 1.100 to 1.161 and the BFL from about
-9,280 ft to 9,930 ft. That's the price of the safety margin. Turn it off with
-`procedure.enforce_v2_min: false` (or the checkbox in the app) to see the
-unconstrained result, which is then flagged with a warning. The ratio is
-`procedure.v2_min_ratio` (default 1.2).
-
-Earlier versions only *reported* the ratio because the original spec asked for a
-diagnostic. Enforcing it is closer to how real takeoff speeds are scheduled.
+For the 747-100 at 710,000 lb this moves k_VR from 1.100 to 1.154 and the BFL from
+8,454 ft to 9,104 ft: the price of the safety margin. Turn it off with
+`procedure.enforce_v2_min: false` (or the checkbox in the app) to see the unconstrained
+result, which is then flagged with a warning. The ratio is `procedure.v2_min_ratio`
+(default 1.2). On top of this, the rotation-speed optimizer may raise VR further when
+that shortens the field ([Rotation speed](rotation_speed.md)).
 
 ### Other assumptions
 
@@ -114,8 +110,15 @@ diagnostic. Enforcing it is closer to how real takeoff speeds are scheduled.
 * **Ground effect** is optional (Raymer, drag only; see `ground_effect.md`). By default the
   aero table is used as given.
 * **Flat-ground airborne segment** (see `equations.md` §5).
-* **Steady headwind** only in Phase 1. The `WindModel` interface is the hook for
-  gusts in Phase 3.
+* **Steady headwind** only. Gusts and wind shear are not modelled (the `WindModel`
+  interface in `environment.py` is where they would go).
+* **Thrust** is read from the table at the true airspeed and the actual temperature,
+  but **not lapsed with altitude**: the tables are sea-level tables. Elevation changes
+  the air density (lift, drag, true airspeeds) only, so high-elevation results are
+  optimistic unless the table is for that altitude.
+* **Landing** is a separate simulation with its own weight, flaps and stopping devices
+  (see [Landing](landing.md)). Constant weight; reversers at a fixed fraction of maximum
+  thrust until the stop.
 * **Friction** is a single coefficient: μ_roll before brakes, μ_brake after. Anti-skid
   enters only through the value you choose (the app's runway-condition presets use
   MIL-STD-3013 Table II). Brake-energy and tire-speed limits are not enforced. The
@@ -135,14 +138,6 @@ diagnostic. Enforcing it is closer to how real takeoff speeds are scheduled.
   V1 is shorter. The tests check the stop portion after V1 (`stop_after_v1_ft`), which
   is where the slope helps.
 
-## The synthetic test aircraft
-
-`tests/data/generic_widebody_synthetic` is **invented** and is used only by the tests and
-the verification figures. It is not in `aircraft/`, so the app does not list it. Its
-README and YAML say so, and every result summary repeats it. At the default
-k_VR = 1.10 its V2/V_S would be about 1.15, below the 1.2 rule, so the V2 rule raises k_VR
-to about 1.16.
-
 ## Reading the animation
 
 * Both outcomes of the *same* engine failure are drawn on one runway. Until the engine
@@ -161,3 +156,6 @@ to about 1.16.
   should be double-checked before being quoted).
 * Heights are exaggerated (×25 by default, in ⚙ settings); otherwise 35 ft would be a
   1-pixel bump over a 10,000 ft runway.
+* **Landing** mode starts at 50 ft over the threshold. The runway strip marks the landing
+  distance, the landing runway required (Part 121: ÷ 0.6) and, dotted, the takeoff field
+  length, so you can see at a glance which one sets the runway.

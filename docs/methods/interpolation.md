@@ -49,7 +49,7 @@ diagonally dominant ($2(h_{i-1}+h_i) > h_{i-1} + h_i$).
 
 ![spline vs scipy](../../output/verification/8_spline_vs_scipy.png)
 
-*Left: the synthetic CL(α) table with linear and natural-spline interpolation. Right:
+*Left: the test aircraft's CL(α) table with linear and natural-spline interpolation. Right:
 the difference between our spline and scipy's `CubicSpline(bc_type="natural")`, about
 $10^{-16}$ (machine precision).*
 
@@ -69,7 +69,7 @@ linear table has *kinks* at the knots, which is a mild violation. A spline is
 $C^2$-smooth, but it can **overshoot** between points. For example, it can invent a
 lift peak higher than any tabulated CLmax, and CLmax sets the stall speed and
 everything after it. For data with a sharp stall, a non-overshooting interpolant is the
-safer engineering choice. The switch is in the config, and on the synthetic data the two
+safer engineering choice. The switch is in the config, and on the test aircraft's data the two
 give BFLs that differ by about 0.03 ft.
 
 ## Out of range

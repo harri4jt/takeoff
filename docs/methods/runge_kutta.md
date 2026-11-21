@@ -5,7 +5,7 @@ Code: `src/bfl/integrators.py` (`rk4_step`, `dp45_step`, `integrate`).
 The aircraft's motion is an initial-value problem $y' = f(t, y)$, $y(t_0) = y_0$. On
 the ground the state is $y = [x, V]$ (distance, ground speed). In the air it is
 $y = [x, h, V_a, \gamma]$ (distance, height, airspeed, flight-path angle). See
-[Physics & equations](equations.md) for $f$.
+[Physics & equations](../equations.md) for $f$.
 
 ## RK4: the classical fourth-order method
 

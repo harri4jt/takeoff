@@ -1,61 +1,52 @@
-# Using the tool from Python
+# Using it from Python
 
-Everything the app does is available from the `bfl` package. The app itself only calls
-these functions.
+The intended workflow: build or edit the aircraft in the app's builder, save it (or
+download the `.zip`), then run cases from a script. Everything the app computes is
+available from the `bfl` package, and the app itself uses only these functions.
+
+Templates: `scripts/analyze_example.py` (one case) and `scripts/trade_study_example.py`
+(two trade studies with plots).
 
 ## One case
 
 ```python
-from bfl import load_config, compute_bfl
+from bfl import analyze
 
-cfg = load_config("b747_100", overrides={"environment.temperature_F": 90,
-                                         "environment.elevation_ft": 5000})
-r = compute_bfl(cfg)
-print(r.summary())             # the text in the app's Run summary tab
-r.field_length_ft              # runway required [ft]
-r.go.to_dataframe()            # every time step of the engine-out go (also .stop, .aeo)
+a = analyze("b747_100", weight_lbf=650_000, temperature_F=95, elevation_ft=5000)
+a.runway_required_ft          # max(takeoff field length, landing runway required)
+a.governed_by                 # "takeoff" or "landing"
+print(a.summary())            # the same text as the app's Run summary
+a.takeoff.v1_kts, a.takeoff.vr_kts, a.landing.v_approach_kts
+a.scalars()                   # every output as one flat dict
+a.time_histories()["go"]      # pandas DataFrame: every time step (also stop, aeo, landing)
+a.save("output/case_1")       # summary.txt, results.csv, time_history_*.csv
 ```
 
-`overrides` takes dotted paths into the configuration, for example
-`environment.weight_lbf`, `environment.headwind_kts`, `environment.mu_brake`,
-`multipliers.k_CL`, `procedure.optimize_vr`, `aircraft.aero.delta_CD_engine_out`.
-A mistyped path is an error, not silently ignored.
+## Inputs
 
-## Landing
+Inputs are keyword arguments (or dict keys in a trade study). The common ones have short
+names:
+
+| short name | what | short name | what |
+|---|---|---|---|
+| `weight_lbf` | takeoff weight | `k_CL`, `k_CD` | lift / drag multipliers |
+| `temperature_F` | outside air temperature | `isa_delta_F` | or: ISA deviation |
+| `elevation_ft` | field elevation | `headwind_kts` | + headwind, − tailwind |
+| `runway_slope_deg` | + uphill | `mu_brake`, `mu_roll` | runway friction |
+| `rules` | `"part25"` or `"mil3013"` | `aero_table`, `thrust_table` | which table (by name) |
+| `ground_effect` | True / False | `optimize_vr` | True / False |
+| `chute` | drag chute in the rejected takeoff | `landing_weight_lbf` | landing weight |
+| `landing_k_CL`, `landing_k_CD` | landing-flap multipliers | | |
+
+Anything else is reachable by its dotted path, the same names as in `aircraft.yaml` and
+the builder:
 
 ```python
-from bfl import compute_landing
-lr = compute_landing(cfg)      # same config; landing settings come from aircraft.yaml
-lr.runway_required_ft, lr.landing_distance_ft
-print(lr.summary())
+analyze("b747_100", **{"aircraft.landing.free_roll_s": 3.0, "procedure.rotation_rate_deg_s": 2.5})
 ```
 
-## Aircraft that are not in `aircraft/`
-
-`load_config` (and `trade_study`) take any of:
-
-```python
-load_config("b747_100")                          # a folder under aircraft/
-load_config("~/designs/concept_a")               # any folder with an aircraft.yaml
-load_config("~/designs/concept_a/aircraft.yaml") # the yaml file itself
-load_config("~/Downloads/concept_b.zip")         # a .zip from the builder's Download
-```
-
-A zip is unpacked once into `~/.cache/bfl/aircraft_zips/` (set `BFL_CACHE_DIR` to move it)
-and reused while it is unchanged. To run many designs kept together:
-
-```python
-from pathlib import Path
-from bfl import list_aircraft, load_config, compute_bfl
-
-designs = Path("~/designs").expanduser()
-for name in list_aircraft(designs):
-    r = compute_bfl(load_config(designs / name))
-    print(f"{name:20s} {r.field_length_ft:8,.0f} ft")
-```
-
-The app lists the aircraft in `aircraft/`; start it with `BFL_AIRCRAFT_DIR=~/designs python -m
-app` to list another folder instead.
+A mistyped name stops with a suggestion (`unknown input 'wieght_lbf' (did you mean
+'weight_lbf'?)`), and an out-of-range value says which field and why.
 
 ## Trade studies
 
@@ -64,34 +55,61 @@ import numpy as np
 from bfl import load_config, trade_study
 from bfl.trade import grid
 
-cfg = load_config("b747_100")
+cfg = load_config("b747_100", overrides={"elevation_ft": 5000})
 df = trade_study(cfg, {
-    "multipliers.k_CL": np.linspace(0.8, 1.2, 9),
-    "multipliers.k_CD": np.linspace(0.8, 1.2, 9),
+    "k_CL": np.linspace(0.8, 1.2, 9),
+    "k_CD": np.linspace(0.8, 1.2, 9),
 })
 df.to_csv("kcl_kcd.csv", index=False)
-grid(df, x="multipliers.k_CD", y="multipliers.k_CL", value="field_length_ft")
+grid(df, x="k_CD", y="k_CL", value="runway_required_ft")   # a k_CL x k_CD table
 ```
 
-* Every combination of the varied inputs is solved (a full grid), in parallel.
-  81 cases of the 747 take about 2.5 s.
-* The result is a pandas DataFrame, one row per case: the varied inputs, the chosen
-  outputs (`outputs=`, any key of `BFLResult.scalars()`; the default is runway required,
-  BFL, all-engines distance, balanced, V1, VR, V2, k_VR, tire speed, brake energy) and
-  `error` (empty when the case solved; failed cases are kept with NaN outputs).
-* Cases are solved in runs along the **last** varied input, each one starting the VR
-  optimizer from its neighbour's answer. Put the input with the most values last.
-* Scripts that use it need the usual `if __name__ == "__main__":` guard, because the
-  study starts worker processes.
+* Every combination is solved (a full grid), in parallel on all but one core.
+  81 cases take about 1–3 s.
+* One row per case: the varied inputs, the outputs, and `error` (empty when the case
+  solved; failed cases stay in the table with NaN outputs, so a grid is never ragged).
+* Default outputs: runway required, takeoff field length, landing runway required, BFL,
+  all-engines distance, balanced, V1, VR, V2, k_VR, tire speed, brake energy. Ask for
+  others with `outputs=(...)`: any key of `a.scalars()`.
+* Cases are solved in runs along the **last** input, each starting the rotation-speed
+  search from its neighbour's answer (results agree with independent solves to a few
+  feet). Put the input with the most values last.
+* Scripts need the `if __name__ == "__main__":` guard, because the study starts worker
+  processes.
 
-`scripts/trade_study_example.py` is a complete template: an aero (k_CL × k_CD) study with a
-contour plot, and a weight × temperature study at a 5,000 ft airport.
+## Aircraft that are not in `aircraft/`
 
-## Other building blocks
+`analyze`, `load_config` and `trade_study` take any of:
+
+```python
+analyze("b747_100")                            # a folder under aircraft/
+analyze("~/designs/concept_a")                 # any folder with an aircraft.yaml
+analyze("~/designs/concept_a/aircraft.yaml")   # the yaml file itself
+analyze("~/Downloads/concept_b.zip")           # a .zip from the builder
+```
+
+A zip is unpacked once into `~/.cache/bfl/aircraft_zips/` (`BFL_CACHE_DIR` moves it) and
+reused while it is unchanged. Many designs kept together:
+
+```python
+from pathlib import Path
+from bfl import analyze, list_aircraft
+
+designs = Path("~/designs").expanduser()
+for name in list_aircraft(designs):
+    a = analyze(designs / name, weight_lbf=None)   # None: the aircraft's default weight
+    print(f"{name:20s} {a.runway_required_ft:8,.0f} ft  ({a.governed_by})")
+```
+
+To list another folder in the app, start it with `BFL_AIRCRAFT_DIR=~/designs python -m app`.
+
+## Lower-level pieces
 
 | | |
 |---|---|
-| `sweep_v1(cfg, n=21)` | go and stop distance vs V1 (the classic crossing chart) |
-| `list_aircraft()` | the aircraft folders available |
+| `load_config(aircraft, overrides={...})` | the full configuration (`RunConfig`), validated |
+| `compute_bfl(cfg)` | takeoff only: `BFLResult` (`.summary()`, `.scalars()`, `.go/.stop/.aeo` trajectories) |
+| `compute_landing(cfg)` | landing only: `LandingResult` |
+| `sweep_v1(cfg, n=21)` | go and stop distance against V1 (the crossing chart) |
 | `bfl.plotting.bfl_chart`, `time_histories` | matplotlib versions of the app's plots |
-| `scripts/run_example.py` | one case: summary, figures and CSVs |
+| `scripts/run_example.py` | one takeoff with figures, from the command line |

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "bfl"
 version = "0.1.0"
-description = "Balanced Field Length solver with hand-written RK / secant / interpolation (MATH 6006 project)"
+description = "Conceptual-design takeoff and landing runway estimator (balanced field length, Part 25 / MIL-STD-3013)"
 requires-python = ">=3.11"
 dependencies = [
     "numpy",

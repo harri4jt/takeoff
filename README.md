@@ -1,109 +1,112 @@
-# Balanced Field Length (BFL) solver
+# Takeoff & landing runway estimator
 
-This started as a MATH 6006 numerical-methods project and is growing into a
-conceptual-design takeoff tool. It estimates the runway an aircraft needs: the
-**balanced field length** under FAA Part 25, or the **critical field length** under
-MIL-STD-3013. In both, a continued takeoff with one engine failed and a rejected
-takeoff need the same distance.
+A conceptual-design tool that answers **how much runway an aircraft design needs**. From
+the aircraft's lift and drag tables, thrust, weights and the runway conditions, it
+simulates:
 
-Features: Part 25 / MIL-STD-3013 rule sets, optional Raymer ground effect, fuel burn
-from TSFC, refusal speed for a given runway, tire-speed and brake-energy outputs with
-reference-aircraft warnings, a trade-study page (k_CL × k_CD maps per aero/thrust table),
-an aircraft builder, and validation pages for the 747-100 and SR-71 fed by the test suite.
+* the **balanced field length**: an engine fails at the worst moment, and continuing or
+  stopping need the same runway (FAA Part 25, or MIL-STD-3013 for military aircraft);
+* the **all-engines takeoff** and the **takeoff field length** the rules require;
+* the **landing** from 50 ft to a stop and the **landing runway** the rules require;
+* the speeds (V1/V_CEF, VR, V_LOF, V2, approach, touchdown), tire speed, brake energy
+  and fuel used.
 
-The numerical core is written from scratch in `src/bfl/`:
+The result to design to is **runway required = max(takeoff field length, landing runway
+required)**. A web app (simulator with animations, trade-study maps, aircraft builder)
+and a Python API give the same numbers.
 
-* fixed-step **RK4** and adaptive **Dormand–Prince RK45**
-* **event location** by re-taking partial RK steps
-* **secant** and bracket-**safeguarded secant** root finders
-* **linear**, **natural cubic spline** (Thomas algorithm) and **bilinear** interpolation
+![Simulator](docs/simulator.png)
 
-scipy is used **only** in the tests and the verification script, as an independent
-reference.
-
-## Install
+## Quick start
 
 ```bash
-pip install -e ".[test]"        # into your Python 3.13 environment
+pip install -e ".[test]"       # Python 3.11+
+python -m app                  # the app at http://127.0.0.1:8050
 ```
 
-## Run
+In the app: pick an aircraft and press **Run**. The ☰ menu has the **Trade study**, the
+**Aircraft builder**, the aircraft validation pages, and the documentation (**About**:
+what it answers, the data it needs, Q&A, the rules; **Methods**: how it computes and the
+evidence that it is right).
 
-```bash
-python scripts/run_example.py                  # summary + figures in output/
-python scripts/run_example.py --kcl 1.1 --headwind 10
-python scripts/make_verification_figures.py    # PNGs in output/verification/
-python -m app                                  # Takeoff Performance Explorer at http://127.0.0.1:8050
-python -m pytest                               # tests (~15 s); also refreshes the validation pages
-```
-
-From Python:
+From a script (build the aircraft in the app first, or use one of the examples):
 
 ```python
-from bfl import load_config, compute_bfl, sweep_v1
-cfg = load_config("b747_100",
-                  overrides={"environment.headwind_kts": 10, "multipliers.k_CL": 1.05})
-r = compute_bfl(cfg)
-print(r.summary())
-df = r.go.to_dataframe()          # time histories
-sw = sweep_v1(cfg)                 # go/stop vs V1
+from bfl import analyze, load_config, trade_study
+
+a = analyze("b747_100", weight_lbf=650_000, temperature_F=95, elevation_ft=5000)
+print(a.summary())
+a.runway_required_ft, a.governed_by          # e.g. 9988.0, "takeoff"
+
+df = trade_study(load_config("b747_100"),
+                 {"weight_lbf": [600e3, 650e3, 700e3], "temperature_F": [30, 59, 90]})
 ```
 
-Landing (settings in the aircraft file's `landing:` section; `docs/landing.md`):
+Templates: `scripts/analyze_example.py`, `scripts/trade_study_example.py`. Details:
+`docs/python_usage.md` (also About › Using it from Python in the app).
 
-```python
-from bfl import compute_landing
-print(compute_landing(cfg).summary())
-```
+## Accuracy
 
-`load_config` also takes a path to any aircraft folder, its `aircraft.yaml`, or a builder
-`.zip` (`docs/python_usage.md`).
+* **Boeing 747-100** (real data): takeoff field length within −5.5 % to +4.4 % of
+  Boeing's chart, 500,000–705,000 lb, sea level.
+* **Lockheed SR-71A** (real lift and thrust, estimated drag): rotation and lift-off speeds
+  within about 4 kt of YF-12 flight test.
+* Numerics: the solver is converged to fractions of a foot; every method is checked
+  against exact solutions and scipy (Methods › Verification).
 
-Trade study (every combination, in parallel, one DataFrame row per case; template in
-`scripts/trade_study_example.py`, details in `docs/python_usage.md`):
-
-```python
-from bfl import trade_study
-df = trade_study(cfg, {"environment.weight_lbf": [600e3, 650e3, 700e3],
-                       "environment.temperature_F": [30, 59, 90]})
-```
-
-## Layout
-
-| Path | Contents |
-|---|---|
-| `src/bfl/` | the package: config, units, atmosphere, tables, aero, propulsion, dynamics, integrators, rootfind, optimize, phases, takeoff, bfl, landing, trade, results, validation, plotting |
-| `app/` | Dash front end ("Takeoff Performance Explorer", a conceptual design tool): simulator with animation, trade study (`trade.py`), aircraft builder (`builder.py`), aircraft data/validation pages (`datapages.py`), docs as two pages, About and Methods (☰ menu). It only calls the public `bfl` API. |
-| `app/reference_aircraft.yaml` | reference aircraft for the tire-speed / brake-energy warnings (**placeholder values**; edit freely) |
-| `aircraft/<name>/` | `aircraft.yaml` + CSV tables + README with data provenance |
-| `docs/equations.md` | every equation, sign convention and numerical method |
-| `docs/assumptions.md` | modelling decisions, the V-speed glossary, assumptions |
-| `docs/methods/` | one page per numerical method + verification gallery (also served by the app) |
-| `docs/STUDY_GUIDE.md` | checklist for understanding the implementation |
-| `scripts/` | `run_example.py`, `make_verification_figures.py` |
-| `tools/` | `make_synthetic_widebody.py`, `make_b747_tables.py`, `make_sr71_tables.py` (table generators) |
-| `tests/` | integrator, root finder, interpolation, physics, feature and validation tests (`test_validation.py` writes the figures/status the app's data pages show); `tests/data/` holds the synthetic test aircraft |
+The input data set the real accuracy, especially drag and the spoiler, engine-out and
+landing-flap increments. Thrust tables are sea-level (not lapsed with altitude). The
+full list: About › Assumptions.
 
 ## Aircraft
 
-* `b747_100`: **real data** for the Boeing 747-100 (JT9D-3), digitized from NASA
-  CR-114494 and Boeing's airport-planning document. Flaps 10 and 20; sea level,
-  standard day only; Part 25; Raymer ground effect on. Validated against Boeing's
-  runway-length chart (`tests/test_validation.py`, ±12 %; model −5.5 … +4.4 %). Sources
-  in its README.
-* `sr71`: **real lift and thrust** for the Lockheed SR-71A from the declassified flight
-  manual (2-D thrust table vs airspeed and temperature, drag chute). Drag is
-  **estimated**. Sea-level pressure altitude, −38 to 40 °C; MIL-STD-3013. Balances only
-  with a later rotation, which the VR optimizer (on by default) finds; see
-  `docs/rotation_speed.md`. Sources
-  in its README.
+| folder | data | rules |
+|---|---|---|
+| `aircraft/b747_100` | Boeing 747-100 (JT9D-3), digitized from NASA CR-114494 and Boeing's airport-planning document; flaps 10/20; Raymer ground effect | Part 25 |
+| `aircraft/sr71` | Lockheed SR-71A from the declassified flight manual (2-D thrust table, drag chute); drag estimated | MIL-STD-3013 |
 
-(`tests/data/generic_widebody_synthetic` is an invented aircraft used only by the tests.)
+Each folder's README lists the sources of every number. New aircraft: the app's
+**Aircraft builder**, or a folder with an `aircraft.yaml` and CSV tables
+(`docs/aircraft_data.md`). Aircraft can live anywhere: `analyze` and `load_config` take a
+folder, an `aircraft.yaml` path, or a builder `.zip`.
 
-To add an aircraft, use the app's **Aircraft builder**, or make a folder with an
-`aircraft.yaml` (copy one of the existing ones), one or more aero tables
-(`alpha_deg,CL,CD`, listed under `aero.configurations`) and, optionally, thrust tables
-(`airspeed_kts,thrust_lbf` or `airspeed_kts,temperature_F,thrust_lbf`, listed under
-`engines.thrust_tables`). Aero and thrust tables work the same way: a `name: file.csv`
-list plus the name of the default. All units are
-English. Every default lives in `src/bfl/config.py`.
+## Repository
+
+| path | contents |
+|---|---|
+| `src/bfl/` | the solver: `analysis` (one-call API), `bfl` (takeoff), `landing`, `trade` (trade studies), `config` (inputs and validation), physics (`atmosphere`, `aero`, `propulsion`, `dynamics`, `model`, `takeoff`, `phases`), numerics (`integrators`, `rootfind`, `optimize`, `tables`), `results`, `validation`, `plotting` |
+| `app/` | the Dash app; it calls only the public `bfl` API. `reference_aircraft.yaml` (tire-speed references, **placeholder values**) and `reference_runways.yaml` are editable |
+| `aircraft/` | the aircraft (yaml + CSV + README with sources) |
+| `docs/` | the documentation the app shows (About and Methods pages) |
+| `scripts/` | examples and the verification-figure script |
+| `tools/` | table generators for the two aircraft; `make_aircraft_field_docs.py` |
+| `tests/` | `python -m pytest` (~35 s); the validation tests also refresh the app's aircraft pages |
+
+All numerical methods (RK4, Dormand–Prince RK45, event location, secant and safeguarded
+secant, Brent's method, linear / natural cubic spline / bilinear interpolation) are
+hand-written; scipy is used only in the tests as an independent reference. The project
+started as a numerical-methods course project.
+
+## Open items
+
+* MIL-STD-3013**B** text not yet checked: the go branch ends at 50 ft (expected), and the
+  landing approach speed (1.2 V_S) and field factor (1.0) are assumptions.
+* Tire-speed reference values in `app/reference_aircraft.yaml` are placeholders.
+* The 747's landing flaps are an estimate (flaps 20 table × multipliers).
+
+## Ideas to consider later
+
+* **Inverse solves:** the maximum takeoff weight for a given runway, or the k_CL needed
+  for a target field length (a root-find on the existing solver).
+* **Climb requirements:** engine-out climb gradients (Part 25.121 second segment, the
+  MIL equivalents), which often size the engines more than field length does.
+* **Sizing chart:** takeoff- and landing-field constraint lines on a T/W vs W/S plot.
+* **Thrust lapse with altitude:** a lapse model or an altitude column in the thrust
+  table, so high-elevation cases are not optimistic.
+* **Validation of the landing** against a Boeing landing chart, with a flaps 25/30 table.
+* **Wind:** gusts and shear during rotation (the `WindModel` interface is the hook).
+* **Packaging and a command line**, if the API is used from other projects.
+* **V1 warm start** inside each solve (about 30 % faster, results change at the V1
+  tolerance level).
+* **Wet-runway rule changes** (Part 25 wet V1 and 15 ft screen), beyond the friction.
+* The work log with every decision so far: `docs/next_steps.md`.
