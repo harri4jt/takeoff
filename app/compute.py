@@ -56,7 +56,6 @@ def build_config(aircraft: str, ui: dict[str, Any]) -> RunConfig:
         "procedure.rotation_rate_deg_s": ui["rotation_rate"],
         "procedure.chute_enabled": bool(ui["chute"]),
         "procedure.enforce_v2_min": bool(ui.get("enforce_v2", True)),
-        "solver.method": ui.get("method", "rk4"),
     }
     return load_config(aircraft, overrides=overrides)
 
@@ -145,8 +144,8 @@ def _pool() -> ProcessPoolExecutor:
 
 @lru_cache(maxsize=32)
 def heatmap(cfg_json: str) -> dict[str, Any]:
-    """BFL on a k_CL x k_CD grid (RK45 for speed: agrees with RK4 to << 1 ft)."""
-    fast = RunConfig.model_validate_json(cfg_json).with_updates({"solver.method": "rk45"})
+    """BFL on a k_CL x k_CD grid (RK45, no display re-run)."""
+    fast = RunConfig.model_validate_json(cfg_json).with_updates({"solver.trajectory_dt_s": None})
     fj = fast.model_dump_json()
     jobs = [(fj, kcl, kcd) for kcl in HEAT_VALUES for kcd in HEAT_VALUES]
     t0 = time.perf_counter()
@@ -161,7 +160,7 @@ def heatmap(cfg_json: str) -> dict[str, Any]:
 
 @lru_cache(maxsize=32)
 def sweep(cfg_json: str, k_vr: float) -> dict[str, Any]:
-    cfg = RunConfig.model_validate_json(cfg_json).with_updates({"solver.method": "rk45"})
+    cfg = RunConfig.model_validate_json(cfg_json)
     df = sweep_v1(cfg, n=15, k_vr=k_vr)
     return df[["v1_kts", "d_go_ft", "d_stop_ft"]].to_dict(orient="list")
 

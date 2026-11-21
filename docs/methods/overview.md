@@ -70,8 +70,8 @@ is what RK4's fourth-order accuracy assumes.
 
 | Method | File | Used for | Page |
 |---|---|---|---|
-| RK4 (fixed step) | `integrators.py` | moving the aircraft (default) | [Runge–Kutta](runge_kutta.md) |
-| RK45 Dormand–Prince (adaptive) | `integrators.py` | moving the aircraft (fast option, sweeps, heatmap) | [Runge–Kutta](runge_kutta.md) |
+| RK4 (fixed step) | `integrators.py` | reference solution; re-runs the shown branches at the solved V1 so plots/animation are evenly sampled | [Runge–Kutta](runge_kutta.md) |
+| RK45 Dormand–Prince (adaptive) | `integrators.py` | moving the aircraft (default solver) | [Runge–Kutta](runge_kutta.md) |
 | Event location | `integrators.py`, `phases.py` | V1, VR, lift-off, 35 ft, stop, switches | [Event location](event_location.md) |
 | Secant / safeguarded secant | `rootfind.py` | V1, V_EF, k_VR and the event times themselves | [Root finding](root_finding.md) |
 | Linear / natural cubic spline / bilinear | `tables.py` | CL(α), CD(α), thrust(V, T) | [Interpolation](interpolation.md) |

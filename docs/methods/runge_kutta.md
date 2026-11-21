@@ -60,6 +60,14 @@ Where the solution is smooth (the long, gentle ground roll), RK45 takes big step
 It shortens them around rotation and lift-off, where things change quickly. That
 is why it is about 14× faster than fixed-step RK4 here (0.2 s vs 3 s per full solve) and still agrees to a few hundredths of a foot.
 
+**RK45 is the default solver** (`solver.method`, rtol = atol = 10⁻⁸). On the three aircraft
+it matches RK4 at h = 0.01 s to within 0.03 ft and is 10–15× faster (tested in
+`tests/test_physics.py::test_rk45_matches_rk4_reference`). Its steps reach several
+seconds on the ground roll, which is too coarse to draw or animate by interpolation. So after
+the solve, the go, stop and all-engines branches at the solved V1 are simulated once more
+with RK4 at h = 0.05 s (`solver.trajectory_dt_s`) and those time histories are what the
+plots show. Distances and V-speeds still come from the RK45 solve.
+
 ## Comparison against exact solutions and scipy
 
 ![RK vs exact](../../output/verification/1_rk_vs_exact.png)

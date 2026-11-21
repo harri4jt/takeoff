@@ -93,11 +93,32 @@ def test_sweep_monotonic(base_cfg):
     assert np.all(np.diff(df["d_stop_ft"]) > 0)
 
 
-def test_step_size_independence(base_cfg, base_result):
-    fine = compute_bfl(base_cfg.with_updates({"solver.dt_s": 0.005}))
-    assert abs(fine.bfl_ft - base_result.bfl_ft) / base_result.bfl_ft < 1e-3
-    rk45 = compute_bfl(base_cfg.with_updates({"solver.method": "rk45"}))
-    assert abs(rk45.bfl_ft - base_result.bfl_ft) / base_result.bfl_ft < 1e-3
+@pytest.mark.parametrize("aircraft", ["generic_widebody_synthetic", "b747_100", "sr71"])
+def test_rk45_matches_rk4_reference(aircraft):
+    """Default RK45 solve agrees with the fixed-step RK4 reference to well under 1 ft."""
+    cfg = load_config(aircraft)
+    assert cfg.solver.method == "rk45"
+    rk45 = compute_bfl(cfg)
+    rk4 = compute_bfl(cfg.with_updates({"solver.method": "rk4", "solver.dt_s": 0.01}))
+    assert abs(rk45.bfl_ft - rk4.bfl_ft) < 0.5
+    assert abs(rk45.v1_kts - rk4.v1_kts) < 0.01
+
+
+def test_rk4_step_size_independence(base_cfg):
+    rk4 = base_cfg.with_updates({"solver.method": "rk4"})
+    a = compute_bfl(rk4.with_updates({"solver.dt_s": 0.01})).bfl_ft
+    b = compute_bfl(rk4.with_updates({"solver.dt_s": 0.005})).bfl_ft
+    assert abs(a - b) / a < 1e-3
+
+
+def test_display_trajectories_evenly_sampled(base_result):
+    """With rk45 the reported histories are the RK4 re-run (step trajectory_dt_s)."""
+    for tr in (base_result.go, base_result.stop, base_result.aeo):
+        t = tr.to_dataframe()["t_s"].to_numpy()
+        assert np.diff(t).max() <= 0.05 + 1e-9
+    stop_x = base_result.stop.to_dataframe()["x_ft"].iloc[-1]
+    allowance = 2.0 * base_result.v1_ground_kts * 1.6878098571011957  # 2 s at V1 ground speed
+    assert abs(base_result.d_stop_ft - allowance - stop_x) < 1.0  # re-run matches the solve
 
 
 # ---------------------------------------------------------------------------------
@@ -193,7 +214,9 @@ def test_v2_depends_on_vr_only(base_cfg, base_result):
     cfg = base_cfg.with_updates({"procedure.k_VR": base_result.k_VR})
     vm = build_model(cfg)
     v2 = oei_v2_from_vr(vm, base_result.k_VR * vm.stall_speed_tas(), cfg.procedure, cfg.solver)
-    assert vm.tas_to_eas(v2) / KTS_TO_FTPS == pytest.approx(base_result.v2_kts, abs=1e-6)
+    # rk45 takes different steps along the two paths, so agreement is to the solver
+    # tolerance (~1e-4 kt), not bit-for-bit as with fixed-step rk4
+    assert vm.tas_to_eas(v2) / KTS_TO_FTPS == pytest.approx(base_result.v2_kts, abs=2e-3)
 
 
 def test_sweep_matches_result_k_vr(base_cfg, base_result):

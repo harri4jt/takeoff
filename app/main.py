@@ -261,20 +261,6 @@ def controls() -> html.Div:
                         className="checks",
                         options=[{"label": " Enforce V2 ≥ 1.2 V_S (raises VR)", "value": "on"}],
                     ),
-                    html.Div(
-                        className="ctl-head",
-                        style={"marginTop": "10px"},
-                        children=html.Span("Integrator", className="ctl-name"),
-                    ),
-                    dcc.RadioItems(
-                        id="method",
-                        value="rk4",
-                        className="checks",
-                        options=[
-                            {"label": " RK4, fixed step 0.01 s", "value": "rk4"},
-                            {"label": " RK45 adaptive (faster)", "value": "rk45"},
-                        ],
-                    ),
                 ],
             ),
             html.Button("Run", id="run", n_clicks=0, className="btn btn-primary btn-run"),
@@ -802,19 +788,17 @@ def create_app() -> Dash:
         State("weight", "value"),
         State("chute", "value"),
         State("enforce-v2", "value"),
-        State("method", "value"),
     )
     def on_run(_n, aircraft, *rest):
         if not aircraft:
             return no_update
         vals = dict(zip(SLIDER_IDS, rest[: len(SLIDER_IDS)], strict=True))
-        weight, chute, enforce, method = rest[len(SLIDER_IDS) :]
+        weight, chute, enforce = rest[len(SLIDER_IDS) :]
         ui = {
             **vals,
             "weight": weight,
             "chute": "on" in (chute or []),
             "enforce_v2": "on" in (enforce or []),
-            "method": method,
         }
         return compute.run(aircraft, ui)
 

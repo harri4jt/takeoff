@@ -152,8 +152,18 @@ class ProcedureConfig(_Model):
 
 
 class SolverConfig(_Model):
-    method: Literal["rk4", "rk45"] = "rk4"
-    dt_s: float = Field(default=0.01, gt=0)
+    method: Literal["rk4", "rk45"] = Field(
+        default="rk45",
+        description="rk45 (adaptive, default) or rk4 (fixed step dt_s, reference)",
+    )
+    dt_s: float = Field(default=0.01, gt=0, description="RK4 step when method = rk4")
+    trajectory_dt_s: float | None = Field(
+        default=0.05,
+        gt=0,
+        description="with rk45: re-simulate the reported go/stop/AEO time histories at the "
+        "solved V1 with RK4 at this step, so plots and the animation are evenly sampled "
+        "(distances and V-speeds still come from the rk45 solve). None -> keep rk45 points",
+    )
     rtol: float = Field(default=1e-8, gt=0)
     atol: float = Field(default=1e-8, gt=0)
     event_tol_s: float = Field(default=1e-9, gt=0)

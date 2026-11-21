@@ -104,6 +104,26 @@ def _with_vr_retries(
 # ------------------------------------------------------------------------------------
 # compute_bfl
 # ------------------------------------------------------------------------------------
+def _display_trajectories(ctx: _Context, v1: float):
+    """RK4 re-run of the three branches at the solved V1, for evenly sampled output.
+
+    RK45 steps can be several seconds long, which is fine for distances (events are
+    located inside a step) but too coarse to plot or animate by interpolation. Returns
+    None when not needed (rk4 solve, or trajectory_dt_s unset) or if the re-run fails.
+    """
+    s = ctx.cfg.solver
+    if s.method != "rk45" or s.trajectory_dt_s is None:
+        return None
+    cfg = ctx.cfg.with_updates({"solver.method": "rk4", "solver.dt_s": s.trajectory_dt_s})
+    try:
+        c = _context(cfg, ctx.k_vr)
+        go, stop, _ = c.evaluate(v1)
+        aeo = simulate_aeo(c.vm, c.roll, cfg.procedure, cfg.solver)
+    except Exception:  # noqa: BLE001 - display only; fall back to the rk45 points
+        return None
+    return go.trajectory(), stop.trajectory(), aeo.trajectory()
+
+
 def _solve(ctx: _Context) -> BFLResult:
     cfg = ctx.cfg
     s = cfg.solver
@@ -157,6 +177,7 @@ def _solve(ctx: _Context) -> BFLResult:
         f(v1)
     go, stop, prefix = cache[v1]
     warnings.extend(prefix.warnings)
+    trajectories = _display_trajectories(ctx, v1) or (go.trajectory(), stop.trajectory(), aeo.trajectory())
 
     bfl = max(go.distance_ft, stop.distance_ft)
     aeo_d = aeo.distance_ft
@@ -181,9 +202,9 @@ def _solve(ctx: _Context) -> BFLResult:
         faa_field_length_ft=field,
         d_go_ft=go.distance_ft,
         d_stop_ft=stop.distance_ft,
-        go=go.trajectory(),
-        stop=stop.trajectory(),
-        aeo=aeo.trajectory(),
+        go=trajectories[0],
+        stop=trajectories[1],
+        aeo=trajectories[2],
         k_VR=ctx.k_vr,
         v1_min_kts=ctx.eas_kts(ctx.v1_min),
         v1_ground_kts=float(prefix.y_v1[1]) * FTPS_TO_KTS,
