@@ -25,6 +25,7 @@ DOC_PAGES: dict[str, tuple[str, str, list[tuple[str, str, Path]]]] = {
             ("how-it-works", "How it works", DOCS / "methods" / "overview.md"),
             ("python", "Using it from Python (trade-study scripts)", DOCS / "python_usage.md"),
             ("rules", "Field-length rules: Part 25 vs MIL", DOCS / "field_length_rules.md"),
+            ("landing", "Landing distance", DOCS / "landing.md"),
             ("rotation-speed", "Rotation speed and VR optimization",
              DOCS / "rotation_speed.md"),
             ("ground-effect", "Ground effect (Raymer)", DOCS / "ground_effect.md"),

@@ -8,6 +8,9 @@ Dash app (no assets or stylesheet needed) and use
     from loading import loading
     loading([dcc.Graph(id="plot"), dcc.Store(id="result")], "Computing…")
 
+Viewers whose browser asks for reduced motion (e.g. Firefox ui.prefersReducedMotion)
+see the finished aircraft fading in and out instead of the assembly.
+
 ``dcc.Loading`` shows the spinner while a callback is updating any component inside
 it, so put the store that the slow computation writes into the wrapper too, not only
 the plot drawn from it.
@@ -62,7 +65,10 @@ _SVG = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 80'>
    58% {{ transform: translateY(-2.5px) rotate(-1deg) }}
    68% {{ transform: translateY(2px) rotate(1deg) }}
    80%, 100% {{ transform: none }} }}
- @media (prefers-reduced-motion: reduce) {{ g {{ animation: none !important; }} }}
+ @keyframes pulse {{ 0%, 100% {{ opacity: 1 }} 50% {{ opacity: 0.3 }} }}
+ @media (prefers-reduced-motion: reduce) {{
+   g:not(.all) {{ animation: none !important; }}
+   .all {{ animation: pulse 1.6s ease-in-out infinite !important; }} }}
 </style>
 <g class='all'>
  <g class='wt'><path fill='{wing}' d='M58 36 L72 36 L50 7 L43 7 Z'/></g>

@@ -371,7 +371,7 @@ Done:
       `bfl.trade.grid` pivots one output. The app's trade page uses it.
       Template: `scripts/trade_study_example.py`; docs: `docs/python_usage.md` (About page).
 
-## Proposal: landing distance (not started)
+## Landing distance (proposal below; implemented in round 7)
 
 Goal: answer "what runway does landing need?" next to the takeoff answer, for both rule sets.
 
@@ -406,3 +406,21 @@ chart from the same Boeing airport-planning document as the takeoff chart.
 
 **Open decisions:** default landing weight (MLW vs takeoff weight minus fuel), reverse thrust
 credit, wet runway option, flare model detail (constant-g vs Raymer's flare radius).
+
+---
+
+## Round 7 (2026-11-21): landing, aircraft from anywhere, loader under reduced motion
+
+- [x] Landing (`bfl.compute_landing`, `docs/landing.md`): glide, constant-g flare, touchdown,
+      free roll, braking; Part 25 (1.23 V_SR0, ÷0.6, no reverser/chute credit) vs MIL-STD-3013
+      (reversers + chute credited). `landing:` section in aircraft.yaml and the builder.
+      App: "Landing runway" tile, Engineering details › Landing, landing in forces/angles,
+      trade metrics "Landing runway required" and "Runway required (takeoff or landing)".
+      Wet runways through μ, as everywhere else.
+- [x] `load_config` takes a folder anywhere, an aircraft.yaml path, or a builder .zip.
+- [x] Loader: under `prefers-reduced-motion` the aircraft pulses instead of standing still
+      (the user's Firefox has `ui.prefersReducedMotion = 1`).
+- [ ] Confirm the MIL-STD-3013 landing approach speed (1.2 V_S here) and field factor (1.0)
+      against 3013B.
+- [ ] 747-100: a flaps 25/30 table and a check against the Boeing landing chart.
+- [ ] A "Landing" mode for the animation (the details tab has the plots).

@@ -60,3 +60,15 @@ ground_effect:                  # Raymer method; on in the baseline (validation:
 certification:
   rules: part25                 # civil transport: FAA Part 25 balanced field length
   # t_recog_s: 1.0              # engine failure -> V1 delay; blank = rule default (1 s)
+
+landing:
+  weight_lbf: 564000.0          # 747-100 maximum landing weight (commonly published value;
+                                # confirm against the Boeing airport-planning document)
+  configuration: flaps20        # no flaps 25/30 table yet: start from flaps 20 ...
+  k_CL: 1.12                    # ... ESTIMATE: landing flaps add ~12 % CL / CLmax
+  k_CD: 1.30                    # ... ESTIMATE: and ~30 % drag
+  # approach_speed_ratio:       # blank = rule (Part 25: V_REF = 1.23 V_SR0)
+  approach_angle_deg: 3.0
+  flare_load_factor: 1.15       # constant-g flare
+  free_roll_s: 2.0              # touchdown -> brakes and spoilers
+  reverse_thrust_fraction: 0.0  # Part 25.125: no reverse-thrust credit

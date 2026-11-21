@@ -23,7 +23,9 @@ MAX_GRID = 21
 # key: (label, unit, default band edges)
 METRICS = {
     "bfl_ft": ("BFL", "ft", "6000, 8000, 10000"),
-    "field_length_ft": ("Runway required (field length)", "ft", "6000, 8000, 10000"),
+    "field_length_ft": ("Takeoff field length", "ft", "6000, 8000, 10000"),
+    "landing_runway_required_ft": ("Landing runway required", "ft", "6000, 8000, 10000"),
+    "runway_required_ft": ("Runway required (takeoff or landing)", "ft", "6000, 8000, 10000"),
     "aeo_distance_ft": ("All-engines distance", "ft", "6000, 8000, 10000"),
     "max_tire_speed_kts": ("Max ground speed (tires)", "kt", "180, 200, 220"),
 }

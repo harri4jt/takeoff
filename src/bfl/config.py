@@ -11,7 +11,11 @@ airspeed indicator. See docs/assumptions.md.
 
 from __future__ import annotations
 
+import hashlib
+import io
 import os
+import shutil
+import zipfile
 from pathlib import Path
 from typing import Any, Literal
 
@@ -203,6 +207,76 @@ class CertificationConfig(_Model):
     )
 
 
+class LandingConfig(_Model):
+    """Landing: configuration, technique and (military only) stopping devices.
+
+    Speeds and field factors not given here come from the rule set (LANDING_RULES).
+    """
+
+    weight_lbf: float | None = Field(
+        default=None,
+        gt=0,
+        description="landing weight; blank -> the takeoff weight "
+        "(an immediate return, the worst case)",
+    )
+    configuration: str | None = Field(
+        default=None, description="aero table to start from; blank -> the takeoff table"
+    )
+    k_CL: float = Field(
+        default=1.0,
+        gt=0,
+        description="landing flaps: CL multiplier on that table "
+        "(includes CLmax, so it sets the landing stall speed)",
+    )
+    k_CD: float = Field(default=1.0, gt=0, description="landing flaps: CD multiplier")
+    approach_speed_ratio: float | None = Field(
+        default=None,
+        gt=1.0,
+        description="approach speed / landing stall speed; blank -> "
+        "rule (Part 25: V_REF = 1.23 V_SR0; MIL: 1.2)",
+    )
+    approach_angle_deg: float = Field(default=3.0, gt=0, le=10, description="glide slope")
+    flare_load_factor: float = Field(
+        default=1.15, gt=1.0, le=2.0, description="constant-g flare: n = L/W in the flare"
+    )
+    touchdown_sink_rate_fps: float = Field(
+        default=2.0, ge=0, description="the flare ends at this sink rate, held to touchdown"
+    )
+    free_roll_s: float = Field(
+        default=2.0, ge=0, description="touchdown -> brakes and spoilers (and reversers)"
+    )
+    reverse_thrust_fraction: float = Field(
+        default=0.0,
+        ge=0,
+        le=1,
+        description="reverse thrust as a fraction of max thrust. "
+        "Military only: Part 25.125 gives no reverse-thrust credit",
+    )
+    use_chute: bool = Field(
+        default=False,
+        description="military only: deploy the drag chute at touchdown (needs the chute "
+        "section). Part 25 gives no credit",
+    )
+    field_factor: float | None = Field(
+        default=None,
+        gt=0,
+        description="runway required / landing distance; blank -> rule "
+        "(Part 25/121: 1/0.6 = 1.67; MIL: 1.0)",
+    )
+
+
+# Landing values each rule set supplies when the aircraft leaves them blank.
+# Part 25.125 (landing distance from 50 ft at V_REF >= 1.23 V_SR0, no reverse thrust),
+# Part 121.195 (runway required = distance / 0.6). MIL-STD-3013: from a 50 ft obstacle,
+# reversers and chute may be credited; approach speed and factor to be confirmed (3013B).
+LANDING_RULES: dict[str, dict[str, Any]] = {
+    "part25": {"screen_height_ft": 50.0, "approach_speed_ratio": 1.23,
+               "field_factor": 1.0 / 0.6, "reverse_credit": False, "chute_credit": False},
+    "mil3013": {"screen_height_ft": 50.0, "approach_speed_ratio": 1.2,
+                "field_factor": 1.0, "reverse_credit": True, "chute_credit": True},
+}  # fmt: skip
+
+
 class AircraftConfig(_Model):
     name: str
     synthetic: bool = False
@@ -218,7 +292,15 @@ class AircraftConfig(_Model):
     ground_effect: GroundEffectConfig = GroundEffectConfig()
     gear: GearConfig = GearConfig()
     certification: CertificationConfig = CertificationConfig()
+    landing: LandingConfig = LandingConfig()
     directory: str = Field(default="", description="filled by the loader")
+
+    @model_validator(mode="after")
+    def _landing_table_listed(self) -> AircraftConfig:
+        c = self.landing.configuration
+        if c is not None and c not in self.aero.configurations:
+            raise ValueError(f"landing configuration '{c}' is not one of the aero tables")
+        return self
 
 
 # ------------------------------------------------------------------------------------
@@ -421,8 +503,55 @@ def list_aircraft(root: str | Path | None = None) -> list[str]:
     return sorted(p.name for p in root.iterdir() if (p / "aircraft.yaml").is_file())
 
 
+def _zip_cache_root() -> Path:
+    """Where zipped aircraft are unpacked: ``$BFL_CACHE_DIR`` or ~/.cache/bfl/aircraft_zips."""
+    env = os.environ.get("BFL_CACHE_DIR")
+    base = Path(env) if env else Path.home() / ".cache" / "bfl"
+    return base / "aircraft_zips"
+
+
+def _unzip_aircraft(zip_path: Path) -> Path:
+    """Unpack a zipped aircraft (as the builder exports it) once, keyed by its content.
+
+    The tables are read from disk while solving, so the files must stay on disk: they go
+    to a cache folder named after the zip's hash, and the same zip is never unpacked
+    twice. ``aircraft.yaml`` may be at the top of the zip or in one folder inside it.
+    """
+    data = zip_path.read_bytes()
+    dest = _zip_cache_root() / hashlib.sha256(data).hexdigest()[:16]
+    if not dest.is_dir():
+        tmp = dest.with_name(dest.name + f".tmp{os.getpid()}")
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            for name in z.namelist():
+                target = (tmp / name).resolve()
+                if not str(target).startswith(str(tmp.resolve())):
+                    raise ValueError(f"{zip_path.name}: unsafe path in zip: {name}")
+            z.extractall(tmp)
+        if dest.exists():  # another process got there first
+            shutil.rmtree(tmp, ignore_errors=True)
+        else:
+            tmp.replace(dest)
+    if (dest / "aircraft.yaml").is_file():
+        return dest
+    inner = [p.parent for p in dest.glob("*/aircraft.yaml")]
+    if len(inner) != 1:
+        raise FileNotFoundError(f"{zip_path.name}: expected one aircraft.yaml in the zip")
+    return inner[0]
+
+
 def resolve_aircraft_dir(aircraft: str | Path) -> Path:
-    p = Path(aircraft)
+    """Folder of an aircraft, from any of:
+
+    * a name under the aircraft root (``aircraft/`` or ``$BFL_AIRCRAFT_DIR``): "b747_100"
+    * a path to a folder that holds ``aircraft.yaml``: "~/designs/concept_a"
+    * a path to the ``aircraft.yaml`` file itself
+    * a path to a ``.zip`` exported by the builder (unpacked once into a cache)
+    """
+    p = Path(aircraft).expanduser()
+    if p.suffix.lower() == ".zip" and p.is_file():
+        return _unzip_aircraft(p).resolve()
+    if p.is_file() and p.name.lower().endswith((".yaml", ".yml")):
+        return p.parent.resolve()
     if (p / "aircraft.yaml").is_file():
         return p.resolve()
     q = default_aircraft_root() / str(aircraft)
@@ -433,7 +562,9 @@ def resolve_aircraft_dir(aircraft: str | Path) -> Path:
 
 def load_aircraft(aircraft: str | Path) -> AircraftConfig:
     d = resolve_aircraft_dir(aircraft)
-    with open(d / "aircraft.yaml") as fh:
+    p = Path(aircraft).expanduser()
+    yaml_file = p if p.is_file() and p.suffix.lower() in (".yaml", ".yml") else d / "aircraft.yaml"
+    with open(yaml_file) as fh:
         data = yaml.safe_load(fh)
     data["directory"] = str(d)
     return AircraftConfig.model_validate(data)
@@ -447,7 +578,8 @@ def load_config(
     """Build a :class:`RunConfig`.
 
     Args:
-        aircraft: aircraft folder name (under ``aircraft/``) or a path to one.
+        aircraft: aircraft folder name (under ``aircraft/``), or a path to a folder with
+            an ``aircraft.yaml``, to the yaml file itself, or to a builder ``.zip``.
         run_yaml: optional YAML with any of the sections environment / procedure /
             solver / multipliers.
         overrides: dotted-path overrides applied last, e.g. ``{"environment.headwind_kts": 10}``.

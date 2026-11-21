@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from bfl import RunConfig, compute_bfl, load_config, sweep_v1, trade_study
+from bfl import RunConfig, compute_bfl, compute_landing, load_config, sweep_v1, trade_study
 from bfl.atmosphere import RHO0_SLUGFT3
 
 TRAJ_COLS = {
@@ -128,11 +128,30 @@ def _run_cached(cfg_json: str) -> dict[str, Any]:
     stop = _trajectory(res.stop, sqrt_sigma, w0)
     aeo = _trajectory(res.aeo, sqrt_sigma, w0)
     x_rest = _event(stop, "stopped")["x_ft"]
+    scalars = res.scalars()
+    landing: dict[str, Any] = {"ok": False}
+    landing_tr = None
+    try:
+        lr = compute_landing(cfg)
+        scalars.update(lr.scalars())
+        scalars["runway_required_ft"] = max(
+            scalars["field_length_ft"], scalars["landing_runway_required_ft"]
+        )
+        landing = {
+            "ok": True,
+            "summary": lr.summary(),
+            "warnings": lr.warnings,
+        }
+        landing_tr = _trajectory(lr.trajectory, sqrt_sigma, lr.weight_lbf)
+    except Exception as exc:  # noqa: BLE001 - the takeoff result stands on its own
+        landing = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     return {
         "ok": True,
         "cfg_json": cfg_json,
-        "scalars": res.scalars(),
-        "summary": res.summary(),
+        "scalars": scalars,
+        "summary": res.summary() + (f"\n\n{landing['summary']}" if landing.get("ok") else ""),
+        "landing": landing,
+        "landing_tr": landing_tr,  # time history, same format as go / stop / aeo
         "warnings": res.warnings,
         "vr_adjustments": res.vr_adjustments,
         "go": go,
@@ -165,7 +184,14 @@ def run(aircraft: str, ui: dict[str, Any]) -> dict[str, Any]:
 # ------------------------------------------------------------------------------------
 # lazy details
 # ------------------------------------------------------------------------------------
-TRADE_METRICS = ("bfl_ft", "field_length_ft", "aeo_distance_ft", "max_tire_speed_kts")
+TRADE_METRICS = (
+    "bfl_ft",
+    "field_length_ft",
+    "aeo_distance_ft",
+    "max_tire_speed_kts",
+    "landing_runway_required_ft",
+    "runway_required_ft",
+)
 
 
 _POOL: ProcessPoolExecutor | None = None

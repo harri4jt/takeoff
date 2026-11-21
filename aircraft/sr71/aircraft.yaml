@@ -57,3 +57,13 @@ chute:
 certification:
   rules: mil3013                # military: MIL-STD-3013 critical field length
   # t_recog_s: 3.0              # engine failure -> brakes delay; blank = rule default (3 s)
+
+landing:
+  # weight_lbf:                 # blank = takeoff weight (immediate return, worst case);
+                                # real landings are much lighter (fuel burned)
+  # configuration:              # blank = takeoff table (in ground effect); the SR-71 has no flaps
+  approach_angle_deg: 3.0
+  flare_load_factor: 1.15
+  free_roll_s: 2.0
+  reverse_thrust_fraction: 0.0  # no thrust reversers on the J58
+  use_chute: true               # standard SR-71 landing: drag chute at touchdown (MIL credit)

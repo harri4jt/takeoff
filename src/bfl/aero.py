@@ -132,6 +132,17 @@ class AeroModel:
         base = self.table.cl_max if self.cl_max_override is None else self.cl_max_override
         return self.k_CL * base
 
+    def alpha_for_cl(self, cl: float) -> float:
+        """Angle of attack [rad] at which the (scaled) table gives ``cl``.
+
+        Inverts the lift curve between its first point and CLmax by linear
+        interpolation of the table points; values outside are clamped to that range.
+        Used where the lift is set by the manoeuvre (approach and flare), not by alpha.
+        """
+        xs, ys = self.table.cl.x, self.table.cl.y
+        i_max = max(range(len(ys)), key=ys.__getitem__)
+        return float(np.interp(cl / self.k_CL, ys[: i_max + 1], xs[: i_max + 1]))
+
     def coefficients(
         self, alpha_rad: float, engine_out: bool, spoilers: bool, h_ft: float = 0.0
     ) -> tuple[float, float]:

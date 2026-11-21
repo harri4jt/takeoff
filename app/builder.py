@@ -41,12 +41,14 @@ SKIP = {"directory", "synthetic"}
 # dropdown that picks the default from that list (both are compared in the trade study).
 TABLE_LISTS = {"aero.configurations": "aero", "engines.thrust_tables": "thrust"}
 DEFAULT_KEYS = {"aero.takeoff_configuration": "aero.configurations",
-                "engines.thrust_table": "engines.thrust_tables"}  # fmt: skip
+                "engines.thrust_table": "engines.thrust_tables",
+                "landing.configuration": "aero.configurations"}  # fmt: skip
 LABELS = {
     "aero.configurations": "aero tables",
     "aero.takeoff_configuration": "default aero table",
     "engines.thrust_tables": "thrust tables",
     "engines.thrust_table": "default thrust table",
+    "landing.configuration": "landing aero table",
 }
 GROUP_TITLES = {
     "": "General",
@@ -61,6 +63,7 @@ GROUP_TITLES = {
     "ground_effect": "Ground effect (Raymer)",
     "gear": "Gear limits (optional)",
     "certification": "Certification (field-length rules)",
+    "landing": "Landing (flaps, technique, stopping devices)",
 }
 
 
@@ -316,8 +319,10 @@ def _widget(f: dict):
         return dcc.Dropdown(id=fid, value=v, clearable=False, searchable=False,
                             options=[{"label": c, "value": c} for c in f["choices"]])  # fmt: skip
     if k == "key":
-        return dcc.Dropdown(id=fid, value=v, options=[], clearable=False,
-                            placeholder="pick one of the tables above")  # fmt: skip
+        optional = f["default"] is None and not f["required"]
+        return dcc.Dropdown(id=fid, value=v, options=[], clearable=optional,
+                            placeholder="blank = takeoff table" if optional
+                            else "pick one of the tables above")  # fmt: skip
     if k == "dict":
         ph = "name: file.csv" if f["path"] in TABLE_LISTS else "name: value"
         return dcc.Textarea(id=fid, value=v, className="bf-dict", placeholder=ph)

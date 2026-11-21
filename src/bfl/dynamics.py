@@ -56,6 +56,8 @@ class SegmentParams:
     theta_rate: float = 0.0
     theta_max: float = math.inf
     chute_t_deploy: float | None = None
+    load_factor: float | None = None  # approach kind, flare phase: n = L / W held constant
+    reverse: float = 0.0  # reverse thrust as a fraction of max thrust (ground roll)
 
     def but(self, **kw) -> SegmentParams:
         return replace(self, **kw)
@@ -89,7 +91,10 @@ def _aero_thrust(t: float, va: float, alpha: float, p: SegmentParams, h: float =
     drag = qbar * vm.S_ft2 * cd + d_chute
     if va < 0.0:  # tailwind at very low ground speed: drag acts forward
         drag = -drag
-    thrust = vm.propulsion.total(p.n_operating, p.idle, va, vm.temp_R)
+    if p.reverse > 0.0:  # reversers deployed: a fraction of max thrust, acting rearward
+        thrust = -p.reverse * vm.propulsion.total(p.n_operating, False, va, vm.temp_R)
+    else:
+        thrust = vm.propulsion.total(p.n_operating, p.idle, va, vm.temp_R)
     eps = alpha + vm.propulsion.incidence_rad
     return qbar, cl, cd, lift, drag, thrust, eps, d_chute
 
@@ -155,6 +160,50 @@ def air_rhs(t: float, y: np.ndarray, p: SegmentParams) -> np.ndarray:
     return np.array([r[9], r[10], r[11], r[12]])
 
 
+# ------------------------------------------------------------------------------------
+# landing approach: load-factor law instead of a pitch-attitude law
+# ------------------------------------------------------------------------------------
+def approach_terms(t: float, y, p: SegmentParams):
+    """Approach and flare, state [x, h, V_a, gamma] (gamma < 0 descending).
+
+    The manoeuvre sets the load factor n = L/W, and the lift coefficient follows:
+        phase "glide": steady descent at constant gamma and V_a (n = cos gamma); the
+                       thrust is whatever holds it (reported, not used)
+        phase "flare": n = load_factor (constant g), thrust at idle
+        phase "final": n = cos gamma (sink rate held to touchdown), thrust at idle
+        dV_a/dt   = (T - D) / m - g sin(gamma)      (0 in the glide)
+        dgamma/dt = g (n - cos gamma) / V_a          (0 except in the flare)
+    alpha is the table angle giving CL = n W / (q S); CD is the table's at that alpha.
+    """
+    vm = p.vehicle
+    x, h, va, gam = y[0], y[1], y[2], y[3]
+    w = vm.weight_lbf
+    m = w / vm.g
+    n = p.load_factor if p.phase == "flare" else math.cos(gam)
+    qbar = 0.5 * vm.rho * va * va
+    cl_req = n * w / (qbar * vm.S_ft2)
+    alpha = vm.aero.alpha_for_cl(cl_req)
+    cl, cd = vm.aero.coefficients(alpha, False, False, h)
+    lift = n * w
+    drag = qbar * vm.S_ft2 * cd
+    if p.phase == "glide":
+        thrust = drag + w * math.sin(gam)  # needed to hold the glide
+        dva = dgam = 0.0
+    else:
+        thrust = vm.propulsion.total(p.n_operating, True, va, vm.temp_R)
+        dva = (thrust - drag) / m - vm.g * math.sin(gam)
+        dgam = vm.g * (n - math.cos(gam)) / va
+    vw = vm.env.wind(t, x, h)
+    dh = va * math.sin(gam)
+    dx = va * math.cos(gam) - vw
+    return alpha + gam, alpha, qbar, cl, cd, lift, drag, thrust, vw, dx, dh, dva, dgam
+
+
+def approach_rhs(t: float, y: np.ndarray, p: SegmentParams) -> np.ndarray:
+    r = approach_terms(t, y, p)
+    return np.array([r[9], r[10], r[11], r[12]])
+
+
 def ground_to_air_state(t: float, y_ground, p: SegmentParams) -> np.ndarray:
     """State conversion at liftoff: V_a = V + V_w, gamma = 0, h = 0."""
     vw = p.vehicle.env.wind(t, y_ground[0], 0.0)
@@ -164,7 +213,7 @@ def ground_to_air_state(t: float, y_ground, p: SegmentParams) -> np.ndarray:
     return np.array(out)
 
 
-RHS_BY_KIND = {"ground": ground_rhs, "air": air_rhs}
+RHS_BY_KIND = {"ground": ground_rhs, "air": air_rhs, "approach": approach_rhs}
 
 
 def airspeed(kind: str, t: float, y, p: SegmentParams) -> float:
@@ -204,7 +253,8 @@ def forces(t: float, y, p: SegmentParams, kind: str) -> dict[str, float]:
             "accel_ftps2": accel,
             "fuel_burned_lbf": y[2] if len(y) > 2 else 0.0,
         }
-    theta, alpha, qbar, cl, cd, lift, drag, thrust, vw, dx, dh, dva, dgam = air_terms(t, y, p)
+    terms = approach_terms if kind == "approach" else air_terms
+    theta, alpha, qbar, cl, cd, lift, drag, thrust, vw, dx, dh, dva, dgam = terms(t, y, p)
     return {
         "t_s": t,
         "x_ft": y[0],

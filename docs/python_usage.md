@@ -21,6 +21,42 @@ r.go.to_dataframe()            # every time step of the engine-out go (also .sto
 `multipliers.k_CL`, `procedure.optimize_vr`, `aircraft.aero.delta_CD_engine_out`.
 A mistyped path is an error, not silently ignored.
 
+## Landing
+
+```python
+from bfl import compute_landing
+lr = compute_landing(cfg)      # same config; landing settings come from aircraft.yaml
+lr.runway_required_ft, lr.landing_distance_ft
+print(lr.summary())
+```
+
+## Aircraft that are not in `aircraft/`
+
+`load_config` (and `trade_study`) take any of:
+
+```python
+load_config("b747_100")                          # a folder under aircraft/
+load_config("~/designs/concept_a")               # any folder with an aircraft.yaml
+load_config("~/designs/concept_a/aircraft.yaml") # the yaml file itself
+load_config("~/Downloads/concept_b.zip")         # a .zip from the builder's Download
+```
+
+A zip is unpacked once into `~/.cache/bfl/aircraft_zips/` (set `BFL_CACHE_DIR` to move it)
+and reused while it is unchanged. To run many designs kept together:
+
+```python
+from pathlib import Path
+from bfl import list_aircraft, load_config, compute_bfl
+
+designs = Path("~/designs").expanduser()
+for name in list_aircraft(designs):
+    r = compute_bfl(load_config(designs / name))
+    print(f"{name:20s} {r.field_length_ft:8,.0f} ft")
+```
+
+The app lists the aircraft in `aircraft/`; start it with `BFL_AIRCRAFT_DIR=~/designs python -m
+app` to list another folder instead.
+
 ## Trade studies
 
 ```python

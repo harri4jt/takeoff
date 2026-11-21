@@ -49,6 +49,16 @@ df = r.go.to_dataframe()          # time histories
 sw = sweep_v1(cfg)                 # go/stop vs V1
 ```
 
+Landing (settings in the aircraft file's `landing:` section; `docs/landing.md`):
+
+```python
+from bfl import compute_landing
+print(compute_landing(cfg).summary())
+```
+
+`load_config` also takes a path to any aircraft folder, its `aircraft.yaml`, or a builder
+`.zip` (`docs/python_usage.md`).
+
 Trade study (every combination, in parallel, one DataFrame row per case; template in
 `scripts/trade_study_example.py`, details in `docs/python_usage.md`):
 
@@ -62,7 +72,7 @@ df = trade_study(cfg, {"environment.weight_lbf": [600e3, 650e3, 700e3],
 
 | Path | Contents |
 |---|---|
-| `src/bfl/` | the package: config, units, atmosphere, tables, aero, propulsion, dynamics, integrators, rootfind, optimize, phases, takeoff, bfl, trade, results, validation, plotting |
+| `src/bfl/` | the package: config, units, atmosphere, tables, aero, propulsion, dynamics, integrators, rootfind, optimize, phases, takeoff, bfl, landing, trade, results, validation, plotting |
 | `app/` | Dash front end ("Takeoff Performance Explorer", a conceptual design tool): simulator with animation, trade study (`trade.py`), aircraft builder (`builder.py`), aircraft data/validation pages (`datapages.py`), docs as two pages, About and Methods (☰ menu). It only calls the public `bfl` API. |
 | `app/reference_aircraft.yaml` | reference aircraft for the tire-speed / brake-energy warnings (**placeholder values**; edit freely) |
 | `aircraft/<name>/` | `aircraft.yaml` + CSV tables + README with data provenance |

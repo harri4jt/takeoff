@@ -149,3 +149,18 @@ are at V1 = VR, because at the lowest legal VR the field does not balance (below
 
 The manual's own takeoff-distance charts (Appendix I, Part II) were not available in
 the public scans, so there is no runway-length validation like the 747's.
+
+## Landing (`landing:` in aircraft.yaml, see docs/landing.md)
+
+No flaps (the takeoff table, in ground effect, is used), no thrust reversers; the drag
+chute is deployed at touchdown (`use_chute: true`, credited under MIL-STD-3013). The landing
+weight is left blank, i.e. the takeoff weight (an immediate return); real landings are much
+lighter.
+
+| Landing weight | approach speed | landing distance (= runway, MIL factor 1.0) |
+|---:|---:|---:|
+| 140,000 lb | 201 kt | 4,935 ft |
+| 80,000 lb | 152 kt | 3,301 ft |
+
+The approach speed is 1.2 V_S (the MIL value used here, to be confirmed against 3013B). Not
+checked against the flight manual's landing charts (not in the public scans).

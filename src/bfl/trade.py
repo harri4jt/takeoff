@@ -30,6 +30,7 @@ import pandas as pd
 
 from .bfl import compute_bfl
 from .config import RunConfig
+from .landing import compute_landing
 
 #: columns returned by default (any BFLResult.scalars() key can be asked for)
 DEFAULT_OUTPUTS = (
@@ -44,6 +45,13 @@ DEFAULT_OUTPUTS = (
     "max_tire_speed_kts",
     "brake_energy_MJ",
 )
+#: extra outputs: anything in LandingResult.scalars() ("landing_..."), and
+#: "runway_required_ft" = max(takeoff field length, landing runway required)
+LANDING_PREFIX = "landing_"
+
+
+def _needs_landing(outputs: Sequence[str]) -> bool:
+    return any(o.startswith(LANDING_PREFIX) or o == "runway_required_ft" for o in outputs)
 
 
 def _solve_run(args: tuple):
@@ -56,9 +64,15 @@ def _solve_run(args: tuple):
     for v, pos in zip(values, order, strict=True):
         row: dict[str, Any] = {"_pos": pos, **fixed, key: v}
         try:
-            r = compute_bfl(base.with_updates({**fixed, key: v}), vr_hint=hint if warm else None)
+            case = base.with_updates({**fixed, key: v})
+            r = compute_bfl(case, vr_hint=hint if warm else None)
             hint = r.k_VR
             sc = r.scalars()
+            if _needs_landing(outputs):
+                sc.update(compute_landing(case).scalars())
+                sc["runway_required_ft"] = max(
+                    sc["field_length_ft"], sc["landing_runway_required_ft"]
+                )
             row.update({o: sc.get(o) for o in outputs})
             row["error"] = ""
         except Exception as exc:  # noqa: BLE001 - one failed case must not stop the study
@@ -87,7 +101,9 @@ def trade_study(
     Args:
         config: the base case (from ``load_config``).
         vary: {dotted path: values}. All combinations are solved (a full grid).
-        outputs: result columns, any key of ``BFLResult.scalars()``.
+        outputs: result columns, any key of ``BFLResult.scalars()``, of
+            ``LandingResult.scalars()`` (``landing_...``; the landing is then solved too),
+            or ``runway_required_ft`` = max(takeoff field length, landing runway).
         workers: parallel processes (default: CPU count - 1, at most 8; 1 = serial).
         warm_start: pass each case's optimal k_VR to the next along the last input.
         executor: an existing executor to use instead of starting processes (the app

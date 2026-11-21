@@ -109,3 +109,15 @@ weight. Nothing was tuned to match. Sensitivities found while checking:
 
 Flaps 10 gives runs 7–20% longer than flaps 20 in the model. That is consistent with
 Boeing using flaps 20 except where the climb gradient requires flaps 10.
+
+## Landing (`landing:` in aircraft.yaml, see docs/landing.md)
+
+| Quantity | Value | Source |
+|---|---|---|
+| Landing weight | 564,000 lb | maximum landing weight as commonly published; **confirm** against the Boeing airport-planning document |
+| Landing flaps | flaps 20 table × k_CL 1.12, k_CD 1.30 | **Estimate**: no flaps 25/30 table yet |
+| Technique | 3° glide, 1.15 g flare, 2 s free roll | defaults |
+
+Part 25 result (sea level, ISA): V_REF 139 kt, landing distance
+4,041 ft, **landing runway required 6,735 ft** (÷ 0.6).
+Not yet checked against Boeing's landing chart.

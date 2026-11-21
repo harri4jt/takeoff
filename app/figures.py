@@ -12,7 +12,7 @@ from plotly.subplots import make_subplots
 # categorical slots in fixed order (validated reference palette)
 C1, C2, C3, C4, C5 = "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"
 CATEGORICAL = (C1, C2, C3, C4, C5)  # fixed order: series i always gets the i-th colour
-GO_C, STOP_C, AEO_C = C1, C2, C3
+GO_C, STOP_C, AEO_C, LAND_C = C1, C2, C3, C4
 BFL_C, FAA_C = "#d7263d", "#1f9d55"
 INK, MUTED, GRID = "#0f1d2b", "#4a5868", "#dfe4ea"
 SURFACE = "rgba(0,0,0,0)"
@@ -35,6 +35,9 @@ EVENT_LABELS = {
     "spoilers": "spoilers",
     "chute_deploy": "chute",
     "stopped": "stopped",
+    "flare": "flare",
+    "touchdown": "touchdown",
+    "reversers": "reversers",
 }
 
 
@@ -954,7 +957,9 @@ def forces_angles(cur: Data, base: Data | None, tab: str, branch: str) -> go.Fig
         ]
     )
     for d, dash, sfx in _runs(cur, base):
-        tr = d[branch]
+        tr = d.get(branch)
+        if not tr:  # e.g. a baseline pinned before landing existed
+            continue
         for key, c, lab in series:
             fig.add_scatter(
                 x=tr["t"],
@@ -964,11 +969,13 @@ def forces_angles(cur: Data, base: Data | None, tab: str, branch: str) -> go.Fig
                 line={"color": c, "width": 2, "dash": dash},
                 opacity=0.55 if dash else 1.0,
             )
-    _event_lines(fig, cur[branch])
+    if cur.get(branch):
+        _event_lines(fig, cur[branch])
     branch_names = {
         "go": "continued takeoff",
         "stop": "rejected takeoff",
         "aeo": "all-engines takeoff",
+        "landing_tr": "landing",
     }
     title = ("Forces" if tab == "forces" else "Angles") + f" vs time ({branch_names[branch]})"
     _base_layout(fig, title, 460)
@@ -978,6 +985,61 @@ def forces_angles(cur: Data, base: Data | None, tab: str, branch: str) -> go.Fig
         title="force [lbf]" if tab == "forces" else "angle [deg]",
         tickformat="," if tab == "forces" else None,
     )
+    return fig
+
+
+_LANDING_TEXT = {  # label placement per (panel, event), clear of neighbours and axes
+    (2, "touchdown"): "top center",
+    (2, "chute_deploy"): "bottom center",
+    (2, "brakes"): "top right",
+    (2, "reversers"): "bottom right",
+    (2, "stopped"): "top left",
+}
+
+
+def landing(cur: Data, base: Data | None) -> go.Figure:
+    """Landing from 50 ft: height and airspeed against runway distance, events marked."""
+    fig = make_subplots(
+        1, 2, subplot_titles=("height vs distance (from the 50 ft point)", "speed vs distance"),
+        horizontal_spacing=0.1,
+    )  # fmt: skip
+    for d, dash, sfx in _runs(cur, base):
+        tr = d.get("landing_tr")
+        if not tr:
+            continue
+        for col, y, name, c in (
+            (1, tr["h"], "height", LAND_C),
+            (2, tr["veas"], "airspeed (KEAS)", LAND_C),
+            (2, tr["vg"], "ground speed", INK),
+        ):
+            ls = dash or ("dot" if name == "ground speed" else None)
+            fig.add_scatter(
+                x=tr["x"], y=y, mode="lines", name=name + sfx,
+                line={"color": c, "width": 2, "dash": ls}, opacity=0.55 if dash else 1.0,
+                showlegend=col == 2, row=1, col=col,
+            )  # fmt: skip
+    tr = cur.get("landing_tr")
+    if tr:
+        # air events on the height panel, ground events on the speed panel
+        panels = (
+            (1, "h", ("flare", "touchdown")),
+            (2, "veas", ("touchdown", "chute_deploy", "brakes", "reversers", "stopped")),
+        )
+        for col, key, names in panels:
+            ev = [e for e in tr["events"] if e["name"] in names]
+            fig.add_scatter(
+                x=[e["x_ft"] for e in ev], y=[_at(tr, key, e["t_s"]) for e in ev],
+                mode="markers+text", text=[EVENT_LABELS[e["name"]] for e in ev],
+                textposition=[_LANDING_TEXT.get((col, e["name"]), "top right") for e in ev],
+                textfont={"size": 10},
+                marker={"size": 7, "color": "white", "line": {"color": LAND_C, "width": 2}},
+                showlegend=False, hoverinfo="skip", row=1, col=col,
+            )  # fmt: skip
+    _base_layout(fig, "", 420)
+    fig.update_layout(hovermode="x unified")
+    fig.update_xaxes(title="distance from the 50 ft point [ft]", tickformat=",")
+    fig.update_yaxes(title="h [ft]", rangemode="tozero", row=1, col=1)
+    fig.update_yaxes(title="speed [kt]", rangemode="tozero", row=1, col=2)
     return fig
 
 

@@ -419,6 +419,7 @@ DETAIL_TABS = [
     ("forces", "Forces"),
     ("angles", "Angles"),
     ("positions", "Positions"),
+    ("landing", "Landing"),
     ("limits", "Gear & limits"),
     ("summary", "Run summary"),
 ]
@@ -532,7 +533,8 @@ def sim_page() -> html.Div:
                                                 "label": " rejected takeoff (stop)  ",
                                                 "value": "stop",
                                             },
-                                            {"label": " all engines", "value": "aeo"},
+                                            {"label": " all engines  ", "value": "aeo"},
+                                            {"label": " landing", "value": "landing_tr"},
                                         ],
                                     ),
                                     dcc.Loading(html.Div(id="detail-content"), type="dot"),
@@ -753,10 +755,28 @@ def readout(d: dict | None, base: dict | None) -> list:
         f"takeoff, rotating at the same VR = {s['vr_kts']:.0f} kt."
     )
 
+    ld = d.get("landing", {})
+    landing_tip = ""
+    if ld.get("ok"):
+        land = s["landing_runway_required_ft"]
+        need = max(s["faa_field_length_ft"], land)
+        factor = (
+            f" × {s['landing_field_factor']:.3g} (Part 121: ÷ 0.6)"
+            if s["landing_field_factor"] != 1.0
+            else ""
+        )
+        landing_tip = (
+            f"Landing at {s['landing_weight_lbf']:,.0f} lb from 50 ft at "
+            f"{s['landing_v_approach_kts']:.0f} kt: {s['landing_distance_ft']:,.0f} ft to a stop"
+            f"{factor}. Runway this design needs: {need:,.0f} ft, set by "
+            f"{'landing' if land > s['faa_field_length_ft'] else 'takeoff'}. Details: "
+            "Engineering details › Landing."
+        )
+
     def metric(
         label: str, key: str, text: str, color: str | None = None, small: bool = False
     ) -> html.Div:
-        delta = f"{s[key] - b[key]:+,.0f} ft vs baseline" if b is not None else ""
+        delta = f"{s[key] - b[key]:+,.0f} ft vs baseline" if b is not None and key in b else ""
         lab = [html.Span(className="swatch", style={"background": color})] if color else []
         return tip(
             html.Div(
@@ -826,6 +846,15 @@ def readout(d: dict | None, base: dict | None) -> list:
                 metric(nm["bfl"], "bfl_ft", bfl_tip, figures.BFL_C),
                 metric(nm["field"], "faa_field_length_ft", faa_tip, figures.FAA_C),
                 metric(f"All engines to {h}", "aeo_distance_ft", aeo_tip, small=True),
+                *(
+                    [
+                        metric(
+                            "Landing runway", "landing_runway_required_ft", landing_tip, small=True
+                        )
+                    ]  # fmt: skip
+                    if ld.get("ok")
+                    else []
+                ),
             ],
         ),
         html.Div(
@@ -933,7 +962,8 @@ def create_app() -> Dash:
         label = [
             ("▾ " if is_open else "▸ ") + "Engineering details",
             html.Span(
-                "V1 trade · speeds · forces · angles · positions · gear & limits · run summary",
+                "V1 trade · speeds · forces · angles · positions · landing · gear & limits · "
+                "run summary",
                 className="sub",
             ),
         ]
@@ -1135,6 +1165,23 @@ def create_app() -> Dash:
             fig = figures.forces_angles(cur, base_ok, tab, branch)
         elif tab == "positions":
             fig = figures.positions(cur, base_ok)
+        elif tab == "landing":
+            ld = cur.get("landing", {})
+            if not ld.get("ok"):
+                return html.Div(
+                    f"Landing not computed: {ld.get('error', 'no result')}", className="hint"
+                )
+            return [
+                dcc.Graph(figure=figures.landing(cur, base_ok), config=GRAPH_CFG),
+                html.Div(
+                    "Glide at the approach speed, constant-g flare at idle, touchdown, free "
+                    "roll, then brakes and spoilers (plus reversers and chute where the rules "
+                    "credit them). Landing settings live in the aircraft file "
+                    "(builder › Landing).",
+                    className="hint",
+                ),
+                html.Pre(ld["summary"], style={"fontSize": "13px", "whiteSpace": "pre-wrap"}),
+            ]
         elif tab == "limits":
             fig = figures.limit_strips(limits.strips(cur["scalars"]))
             note = [
