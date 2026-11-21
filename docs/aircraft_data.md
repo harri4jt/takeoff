@@ -80,6 +80,7 @@ text when you hover a field.
 | field | default | meaning |
 |---|---|---|
 | `wing_area_ft2` | **required** | reference wing area S_ref [ft^2] |
+| `span_ft` | – | wing span [ft]; optional (gust analysis averages gusts over it; ground effect uses its own span_ft) |
 
 #### Weight (`weight:`)
 

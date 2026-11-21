@@ -13,6 +13,7 @@ description: >-
 
 geometry:
   wing_area_ft2: 1605.0         # SR-71A-1 Section I, "Dimensions" (reference wing area)
+  span_ft: 55.6                 # SR-71A-1 Section I, "Dimensions"
 
 weight:
   default_weight_lbf: 140000.0  # SR-71A-1 Section I: loaded gross weight 135,000 to over 140,000 lb

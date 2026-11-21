@@ -34,6 +34,12 @@ class _Model(BaseModel):
 # ------------------------------------------------------------------------------------
 class GeometryConfig(_Model):
     wing_area_ft2: float = Field(gt=0, description="reference wing area S_ref [ft^2]")
+    span_ft: float | None = Field(
+        default=None,
+        gt=0,
+        description="wing span [ft]; optional (gust analysis averages "
+        "gusts over it; ground effect uses its own span_ft)",
+    )
 
 
 class WeightConfig(_Model):
