@@ -232,7 +232,9 @@ def fig5_ground_roll() -> None:
                 }
             )
         )
-        cfg = load_config(d, overrides={"environment.mu_roll": mu})
+        # RK4 at 0.01 s, as labelled (the solver's default is RK45)
+        cfg = load_config(d, overrides={"environment.mu_roll": mu, "solver.method": "rk4",
+                                        "solver.dt_s": 0.01})  # fmt: skip
         vm = build_model(cfg)
     m = W / G0_FTPS2
     A = 2 * T1 - mu * m * G0_FTPS2
@@ -363,6 +365,45 @@ def fig8_spline() -> None:
     check("Natural cubic spline vs scipy", e.max() < 1e-12, f"max |diff| = {e.max():.1e}")
 
 
+def fig9_sde() -> None:
+    """Strong convergence of Euler-Maruyama and stochastic Heun on geometric Brownian
+    motion (exact solutions known), same Brownian paths at every step size."""
+    from bfl.sde import BrownianPath, integrate_sde
+    from bfl.sde import observed_order as sde_order
+
+    mu, sig, t_end, n = 0.5, 0.8, 1.0, 4000
+    bp = BrownianPath.sample(np.random.default_rng(7), t_end, 2.0**-11, 1, n)
+    w = bp.endpoint(t_end)[0]
+    exact = {"em": np.exp((mu - 0.5 * sig**2) * t_end + sig * w),  # Ito
+             "heun": np.exp(mu * t_end + sig * w)}  # Stratonovich  # fmt: skip
+    fig, ax = plt.subplots(figsize=(6.5, 4.5), constrained_layout=True)
+    orders = {}
+    for method, color, lab in (("em", STOP, "Euler–Maruyama"), ("heun", GO, "stochastic Heun")):
+        dts, errs = [], []
+        for r in (8, 16, 32, 64, 128):
+            dt = 2.0**-11 * r
+            y = integrate_sde(lambda t, y: [mu * y[0]], lambda t, y: [sig * y[0]],
+                              [np.ones(n)], t_end, dt, bp.increments(r), method)  # fmt: skip
+            dts.append(dt)
+            errs.append(float(np.mean(np.abs(y[0] - exact[method]))))
+        orders[method] = sde_order(dts, errs)
+        ax.loglog(dts, errs, "o-", color=color, ms=7,
+                  label=f"{lab} (fitted strong order {orders[method]:.2f})")  # fmt: skip
+        for p_, ls in ((0.5, ":"), (1.0, "--")):
+            if (method, p_) in (("em", 0.5), ("heun", 1.0)):
+                ax.loglog(dts, errs[0] * (np.array(dts) / dts[0]) ** p_, ls, color=MUTED,
+                          lw=1.2, label=f"reference slope {p_:g}")  # fmt: skip
+    ax.set(title="SDE methods: strong order on geometric Brownian motion",
+           xlabel="step size dt", ylabel="mean path error at t = 1")  # fmt: skip
+    ax.legend(fontsize=9)
+    fig.savefig(OUT / "9_sde_strong_order.png")
+    plt.close(fig)
+    check("Euler–Maruyama strong order ≈ 0.5", abs(orders["em"] - 0.5) < 0.12,
+          f"{orders['em']:.2f}")  # fmt: skip
+    check("stochastic Heun strong order ≈ 1", abs(orders["heun"] - 1.0) < 0.12,
+          f"{orders['heun']:.2f}")  # fmt: skip
+
+
 def fig7_summary() -> None:
     n = len(checks)
     fig, ax = plt.subplots(figsize=(11, 0.42 * n + 1.0))
@@ -396,6 +437,7 @@ def main() -> None:
     fig5_ground_roll()
     fig6_and_physics()
     fig8_spline()
+    fig9_sde()
     fig7_summary()
     npass = sum(ok for _, ok, _ in checks)
     print(f"\n{npass}/{len(checks)} checks pass; figures in {OUT}")

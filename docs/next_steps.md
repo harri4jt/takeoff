@@ -442,3 +442,24 @@ credit, wet runway option, flare model detail (constant-g vs Raymer's flare radi
       data (generated field reference), Python, rules, rotation speed, landing, ground
       effect, assumptions; Methods = solver, physics, numerical methods, verification and
       validation. README rewritten with "Ideas to consider later". Study guide removed.
+
+---
+
+## Round 9 (2026-11-21): thrust multiplier, gust analysis (stochastics)
+
+- [x] `multipliers.k_T` (main slider, trade override, `k_T` in scripts).
+- [x] `bfl.sde`: Euler–Maruyama and stochastic Heun; strong order 0.48 / 0.98 measured on GBM,
+      EM weak order 1 on OU (tests).
+- [x] `bfl.gusts`: Dryden low-altitude OU gusts (u and w, span-averaged), ground-frame
+      equations, calm-day schedule flown on indicated airspeed with a 1 s lag on the gust
+      part, shared go/stop/all-engines gust history, landing with a ground-referenced flare
+      cue; percentiles with order-statistic CIs; strong-convergence study (≈ first order,
+      a few ft at dt 0.01 s).
+- [x] **Gust analysis page** (☰ › Gust analysis), not used by the simulator or trade study:
+      question bar, answer cards with coverage 90/95/99 %, extra-runway-vs-coverage chart,
+      branch spread, sample gust histories, sampling and time-step accuracy, CSV/summary
+      downloads, slide-ready PNG export.
+- [x] Worker pools use forkserver (forking a threaded process can deadlock).
+- Findings: 747-100 moderate gusts: +395 ft (+4.1 %) covers 95 % of takeoffs; landing
+  barely moves unless an approach speed additive is flown. The SR-71 is far more sensitive
+  (+9 % moderate, +20 % severe at P95).

@@ -13,7 +13,9 @@ simulates:
 
 The result to design to is **runway required = max(takeoff field length, landing runway
 required)**. A web app (simulator with animations, trade-study maps, aircraft builder)
-and a Python API give the same numbers.
+and a Python API give the same numbers. A separate **gust analysis** simulates hundreds of
+takeoffs and landings in random turbulence (a stochastic differential equation per run)
+and answers how much extra runway covers 95 % or 99 % of gusty days.
 
 ![Simulator](docs/simulator.png)
 
@@ -74,7 +76,7 @@ folder, an `aircraft.yaml` path, or a builder `.zip`.
 
 | path | contents |
 |---|---|
-| `src/bfl/` | the solver: `analysis` (one-call API), `bfl` (takeoff), `landing`, `trade` (trade studies), `config` (inputs and validation), physics (`atmosphere`, `aero`, `propulsion`, `dynamics`, `model`, `takeoff`, `phases`), numerics (`integrators`, `rootfind`, `optimize`, `tables`), `results`, `validation`, `plotting` |
+| `src/bfl/` | the solver: `analysis` (one-call API), `bfl` (takeoff), `landing`, `trade` (trade studies), `gusts` (gust analysis), `sde` (stochastic methods), `config` (inputs and validation), physics (`atmosphere`, `aero`, `propulsion`, `dynamics`, `model`, `takeoff`, `phases`), numerics (`integrators`, `rootfind`, `optimize`, `tables`), `results`, `validation`, `plotting` |
 | `app/` | the Dash app; it calls only the public `bfl` API. `reference_aircraft.yaml` (tire-speed references, **placeholder values**) and `reference_runways.yaml` are editable |
 | `aircraft/` | the aircraft (yaml + CSV + README with sources) |
 | `docs/` | the documentation the app shows (About and Methods pages) |
@@ -83,7 +85,8 @@ folder, an `aircraft.yaml` path, or a builder `.zip`.
 | `tests/` | `python -m pytest` (~35 s); the validation tests also refresh the app's aircraft pages |
 
 All numerical methods (RK4, Dormand–Prince RK45, event location, secant and safeguarded
-secant, Brent's method, linear / natural cubic spline / bilinear interpolation) are
+secant, Brent's method, linear / natural cubic spline / bilinear interpolation,
+Euler–Maruyama and stochastic Heun, order-statistic confidence intervals) are
 hand-written; scipy is used only in the tests as an independent reference. The project
 started as a numerical-methods course project.
 
@@ -104,7 +107,7 @@ started as a numerical-methods course project.
 * **Thrust lapse with altitude:** a lapse model or an altitude column in the thrust
   table, so high-elevation cases are not optimistic.
 * **Validation of the landing** against a Boeing landing chart, with a flaps 25/30 table.
-* **Wind:** gusts and shear during rotation (the `WindModel` interface is the hook).
+* **Wind shear and discrete gusts** in the gust analysis (it has steady Dryden turbulence).
 * **Packaging and a command line**, if the API is used from other projects.
 * **V1 warm start** inside each solve (about 30 % faster, results change at the V1
   tolerance level).

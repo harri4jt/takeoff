@@ -26,6 +26,11 @@ compute_bfl
 compute_landing
 ├─ glide → constant-g flare → final → touchdown                  (RK45 + events)
 └─ free roll → braking to a stop                                  (RK45 + events)
+
+gust_study (its own page)
+└─ N runs × [ shared roll to V_EF → go / stop / all engines; landing ]
+      each: SDE, Euler–Maruyama or stochastic Heun, fixed step      (stochastic methods)
+   → percentiles with order-statistic confidence intervals          (Monte Carlo)
 ```
 
 1. **All-engines roll (computed once).** The aircraft accelerates from rest to the
@@ -62,6 +67,8 @@ is what RK4's fourth-order accuracy assumes.
 | Secant / safeguarded secant | `rootfind.py` | V1, V_EF, k_VR and the event times themselves | [Root finding](root_finding.md) |
 | Linear / natural cubic spline / bilinear | `tables.py` | CL(α), CD(α), thrust(V, T) | [Interpolation](interpolation.md) |
 | Brent's method (golden section + parabolic steps) | `optimize.py` | the field-length-minimizing VR | [Rotation speed](../rotation_speed.md) |
+| Euler–Maruyama, stochastic Heun | `sde.py` | gusty takeoffs and landings | [Stochastic methods](sde.md) |
+| Monte Carlo percentiles, order-statistic intervals | `gusts.py` | the gust analysis's answers | [Stochastic methods](sde.md) |
 
 ## Why the animation's stopping aircraft stops short of the red line
 

@@ -7,7 +7,9 @@ are computed only when asked for.
 
 from __future__ import annotations
 
+import json
 import math
+import multiprocessing
 import os
 import time
 from concurrent.futures import ProcessPoolExecutor
@@ -19,6 +21,8 @@ import pandas as pd
 
 from bfl import RunConfig, compute_bfl, compute_landing, load_config, sweep_v1, trade_study
 from bfl.atmosphere import RHO0_SLUGFT3
+from bfl.model import build_model
+from bfl.units import FTPS_TO_KTS
 
 TRAJ_COLS = {
     "t": "t_s",
@@ -37,6 +41,9 @@ TRAJ_COLS = {
     "phase": "phase",
 }
 MAX_ROWS = 1500
+
+# forkserver: forking a process that has threads (the app's server) can deadlock
+_MP = multiprocessing.get_context("forkserver")
 
 
 def build_config(aircraft: str, ui: dict[str, Any]) -> RunConfig:
@@ -201,7 +208,7 @@ _POOL: ProcessPoolExecutor | None = None
 def _pool() -> ProcessPoolExecutor:
     global _POOL
     if _POOL is None:
-        _POOL = ProcessPoolExecutor(max_workers=max(1, (os.cpu_count() or 2) - 1))
+        _POOL = ProcessPoolExecutor(mp_context=_MP, max_workers=max(1, (os.cpu_count() or 2) - 1))
     return _POOL
 
 
@@ -241,3 +248,59 @@ def sweep(cfg_json: str, k_vr: float) -> dict[str, Any]:
     cfg = RunConfig.model_validate_json(cfg_json)
     df = sweep_v1(cfg, n=15, k_vr=k_vr)
     return df[["v1_kts", "d_go_ft", "d_stop_ft"]].to_dict(orient="list")
+
+
+# ------------------------------------------------------------------------------------
+# gust analysis (its own page; never part of the main run or the trade study)
+# ------------------------------------------------------------------------------------
+_TRACE_STRIDE = 5  # keep every 5th time step of the sample histories (plots only)
+
+
+@lru_cache(maxsize=8)
+def gusts(cfg_json: str, settings_json: str) -> dict[str, Any]:
+    """bfl.gusts.gust_study, reshaped for the page (JSON-friendly)."""
+    from bfl.gusts import GustSettings, gust_study
+
+    cfg = RunConfig.model_validate_json(cfg_json)
+    s = GustSettings(**json.loads(settings_json))
+    try:
+        res = gust_study(cfg, s, executor=_pool())
+    except Exception:  # noqa: BLE001 - e.g. no multiprocessing: let it run serially
+        res = gust_study(cfg, s)
+    traces = {
+        str(run): {k: df.iloc[::_TRACE_STRIDE].to_dict(orient="list") for k, df in parts.items()}
+        for run, parts in res.traces.items()
+    }
+    vm = build_model(cfg)
+    sch_ref = compute_bfl(cfg.with_updates({"solver.trajectory_dt_s": None}))
+    return {
+        "ok": True,
+        "aircraft": res.aircraft_name,
+        "rules": res.rules,
+        "settings": json.loads(settings_json),
+        "w20": s.w20,
+        "samples": res.samples.to_dict(orient="list"),
+        "calm": res.calm,
+        "reference": res.reference,
+        "percentiles": res.percentiles().to_dict(orient="records"),
+        "traces": traces,
+        "summary": res.summary(),
+        "time_s": res.time_s,
+        "dryden": res.dryden_at,
+        "speeds": {"v_ef_kts": sch_ref.v_ef_kts, "vr_kts": sch_ref.vr_kts,
+                   "v_s_kts": vm.tas_to_eas(vm.stall_speed_tas()) * FTPS_TO_KTS},
+    }  # fmt: skip
+
+
+@lru_cache(maxsize=8)
+def gust_convergence(cfg_json: str, settings_json: str) -> dict[str, Any]:
+    """Strong error vs time step for both methods (a quick version for the page)."""
+    from bfl.gusts import GustSettings, convergence_study
+
+    cfg = RunConfig.model_validate_json(cfg_json)
+    s = GustSettings(**json.loads(settings_json))
+    outs = ("go_ft", "stop_ft", "aeo_ft") if s.takeoff else ()
+    outs += ("landing_distance_ft",) if s.landing else ()
+    df = convergence_study(cfg, s, dts=(0.04, 0.02, 0.01, 0.005), ref_dt=0.00125, n_paths=8,
+                           outputs=outs, executor=_pool())  # fmt: skip
+    return df.to_dict(orient="list")

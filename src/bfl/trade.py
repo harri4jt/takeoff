@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import itertools
 import math
+import multiprocessing
 import os
 from collections.abc import Iterable, Mapping, Sequence
 from concurrent.futures import Executor, ProcessPoolExecutor
@@ -50,6 +51,9 @@ DEFAULT_OUTPUTS = (
 #: extra outputs: anything in LandingResult.scalars() ("landing_..."), and
 #: "runway_required_ft" = max(takeoff field length, landing runway required)
 LANDING_PREFIX = "landing_"
+
+# forkserver: forking a process that has threads (the app's server) can deadlock
+_MP = multiprocessing.get_context("forkserver")
 
 
 def _needs_landing(outputs: Sequence[str]) -> bool:
@@ -143,9 +147,9 @@ def trade_study(
         chunks = list(executor.map(_solve_run, jobs))
     elif workers > 1 and len(jobs) > 1:
         try:
-            with ProcessPoolExecutor(max_workers=min(workers, len(jobs))) as ex:
+            with ProcessPoolExecutor(mp_context=_MP, max_workers=min(workers, len(jobs))) as ex:
                 chunks = list(ex.map(_solve_run, jobs))
-        except (OSError, RuntimeError):  # e.g. no multiprocessing here: run serially
+        except Exception:  # noqa: BLE001 - no usable process pool here: run serially
             chunks = [_solve_run(j) for j in jobs]
     else:
         chunks = [_solve_run(j) for j in jobs]

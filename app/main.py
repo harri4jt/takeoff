@@ -22,7 +22,7 @@ from flask import abort, send_from_directory  # noqa: E402
 from bfl import list_aircraft  # noqa: E402
 from bfl.config import load_aircraft  # noqa: E402
 
-from . import builder, compute, datapages, figures, limits, loading, pages, trade  # noqa: E402
+from . import builder, compute, datapages, figures, gust_page, limits, loading, pages, trade  # noqa: E402
 
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_AIRCRAFT = "b747_100"
@@ -922,6 +922,7 @@ def create_app() -> Dash:
         return send_from_directory(pages.VERIFICATION_DIR, name)
 
     trade.register(app, aircraft_options)
+    gust_page.register(app, aircraft_options)
     builder.register(app)
 
     # ---- routing and menus -----------------------------------------------------------
@@ -937,6 +938,8 @@ def create_app() -> Dash:
             return {}, None, HIDDEN
         if path == "/trade":
             return HIDDEN, trade.layout(), HIDDEN
+        if path == "/gusts":
+            return HIDDEN, gust_page.layout(), HIDDEN
         if path == "/builder":
             return HIDDEN, builder.layout(), HIDDEN
         if path in datapages.ROUTES:

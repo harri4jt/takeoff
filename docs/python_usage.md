@@ -77,6 +77,22 @@ grid(df, x="k_CD", y="k_CL", value="runway_required_ft")   # a k_CL x k_CD table
 * Scripts need the `if __name__ == "__main__":` guard, because the study starts worker
   processes.
 
+## Gust analysis
+
+```python
+from bfl import load_config
+from bfl.gusts import GustSettings, gust_study
+
+g = gust_study(load_config("b747_100"), GustSettings(intensity="moderate", n=500))
+print(g.summary())
+g.percentiles()        # per output: calm, P50/P90/P95/P99 with confidence intervals
+g.samples              # one row per run (go, stop, all-engines, field length, landing, ...)
+```
+
+`GustSettings` holds the turbulence (`intensity`, `vertical`), the number of runs, the SDE
+method and time step, the seed, the pilot lag and the approach speed additive. See
+[Gust analysis](gusts.md).
+
 ## Aircraft that are not in `aircraft/`
 
 `analyze`, `load_config` and `trade_study` take any of:

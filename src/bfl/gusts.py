@@ -47,6 +47,7 @@ and landing runway required.
 from __future__ import annotations
 
 import math
+import multiprocessing
 import os
 import time
 from concurrent.futures import Executor, ProcessPoolExecutor
@@ -68,6 +69,7 @@ V_FLOOR = 10.0 * KTS_TO_FTPS  # turbulence moves past at least this fast
 H_MIN, H_MAX = 10.0, 1000.0  # Dryden low-altitude range [ft]
 
 OUTPUTS = {  # column: (label, unit)
+    "runway_required_ft": ("Runway required (takeoff or landing)", "ft"),
     "takeoff_field_ft": ("Takeoff field length", "ft"),
     "engine_out_ft": ("Engine-out field (max of go, stop)", "ft"),
     "go_ft": ("Continued takeoff (go)", "ft"),
@@ -76,6 +78,9 @@ OUTPUTS = {  # column: (label, unit)
     "landing_distance_ft": ("Landing distance", "ft"),
     "landing_runway_ft": ("Landing runway required", "ft"),
 }
+
+# forkserver: forking a process that has threads (the app's server) can deadlock
+_MP = multiprocessing.get_context("forkserver")
 
 
 @dataclass
@@ -641,16 +646,20 @@ def gust_study(
     jobs = [(cfg_json, sd, list(range(i, min(i + chunk, s.n))), False)
             for i in range(0, s.n, chunk)]  # fmt: skip
     calm_job = (cfg_json, {**sd, "n_traces": 0}, [0], True)
-    if executor is None and s.n > chunk:
-        with ProcessPoolExecutor(max_workers=min(workers, len(jobs) + 1)) as ex:
-            calm_rows = ex.submit(_realizations, calm_job)
-            parts = list(ex.map(_realizations, jobs))
-            calm_rows = calm_rows.result()
-    elif executor is not None:
-        calm_fut = executor.submit(_realizations, calm_job)
-        parts = list(executor.map(_realizations, jobs))
-        calm_rows = calm_fut.result()
-    else:
+    parts = calm_rows = None
+    try:
+        if executor is not None:
+            calm_fut = executor.submit(_realizations, calm_job)
+            parts = list(executor.map(_realizations, jobs))
+            calm_rows = calm_fut.result()
+        elif s.n > chunk:
+            with ProcessPoolExecutor(mp_context=_MP, max_workers=min(workers, len(jobs) + 1)) as ex:
+                calm_fut = ex.submit(_realizations, calm_job)
+                parts = list(ex.map(_realizations, jobs))
+                calm_rows = calm_fut.result()
+    except Exception:  # noqa: BLE001 - no usable process pool here: run serially
+        parts = calm_rows = None
+    if parts is None or calm_rows is None:
         calm_rows = _realizations(calm_job)
         parts = [_realizations(j) for j in jobs]
     rows = [r for p in parts for r in p]
@@ -664,6 +673,10 @@ def gust_study(
     calm_row = calm_rows[0]
     if calm_row.get("error"):
         raise RuntimeError(f"the calm reference run failed: {calm_row['error']}")
+    if s.takeoff and s.landing:  # per realization: what that day's operations need
+        for d in (samples, calm_row):
+            d["runway_required_ft"] = np.maximum(d["takeoff_field_ft"], d["landing_runway_ft"])
+        calm_row["runway_required_ft"] = float(calm_row["runway_required_ft"])
     calm = {c: float(calm_row[c]) for c in OUTPUTS if c in calm_row}
     reference: dict[str, float] = {}
     if s.takeoff:
@@ -674,6 +687,9 @@ def gust_study(
         lr = compute_landing(cfg.with_updates({"solver.trajectory_dt_s": None}))
         reference.update(landing_distance_ft=lr.landing_distance_ft,
                          landing_runway_ft=lr.runway_required_ft)  # fmt: skip
+    if s.takeoff and s.landing:
+        reference["runway_required_ft"] = max(reference["takeoff_field_ft"],
+                                              reference["landing_runway_ft"])  # fmt: skip
     dry = {}
     span = cfg.aircraft.geometry.span_ft or cfg.aircraft.ground_effect.span_ft
     for h in (10.0, 50.0):
@@ -745,7 +761,8 @@ def convergence_study(
         if executor is not None:
             paths = list(executor.map(_convergence_path, jobs))
         else:
-            with ProcessPoolExecutor(max_workers=max(1, (os.cpu_count() or 2) - 1)) as ex:
+            n_workers = max(1, (os.cpu_count() or 2) - 1)
+            with ProcessPoolExecutor(mp_context=_MP, max_workers=n_workers) as ex:
                 paths = list(ex.map(_convergence_path, jobs))
         for dt in dts:
             for o in outputs:

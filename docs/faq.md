@@ -6,6 +6,7 @@
 [Why is the field "unbalanced"?](#q-unbalanced) ·
 [Why is VR higher than 1.1 V_S?](#q-vr) ·
 [Is landing a concern for my design?](#q-landing) ·
+[How much extra runway for a gusty day?](#q-gusts) ·
 [What do the warnings mean?](#q-warnings)
 
 **Inputs**
@@ -74,6 +75,15 @@ For a transport at maximum takeoff weight the answer is usually no, but a design
 lands near its takeoff weight, or a military aircraft landing without its chute, can be
 landing-critical. The **Runway required (takeoff or landing)** trade-study metric shows
 where that happens. Details: [Landing](landing.md).
+
+<a id="q-gusts"></a>
+### How much extra runway for a gusty day?
+
+The **Gust analysis** page (☰ menu) answers it: hundreds of takeoffs and landings on the
+calm-day schedule through random Dryden gusts, and the runway that covers 90, 95 or 99 %
+of them. For the 747-100 in moderate turbulence, covering 95 % costs about +4 % on the
+takeoff field length and under 1 % on the landing. It is a probability, not a worst
+case. Details: [Gust analysis](gusts.md).
 
 <a id="q-warnings"></a>
 ### What do the warnings mean?
@@ -187,7 +197,7 @@ and Methods › Verification.
 <a id="q-not"></a>
 ### What is not modelled?
 
-Thrust lapse with altitude; pitch dynamics (the attitude is prescribed: hold, rotate at a
+Thrust lapse with altitude (and, on the main pages, gusts: see the Gust analysis); pitch dynamics (the attitude is prescribed: hold, rotate at a
 set rate, hold); lateral-directional motion (only V_mcg as a lower limit on V1); gusts
 and time-varying wind; brake temperature and tire limits (reported, not enforced);
 climb-gradient requirements after the screen height; wet-runway rule changes; reverser
