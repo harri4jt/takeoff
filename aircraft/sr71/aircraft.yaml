@@ -23,6 +23,7 @@ engines:
   thrust_table: thrust.csv      # per engine vs TAS and OAT, max A/B, SL (Fig. 1-3)
   idle_thrust_per_engine_lbf: 500.0    # Fig. 1-5: ~1,250 lb static falling to ~0 at 170 KIAS; mean over a stop
   thrust_incidence_deg: 0.0     # not given
+  tsfc_per_hr: 1.9              # ESTIMATE: J58 maximum afterburner, sea level static
 
 attitude:
   # The table alpha is body pitch attitude (= indicated alpha + 1.2 deg, see README).
