@@ -22,7 +22,7 @@ from flask import abort, send_from_directory  # noqa: E402
 from bfl import list_aircraft  # noqa: E402
 from bfl.config import load_aircraft  # noqa: E402
 
-from . import builder, compute, datapages, figures, limits, pages, trade  # noqa: E402
+from . import builder, compute, datapages, figures, limits, loading, pages, trade  # noqa: E402
 
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_AIRCRAFT = "b747_100"
@@ -488,13 +488,18 @@ def sim_page() -> html.Div:
                                     ),
                                 ],
                             ),
-                            dcc.Loading(
-                                dcc.Graph(
-                                    id="scene",
-                                    config={**GRAPH_CFG, "displayModeBar": False},
-                                    style={"height": f"{figures.SCENE_HEIGHT}px"},
-                                ),
-                                type="circle",
+                            loading.loading(
+                                [
+                                    dcc.Graph(
+                                        id="scene",
+                                        config={**GRAPH_CFG, "displayModeBar": False},
+                                        style={"height": f"{figures.SCENE_HEIGHT}px"},
+                                    ),
+                                    # the solve writes here: inside, so the loader shows
+                                    dcc.Store(id="current"),
+                                ],
+                                "Solving the takeoff…",
+                                figures.SCENE_HEIGHT,
                             ),
                             html.Div(id="readout"),
                         ],
@@ -665,7 +670,6 @@ def layout() -> html.Div:
         className="app-root",
         children=[
             dcc.Location(id="url"),
-            dcc.Store(id="current"),
             dcc.Store(id="baseline"),
             dcc.Store(id="details-open", data=False),
             dcc.Store(id="aircraft-saved"),

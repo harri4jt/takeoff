@@ -16,7 +16,7 @@ from dash import Input, Output, State, ctx, dcc, html, no_update
 from bfl import RunConfig, load_config
 from bfl.config import load_aircraft
 
-from . import compute, figures
+from . import compute, figures, loading
 
 MAX_MAPS = 6
 MAX_GRID = 21
@@ -261,19 +261,22 @@ def layout() -> html.Div:
                                 "the first edge, then yellow, red, …, grey above the last.",
                                 className="hint",
                             ),
-                            dcc.Loading(
-                                dcc.Graph(
-                                    id="tr-graph",
-                                    config=GRAPH_CFG,
-                                    figure=figures.empty("Set up and press Run", 420),
-                                ),
-                                type="circle",
-                            ),  # fmt: skip
+                            loading.loading(
+                                [
+                                    dcc.Graph(
+                                        id="tr-graph",
+                                        config=GRAPH_CFG,
+                                        figure=figures.empty("Set up and press Run", 420),
+                                    ),
+                                    dcc.Store(id="tr-result"),  # inside: loader shows
+                                ],
+                                "Running the trade study…",
+                                420,
+                            ),
                         ],
                     ),
                 ],
             ),
-            dcc.Store(id="tr-result"),
             dcc.Store(id="tr-init", data=1),
         ],
     )
