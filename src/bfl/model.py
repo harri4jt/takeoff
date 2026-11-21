@@ -123,6 +123,7 @@ def build_model(cfg: RunConfig) -> VehicleModel:
         eng.idle_thrust_per_engine_lbf,
         eng.thrust_incidence_deg * DEG_TO_RAD,
         tsfc,
+        mult.k_T,
     )
 
     atm = atmosphere(env.elevation_ft, env.temperature_F, env.isa_delta_F)

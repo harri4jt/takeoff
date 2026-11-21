@@ -458,6 +458,9 @@ class SolverConfig(_Model):
 class Multipliers(_Model):
     k_CL: float = Field(default=1.0, gt=0, description="scales table CL everywhere (incl. CLmax)")
     k_CD: float = Field(default=1.0, gt=0, description="scales table CD")
+    k_T: float = Field(
+        default=1.0, gt=0, description="scales takeoff thrust (and reverse thrust); not idle"
+    )
 
 
 class RunConfig(_Model):
@@ -521,6 +524,7 @@ INPUT_ALIASES: dict[str, str] = {
     "mu_roll": "environment.mu_roll",
     "k_CL": "multipliers.k_CL",
     "k_CD": "multipliers.k_CD",
+    "k_T": "multipliers.k_T",
     "rules": "aircraft.certification.rules",
     "aero_table": "aircraft.aero.takeoff_configuration",
     "thrust_table": "aircraft.engines.thrust_table",

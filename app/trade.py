@@ -134,7 +134,25 @@ def layout() -> html.Div:
                                 className="tr-over",
                                 children=[
                                     html.Summary("Overrides (blank = inherit)"),
-                                    _num("tr-weight", "Takeoff weight", None, 1000, unit="lbf"),
+                                    html.Div(
+                                        className="tr-row",
+                                        children=[
+                                            _num(
+                                                "tr-weight",
+                                                "Takeoff weight",
+                                                None,
+                                                1000,
+                                                unit="lbf",
+                                            ),
+                                            _num(
+                                                "tr-kt",
+                                                "Thrust multiplier k_T",
+                                                None,
+                                                0.01,
+                                                unit="×",
+                                            ),
+                                        ],
+                                    ),  # fmt: skip
                                     html.Div(
                                         className="tr-row",
                                         children=[
@@ -383,6 +401,7 @@ def register(app, aircraft_options) -> None:
         State("tr-kcl-hi", "value"),
         State("tr-n", "value"),
         State("tr-weight", "value"),
+        State("tr-kt", "value"),
         State("tr-temp", "value"),
         State("tr-elev", "value"),
         State("tr-wind", "value"),
@@ -399,13 +418,15 @@ def register(app, aircraft_options) -> None:
         if not name:
             return no_update, "Pick an aircraft."
         cur = rest[-1]
-        weight, temp, elev, wind, slope, cond, mu_b, mu_r, rot = rest[:9]
-        toggles = dict(zip(TOGGLES, rest[9:-1], strict=True))
+        weight, k_t, temp, elev, wind, slope, cond, mu_b, mu_r, rot = rest[:10]
+        toggles = dict(zip(TOGGLES, rest[10:-1], strict=True))
         try:
             cfg, _ = _base_cfg(name, cur)
             upd: dict = {}
             if weight:
                 upd["environment.weight_lbf"] = float(weight)
+            if k_t is not None:
+                upd["multipliers.k_T"] = float(k_t)
             if temp is not None:
                 upd["environment.temperature_F"] = float(temp)
                 upd["environment.isa_delta_F"] = None

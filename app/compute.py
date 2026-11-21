@@ -44,6 +44,7 @@ def build_config(aircraft: str, ui: dict[str, Any]) -> RunConfig:
     overrides = {
         "multipliers.k_CL": ui["k_cl"],
         "multipliers.k_CD": ui["k_cd"],
+        "multipliers.k_T": ui.get("k_t", 1.0),
         "environment.mu_roll": ui["mu_roll"],
         "environment.mu_brake": ui["mu_brake"],
         "environment.headwind_kts": ui["headwind"],

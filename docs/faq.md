@@ -10,7 +10,7 @@
 
 **Inputs**
 [What is the least data I need for an aircraft?](#q-minimum) ·
-[What do k_CL and k_CD do?](#q-multipliers) ·
+[What do k_CL, k_CD and k_T do?](#q-multipliers) ·
 [How do I model a wet or icy runway?](#q-wet) ·
 [How are elevation and temperature handled?](#q-altitude) ·
 [Civil or military rules?](#q-rules) ·
@@ -101,12 +101,14 @@ aero table (`alpha_deg, CL, CD`). Everything else has a default or is optional. 
 builder marks required fields with *. Details: [Aircraft data](aircraft_data.md).
 
 <a id="q-multipliers"></a>
-### What do k_CL and k_CD do?
+### What do k_CL, k_CD and k_T do?
 
 They scale the whole aero table: k_CL multiplies CL everywhere, **including CLmax**, so
 it also moves the stall speed and every speed scaled from it. k_CD multiplies CD. They
 stand for "a better or worse airframe" and do not scale the spoiler, engine-out or chute
 increments. The landing has its own pair (landing flaps) that multiplies on top.
+k_T multiplies the takeoff thrust (and reverse thrust), not idle thrust: "a more powerful
+engine" without a new thrust table.
 
 <a id="q-wet"></a>
 ### How do I model a wet or icy runway?

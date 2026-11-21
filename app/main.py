@@ -61,6 +61,7 @@ def _signed(v: float, pos: str, neg: str, zero: str, unit: str, fmt: str = "{:.0
 SLIDERS = {
     "k_cl": ("Lift multiplier", "k_CL", 0.8, 1.2, 0.01, 1.0, None, lambda v: f"{v:.2f}×"),
     "k_cd": ("Drag multiplier", "k_CD", 0.8, 1.2, 0.01, 1.0, None, lambda v: f"{v:.2f}×"),
+    "k_t": ("Thrust multiplier", "k_T", 0.8, 1.2, 0.01, 1.0, None, lambda v: f"{v:.2f}×"),
     "headwind": (
         "Wind",
         "",
@@ -319,6 +320,7 @@ def controls() -> html.Div:
                     ),
                     slider("k_cl"),
                     slider("k_cd"),
+                    slider("k_t"),
                     dcc.Checklist(
                         id="ground-effect",
                         value=init["ground-effect"],

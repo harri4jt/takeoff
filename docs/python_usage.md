@@ -29,7 +29,7 @@ names:
 
 | short name | what | short name | what |
 |---|---|---|---|
-| `weight_lbf` | takeoff weight | `k_CL`, `k_CD` | lift / drag multipliers |
+| `weight_lbf` | takeoff weight | `k_CL`, `k_CD`, `k_T` | lift / drag / thrust multipliers |
 | `temperature_F` | outside air temperature | `isa_delta_F` | or: ISA deviation |
 | `elevation_ft` | field elevation | `headwind_kts` | + headwind, − tailwind |
 | `runway_slope_deg` | + uphill | `mu_brake`, `mu_roll` | runway friction |

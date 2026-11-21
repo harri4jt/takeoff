@@ -366,3 +366,20 @@ def test_mistyped_override_suggests_the_field():
         load_config("b747_100", overrides={"environment.wieght_lbf": 5.0})
     with pytest.raises(KeyError, match="did you mean 'environment.weight_lbf'"):
         load_config("b747_100", overrides={"enviroment.weight_lbf": 5.0})
+
+
+def test_thrust_multiplier():
+    """k_T scales takeoff thrust (more thrust, shorter field), not idle thrust."""
+    from bfl import analyze
+
+    base = analyze("b747_100")
+    more = analyze("b747_100", k_T=1.1)
+    assert more.takeoff.field_length_ft < base.takeoff.field_length_ft
+    assert analyze("b747_100", k_T=1.0).runway_required_ft == base.runway_required_ft
+    vm = build_model(load_config("b747_100", overrides={"k_T": 1.2}))
+    vm0 = build_model(load_config("b747_100"))
+    v = 200.0
+    assert vm.propulsion.total(4, False, v, 518.67) == pytest.approx(
+        1.2 * vm0.propulsion.total(4, False, v, 518.67)
+    )
+    assert vm.propulsion.total(4, True, v, 518.67) == vm0.propulsion.total(4, True, v, 518.67)

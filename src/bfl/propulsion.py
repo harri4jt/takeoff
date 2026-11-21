@@ -140,6 +140,7 @@ class Propulsion:
     idle_per_engine_lbf: float
     incidence_rad: float = 0.0
     tsfc: TsfcModel | None = None  # None -> no fuel burn
+    k_T: float = 1.0  # thrust multiplier (multipliers.k_T); idle thrust is not scaled
 
     def fuel_flow_lbm_s(self, thrust_lbf: float, v_air_ftps: float, temp_R: float) -> float:
         """Fuel flow of the operating engines for the given total thrust [lbm/s]."""
@@ -151,5 +152,6 @@ class Propulsion:
         """Total thrust from the operating engines (failed engines give zero)."""
         if n_operating == 0:
             return 0.0
-        per = self.idle_per_engine_lbf if idle else self.model.per_engine(v_air_ftps, temp_R)
-        return n_operating * per
+        if idle:
+            return n_operating * self.idle_per_engine_lbf
+        return n_operating * self.k_T * self.model.per_engine(v_air_ftps, temp_R)
