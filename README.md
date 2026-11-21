@@ -42,8 +42,7 @@ From Python:
 ```python
 from bfl import load_config, compute_bfl, sweep_v1
 cfg = load_config("b747_100",
-                  overrides={"environment.headwind_kts": 10, "multipliers.k_CL": 1.05,
-                             "procedure.optimize_vr": True})
+                  overrides={"environment.headwind_kts": 10, "multipliers.k_CL": 1.05})
 r = compute_bfl(cfg)
 print(r.summary())
 df = r.go.to_dataframe()          # time histories
@@ -76,7 +75,8 @@ sw = sweep_v1(cfg)                 # go/stop vs V1
 * `sr71`: **real lift and thrust** for the Lockheed SR-71A from the declassified flight
   manual (2-D thrust table vs airspeed and temperature, drag chute). Drag is
   **estimated**. Sea-level pressure altitude, −38 to 40 °C; MIL-STD-3013. Balances only
-  with a later rotation (`procedure.optimize_vr`, see `docs/rotation_speed.md`). Sources
+  with a later rotation, which the VR optimizer (on by default) finds; see
+  `docs/rotation_speed.md`. Sources
   in its README.
 
 (`tests/data/generic_widebody_synthetic` is an invented aircraft used only by the tests.)

@@ -11,6 +11,7 @@ from plotly.subplots import make_subplots
 
 # categorical slots in fixed order (validated reference palette)
 C1, C2, C3, C4, C5 = "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"
+CATEGORICAL = (C1, C2, C3, C4, C5)  # fixed order: series i always gets the i-th colour
 GO_C, STOP_C, AEO_C = C1, C2, C3
 BFL_C, FAA_C = "#d7263d", "#1f9d55"
 INK, MUTED, GRID = "#0f1d2b", "#4a5868", "#dfe4ea"
@@ -134,7 +135,9 @@ _PARTS_PX = [
 _SCALE = 1.6
 _ENGINE_PX = (-1.5, 2.3)
 _TAIL_PX = (-40.0, 9.0)
-SCENE_PX = (1050.0, 365.0)  # approx. plotting area of the scene row, for undistorted shapes
+SCENE_HEIGHT = 460  # px; the side view only climbs at the far right, so keep it short
+# approx. plotting area of the scene row (height - margins, top 75 %), for undistorted shapes
+SCENE_PX = (1050.0, 0.75 * (SCENE_HEIGHT - 114))
 MAX_FRAMES = 450
 FPS = 25
 
@@ -223,7 +226,7 @@ def scene(
     speed: float = 4.0,
     show_base: bool = True,
     mode: str = "failure",
-    height: int = 600,
+    height: int = SCENE_HEIGHT,
 ) -> go.Figure:
     """Animated side view over a plan-view runway strip (shared x axis).
 
@@ -716,6 +719,7 @@ def scene(
         if tr.text is not None:
             fig.data[idx].text = tr.text
 
+    ctl_y = 30.0 / (height - 114)  # play controls ~30 px below the plot, clear of the ticks
     fig.update_layout(
         height=height,
         margin={"l": 52, "r": 16, "t": 36, "b": 78},
@@ -737,7 +741,7 @@ def scene(
                 "type": "buttons",
                 "direction": "left",
                 "x": 0.0,
-                "y": -0.075,
+                "y": -ctl_y,
                 "xanchor": "left",
                 "yanchor": "top",
                 "pad": {"t": 0, "r": 6},
@@ -771,7 +775,7 @@ def scene(
         sliders=[
             {
                 "x": 0.16,
-                "y": -0.04,
+                "y": -ctl_y,
                 "len": 0.84,
                 "yanchor": "top",
                 "pad": {"t": 0},
@@ -1119,129 +1123,6 @@ def v1_trade(
     _base_layout(fig, "The V1 trade: go and stop distance vs decision speed", 440)
     fig.update_xaxes(title="V1 [KEAS]")
     fig.update_yaxes(title="distance from brake release [ft]", tickformat=",")
-    return fig
-
-
-def aircraft(ad: dict) -> go.Figure:
-    fig = make_subplots(
-        2,
-        2,
-        subplot_titles=(
-            "lift curve CL(α)",
-            "drag CD(α)",
-            "drag polar",
-            f"thrust per engine at {ad['temperature_F']:.0f} °F",
-        ),
-        horizontal_spacing=0.11,
-        vertical_spacing=0.16,
-    )
-    scaled = abs(ad["k_CL"] - 1) > 1e-9 or abs(ad["k_CD"] - 1) > 1e-9
-    a = ad["alpha_deg"]
-    if scaled:
-        for (r, c), x, y in (
-            ((1, 1), a, ad["cl_raw"]),
-            ((1, 2), a, ad["cd_raw"]),
-            ((2, 1), ad["cd_raw"], ad["cl_raw"]),
-        ):
-            fig.add_scatter(
-                x=x,
-                y=y,
-                mode="lines",
-                line={"color": "#9aa5b1", "width": 1.5, "dash": "dash"},
-                name="table (k = 1)",
-                legendgroup="raw",
-                showlegend=(r, c) == (1, 1),
-                row=r,
-                col=c,
-            )
-    lab = f"used (k_CL {ad['k_CL']:g}, k_CD {ad['k_CD']:g})"
-    fig.add_scatter(
-        x=a,
-        y=ad["cl"],
-        mode="lines",
-        line={"color": C1, "width": 2.5},
-        name=lab,
-        legendgroup="used",
-        row=1,
-        col=1,
-    )
-    fig.add_scatter(
-        x=a,
-        y=ad["cd"],
-        mode="lines",
-        line={"color": C1, "width": 2.5},
-        showlegend=False,
-        legendgroup="used",
-        row=1,
-        col=2,
-    )
-    fig.add_scatter(
-        x=ad["cd"],
-        y=ad["cl"],
-        mode="lines",
-        line={"color": C1, "width": 2.5},
-        showlegend=False,
-        legendgroup="used",
-        row=2,
-        col=1,
-    )
-    fig.add_hline(
-        y=ad["cl_max"],
-        line={"color": MUTED, "dash": "dot", "width": 1},
-        row=1,
-        col=1,
-        annotation_text=f"CLmax {ad['cl_max']:.2f}",
-        annotation_position="bottom right",
-        annotation_font={"size": 10, "color": MUTED},
-    )
-    for th, txt in ((ad["theta_ground_deg"], "ground roll"), (ad["theta_target_deg"], "max pitch")):
-        fig.add_vline(
-            x=th,
-            line={"color": MUTED, "dash": "dot", "width": 1},
-            row=1,
-            col=1,
-            annotation_text=txt,
-            annotation_position="top left",
-            annotation_textangle=-90,
-            annotation_font={"size": 10, "color": MUTED},
-        )
-    fig.add_scatter(
-        x=ad["v_kts"],
-        y=ad["thrust_per_engine"],
-        mode="lines",
-        line={"color": C2, "width": 2.5},
-        name="takeoff thrust",
-        row=2,
-        col=2,
-    )
-    fig.add_hline(
-        y=ad["idle_per_engine"],
-        line={"color": MUTED, "dash": "dot", "width": 1},
-        row=2,
-        col=2,
-        annotation_text=f"idle {ad['idle_per_engine']:,.0f} lbf",
-        annotation_position="top right",
-        annotation_font={"size": 10, "color": MUTED},
-    )
-    fig.add_vline(
-        x=ad["v_s_kts"],
-        line={"color": MUTED, "dash": "dot", "width": 1},
-        row=2,
-        col=2,
-        annotation_text="V_S",
-        annotation_position="bottom left",
-        annotation_font={"size": 10, "color": MUTED},
-    )
-    _base_layout(fig, "", 640)
-    fig.update_layout(hovermode="closest", legend={"y": -0.1})
-    fig.update_xaxes(title="α [deg]", row=1, col=1)
-    fig.update_xaxes(title="α [deg]", row=1, col=2)
-    fig.update_xaxes(title="CD", row=2, col=1)
-    fig.update_xaxes(title="true airspeed [kt]", row=2, col=2)
-    fig.update_yaxes(title="CL", row=1, col=1)
-    fig.update_yaxes(title="CD", row=1, col=2)
-    fig.update_yaxes(title="CL", row=2, col=1)
-    fig.update_yaxes(title="lbf", tickformat=",", rangemode="tozero", row=2, col=2)
     return fig
 
 

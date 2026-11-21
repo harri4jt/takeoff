@@ -283,7 +283,7 @@ class ProcedureConfig(_Model):
     )
     k_VR: float = Field(default=1.10, gt=1.0, description="VR / V_S")
     optimize_vr: bool = Field(
-        default=False,
+        default=True,
         description="choose the k_VR (>= the legal minimum) that minimizes the field length; "
         "see docs/rotation_speed.md",
     )

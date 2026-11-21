@@ -16,7 +16,7 @@ import pandas as pd
 
 from .config import RunConfig
 from .model import VehicleModel, build_model
-from .optimize import golden_section
+from .optimize import brent_min
 from .results import BFLResult
 from .rootfind import safeguarded_secant
 from .takeoff import (
@@ -358,7 +358,7 @@ def _k_vr_for_v2(cfg: RunConfig) -> tuple[float, float, dict[str, Any]]:
     return k_star, r0, {"evaluations": len(ratios), "converged": res.converged}
 
 
-def compute_bfl(config: RunConfig) -> BFLResult:
+def compute_bfl(config: RunConfig, vr_hint: float | None = None) -> BFLResult:
     """Solve for the balanced field length.
 
     1. (V2 rule, if procedure.enforce_v2_min) secant solve on k_VR so that
@@ -368,75 +368,137 @@ def compute_bfl(config: RunConfig) -> BFLResult:
        simulates both branches.
     On a touchback the whole solve is rerun with k_VR += vr_step.
     3. (if procedure.optimize_vr) search k_VR >= the value from 1-2 for the one that
-       minimizes the field length (scan, then golden section); see _optimize_vr.
+       minimizes the field length (scan, then Brent's method); see _optimize_vr.
+
+    Args:
+        vr_hint: optional k_VR where the optimum is expected (e.g. a neighbouring case's
+            optimum in a trade study). Replaces the upward scan by a local search
+            around it; only used with procedure.optimize_vr.
     """
     config = config.resolved()
     result = _compute_min_vr(config)
     if config.procedure.optimize_vr:
-        result = _optimize_vr(config, result)
+        result = _optimize_vr(config, result, vr_hint)
     return result
 
 
+_VR_PROBE = 0.01  # first scan point above the lowest legal k_VR (~1.5 kt of VR)
 _VR_SCAN_STEP = 0.05
-_VR_XTOL = 0.002
+_VR_LOCAL_STEP = 0.02  # warm start: half-width of the first local bracket
+_VR_XTOL = 0.005  # ~0.8 kt of VR; the field length is flat to a few ft there
+_VR_WALL_TOL = 2e-5  # edge of the feasible range (e.g. thrust table), located closely
 
 
-def _optimize_vr(config: RunConfig, base: BFLResult) -> BFLResult:
+def _optimize_vr(config: RunConfig, base: BFLResult, hint: float | None = None) -> BFLResult:
     """Rotate later if that shortens the field length.
 
     VR is the same for the all-engines and the engine-out takeoff, and every k_VR
-    above the legal minimum (V2 rule, touchback) is allowed. A later rotation keeps
+    above the legal minimum k_lo (V2 rule, touchback) is allowed. A later rotation keeps
     the aircraft on the runway at low drag for longer, which helps when the one-engine
     excess thrust at the rotated attitude is small (SR-71), but it lengthens the
-    all-engines distance and raises V1 for everyone else (747). FL(k_VR) is scanned
-    upward in steps of 0.05 until it has risen twice in a row past its best point,
-    then the best bracket is refined by golden section. Failed solves count as +inf.
+    all-engines distance and raises V1 for everyone else (747).
+
+    1. Bracket the minimum of FL(k_VR):
+       - cold start: probe k_lo + 0.01, then scan k_lo + 0.05, 0.10, ... until FL has
+         risen twice in a row past the best point. If the probe and the first scan
+         point are both worse, the lowest legal VR is the optimum (2 extra solves).
+       - warm start (``hint``): evaluate hint and hint +/- 0.02 and walk downhill in
+         doubling steps until the best point has a worse point on each side. If the
+         hint is the lowest legal VR itself and the probe is worse, stop there (1
+         extra solve); the neighbour's scan already looked further out.
+    2. Refine inside the bracket with Brent's method (golden section + parabolic
+       steps) to 0.005 in k_VR.
+    Failed solves (e.g. past the end of a table) count as +inf. The search runs
+    without display trajectories; if those are wanted, the winner is solved once more
+    with them (the only RK4 re-run).
     """
     proc = config.procedure
     k_lo = base.k_VR
     k_hi = max(k_lo, proc.k_VR_max)
-    fast = config.with_updates({"solver.trajectory_dt_s": None})
-    seen: dict[float, float] = {}
+    want_display = config.solver.trajectory_dt_s is not None
+    fast = config.with_updates({"solver.trajectory_dt_s": None}) if want_display else config
+    seen: dict[float, float] = {round(k_lo, 6): base.field_length_ft}
+    solved: dict[float, BFLResult] = {}
 
     def fl(k: float) -> float:
-        k = round(k, 6)
+        k = round(min(max(k, k_lo), k_hi), 6)
         if k not in seen:
-            if k == round(k_lo, 6):
-                seen[k] = base.field_length_ft
-            else:
-                try:
-                    seen[k] = _solve_at(fast.with_updates({"procedure.k_VR": k})).field_length_ft
-                except Exception:  # noqa: BLE001 - e.g. table range; treat as infeasible
-                    seen[k] = math.inf
+            try:
+                r = _solve_at(fast.with_updates({"procedure.k_VR": k}))
+                seen[k], solved[k] = r.field_length_ft, r
+            except Exception:  # noqa: BLE001 - e.g. table range; treat as infeasible
+                seen[k] = math.inf
         return seen[k]
 
-    ks = [k_lo]
-    best = fl(k_lo)
-    k_best = k_lo
-    worse = 0
-    k = k_lo
-    while k + _VR_SCAN_STEP <= k_hi + 1e-12 and worse < 2:
-        k += _VR_SCAN_STEP
-        ks.append(k)
-        v = fl(k)
-        if v < best:
-            best, k_best, worse = v, k, 0
-        elif math.isfinite(best):
-            worse += 1
-    a = max(k_lo, k_best - _VR_SCAN_STEP)
-    b = min(k_hi, k_best + _VR_SCAN_STEP)
-    if b - a > _VR_XTOL:
-        golden_section(fl, a, b, xtol=_VR_XTOL)
-    k_opt = min(seen, key=seen.__getitem__)
+    def best_k() -> float:
+        return min(seen, key=seen.__getitem__)
+
+    def neighbours(k: float) -> tuple[float, float]:
+        ks = sorted(seen)
+        i = ks.index(k)
+        return ks[max(i - 1, 0)], ks[min(i + 1, len(ks) - 1)]
+
+    if hint is not None and hint > k_lo + _VR_PROBE:
+        # warm start: local bracket around the hint, walking downhill
+        h = _VR_LOCAL_STEP
+        for k in (hint - h, hint, hint + h):
+            fl(k)
+        for _ in range(12):
+            kb = best_k()
+            left, right = neighbours(kb)
+            if kb in (round(k_lo, 6), round(k_hi, 6)) or (left < kb < right):
+                break
+            h *= 2.0
+            fl(kb - h if left == kb else kb + h)
+    elif hint is not None and fl(k_lo + _VR_PROBE) >= seen[round(k_lo, 6)]:
+        pass  # warm start at the lowest legal VR, and it still rises: one probe is enough
+    else:
+        # cold start: probe just above k_lo, then scan upward
+        k_best, worse = round(k_lo, 6), 0
+        for k in [k_lo + _VR_PROBE] + [
+            k_lo + _VR_SCAN_STEP * i for i in range(1, int((k_hi - k_lo) / _VR_SCAN_STEP) + 1)
+        ]:
+            if fl(k) < seen[k_best]:
+                k_best, worse = round(k, 6), 0
+            elif math.isfinite(seen[k_best]):
+                worse += 1
+            if worse >= 2:
+                break
+
+    kb = best_k()
+    a, b = neighbours(kb)
+    if kb == round(k_lo, 6) and fl(k_lo + _VR_PROBE) >= seen[kb]:
+        pass  # rises right away: the lowest legal VR is the optimum
+    elif b - a > _VR_XTOL:
+        brent_min(fl, a, b, xtol=_VR_XTOL, x0=kb, f0=seen[kb])
+    # A minimum against a wall of failed solves (e.g. the end of the thrust table) is
+    # not a real optimum: the field length is still falling there. Locate the wall
+    # tightly by bisection so the answer does not depend on where the search stopped.
+    limited = False
+    kb = best_k()
+    _, right = neighbours(kb)
+    if right > kb and not math.isfinite(seen[right]):
+        limited = True
+        lo, hi = kb, right
+        while hi - lo > _VR_WALL_TOL:
+            mid = 0.5 * (lo + hi)
+            if math.isfinite(fl(mid)):
+                lo = mid
+            else:
+                hi = mid
+    k_opt = best_k()
     info = {
         "reason": "optimize_vr",
         "k_VR_old": k_lo,
         "k_VR_new": k_opt,
         "field_length_min_vr_ft": base.field_length_ft,
         "field_length_opt_ft": seen[k_opt],
-        "evaluations": len(seen),
+        "evaluations": len(seen) - 1,
+        "warm_start": hint,
+        "limited_by_failed_solves": limited,
         "scan": sorted((k, v) for k, v in seen.items()),
     }
+    n = len(seen) - 1
     if k_opt <= k_lo + 1e-9 or seen[k_opt] >= base.field_length_ft - 0.5:
         base.vr_optimization = {
             **info,
@@ -445,21 +507,31 @@ def _optimize_vr(config: RunConfig, base: BFLResult) -> BFLResult:
         }
         base.warnings.append(
             f"VR optimization: the lowest legal VR (k_VR = {k_lo:.3f}) already gives the "
-            f"shortest field ({len(seen)} solves)"
+            f"shortest field ({n} extra solves)"
         )
         return base
-    result = _solve_at(config.with_updates({"procedure.k_VR": k_opt}))
+    result = (
+        _solve_at(config.with_updates({"procedure.k_VR": k_opt})) if want_display else solved[k_opt]
+    )
     result.vr_adjustments = base.vr_adjustments + [info] + result.vr_adjustments
     result.vr_optimization = info
+    # the lowest-VR result's own status (e.g. UNBALANCED) no longer applies
+    stale = [w for w in base.warnings if w.startswith("UNBALANCED")]
     result.warnings = (
-        base.warnings
+        [w for w in base.warnings if w not in stale]
         + [
             f"VR optimized: k_VR {k_lo:.3f} -> {result.k_VR:.3f} (VR {base.vr_kts:.0f} -> "
             f"{result.vr_kts:.0f} kt) shortens the field length {base.field_length_ft:,.0f} -> "
-            f"{result.field_length_ft:,.0f} ft ({len(seen)} solves)"
+            f"{result.field_length_ft:,.0f} ft ({n} extra solves)"
         ]
         + [w for w in result.warnings if w not in base.warnings]
     )
+    if limited:
+        result.warnings.append(
+            f"VR optimization stopped at k_VR = {k_opt:.4f}: a higher VR fails (e.g. past "
+            "the end of the thrust table), and the field length was still falling, so "
+            "this is the data's limit, not a true optimum"
+        )
     return result
 
 

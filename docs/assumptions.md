@@ -125,8 +125,9 @@ diagnostic. Enforcing it is closer to how real takeoff speeds are scheduled.
 * **Rule set.** An aircraft setting (`certification.rules`): Part 25 for the 747,
   MIL-STD-3013 for the SR-71. MIL-STD-3013 changes only procedure values (delay, pad,
   50 ft, no 1.15 factor, chute optional). See `field_length_rules.md`.
-* **Rotation speed.** The lowest legal VR by default. `procedure.optimize_vr` searches
-  for the VR that minimizes the field length instead. See `rotation_speed.md`.
+* **Rotation speed.** The VR (at or above the lowest legal one) that minimizes the field
+  length: `procedure.optimize_vr`, on by default. Set it to false for the lowest legal
+  VR. See `rotation_speed.md`.
 * **Thrust** lookups use `max(V_a, 0)`. With a tailwind at brake release the airspeed
   is briefly negative.
 * **Uphill slope.** At a fixed V1, the slope makes the *acceleration to V1* longer, so

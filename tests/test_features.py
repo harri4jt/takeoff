@@ -12,7 +12,7 @@ from bfl import compute_bfl, load_config
 from bfl.aero import fit_parabolic_polar, load_aero_table, raymer_phi
 from bfl.config import RULE_PRESETS, EnginesConfig
 from bfl.model import build_model
-from bfl.optimize import golden_section
+from bfl.optimize import brent_min, golden_section
 
 from .conftest import SYNTH
 
@@ -231,25 +231,70 @@ def test_golden_section():
     assert len(k.x_history) == k.iterations + 2
 
 
+def test_brent_min():
+    """Brent's method: same answers as golden section, far fewer evaluations when f is
+    smooth, and no worse than golden section on a kink."""
+    q = brent_min(lambda x: (x - 1.3) ** 2, 0.0, 2.0, xtol=1e-6)
+    g = golden_section(lambda x: (x - 1.3) ** 2, 0.0, 2.0, xtol=1e-6)
+    assert q.x == pytest.approx(1.3, abs=1e-6)
+    assert len(q.x_history) < len(g.x_history) / 3
+    k = brent_min(lambda x: max(2.0 - x, 0.5 * x), 0.0, 3.0, xtol=1e-6)
+    assert k.x == pytest.approx(4.0 / 3.0, abs=1e-6)
+    s = brent_min(lambda x: math.cosh(x - 0.7) + 0.1 * x**4, -1.0, 2.0, xtol=1e-6)
+    assert s.x == pytest.approx(0.6095437, abs=1e-5)
+    # a known starting point is used, not re-evaluated
+    calls = []
+    brent_min(lambda x: calls.append(x) or (x - 1.0) ** 2, 0.0, 3.0, xtol=1e-4, x0=0.9, f0=0.01)
+    assert 0.9 not in calls
+
+
 def test_optimize_vr_sr71_balances():
-    """The SR-71 does not balance at its lowest legal VR; a later rotation fixes it."""
+    """The SR-71 does not balance at its lowest legal VR; a later rotation (the default)
+    fixes it."""
     cfg = load_config("sr71")
-    lo = compute_bfl(cfg)
-    opt = compute_bfl(cfg.with_updates({"procedure.optimize_vr": True}))
+    lo = compute_bfl(cfg.with_updates({"procedure.optimize_vr": False}))
+    opt = compute_bfl(cfg)
+    assert cfg.procedure.optimize_vr  # on by default
     assert not lo.balanced and opt.balanced
+    assert not any(w.startswith("UNBALANCED") for w in opt.warnings)
     assert opt.k_VR > lo.k_VR + 0.1
     assert opt.field_length_ft < 0.5 * lo.field_length_ft
     vo = opt.vr_optimization
     assert vo["k_VR_old"] == pytest.approx(lo.k_VR) and vo["k_VR_new"] == opt.k_VR
+    assert vo["evaluations"] <= 14
     # it is a minimum: nudging k_VR either way does not help
+    fixed = {"procedure.enforce_v2_min": False, "procedure.optimize_vr": False}
     for dk in (-0.01, 0.01):
-        nb = compute_bfl(cfg.with_updates({"procedure.k_VR": opt.k_VR + dk,
-                                           "procedure.enforce_v2_min": False}))  # fmt: skip
+        nb = compute_bfl(cfg.with_updates({"procedure.k_VR": opt.k_VR + dk, **fixed}))
         assert nb.field_length_ft >= opt.field_length_ft - 1.0
 
 
 def test_optimize_vr_keeps_lowest_vr_when_best(base_cfg):
-    lo = compute_bfl(base_cfg)
+    """When the field grows with VR, two extra solves (k_lo + 0.01, k_lo + 0.05) settle it."""
+    lo = compute_bfl(base_cfg.with_updates({"procedure.optimize_vr": False}))
     opt = compute_bfl(base_cfg.with_updates({"procedure.optimize_vr": True}))
     assert opt.k_VR == lo.k_VR and opt.field_length_ft == lo.field_length_ft
-    assert opt.vr_optimization["evaluations"] > 3
+    assert opt.vr_optimization["evaluations"] == 2
+
+
+def test_optimize_vr_warm_start_agrees_with_cold():
+    """A neighbouring optimum as the starting point gives the same answer, cheaper."""
+    cfg = load_config("sr71")
+    cold = compute_bfl(cfg)
+    warm = compute_bfl(cfg, vr_hint=cold.k_VR + 0.015)
+    assert warm.field_length_ft == pytest.approx(cold.field_length_ft, abs=3.0)
+    assert warm.vr_optimization["evaluations"] < cold.vr_optimization["evaluations"]
+    # a hint far from the optimum still walks to it
+    far = compute_bfl(cfg, vr_hint=cold.k_VR + 0.12)
+    assert far.field_length_ft == pytest.approx(cold.field_length_ft, abs=3.0)
+
+
+def test_optimize_vr_flags_table_limited_optimum():
+    """If the field length is still falling where the solves start failing (end of the
+    thrust table), the result is the edge of the data, flagged as such."""
+    cfg = load_config("sr71", overrides={"multipliers.k_CL": 0.8, "multipliers.k_CD": 0.75})
+    r = compute_bfl(cfg)
+    assert r.vr_optimization["limited_by_failed_solves"]
+    assert any("not a true optimum" in w for w in r.warnings)
+    w = compute_bfl(cfg, vr_hint=r.k_VR - 0.03)
+    assert w.field_length_ft == pytest.approx(r.field_length_ft, abs=5.0)

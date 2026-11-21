@@ -111,3 +111,13 @@ def test_docs_pages_and_links():
     assert pages.OLD_ROUTES["/rules"] == "/about#rules"
     assert pages._rewrite("[x](field_length_rules.md)") == "[x](/about#rules)"
     assert pages._rewrite("[x](methods/root_finding.md)") == "[x](/methods#root-finding)"
+
+
+def test_two_second_allowance_only_under_part25():
+    """The scene's '2-s allowance' strip is drawn only when the rules add one."""
+    from app import compute
+
+    p25 = compute._run_cached(load_config("b747_100").model_dump_json())
+    mil = compute._run_cached(load_config("sr71").model_dump_json())
+    assert p25["allowance_ft"] > 100.0
+    assert mil["allowance_ft"] == 0.0

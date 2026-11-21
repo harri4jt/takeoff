@@ -40,7 +40,7 @@ compute_bfl
 │     ├─ [inner] secant on V_EF: 1 s of one-engine-out ends at V1 (root finding)
 │     ├─ go branch:   integrate to h = 35 ft                       (RK4 / RK45 + events)
 │     └─ stop branch: integrate to V = 0                           (RK4 / RK45 + events)
-└─ [optional] scan + golden section on k_VR: minimize the field   (optimization)
+└─ [default] scan + Brent's method on k_VR: minimize the field    (optimization)
       └─ each evaluation: everything above, at that k_VR
 ```
 
@@ -77,7 +77,7 @@ is what RK4's fourth-order accuracy assumes.
 | Event location | `integrators.py`, `phases.py` | V1, VR, lift-off, 35 ft, stop, switches | [Event location](event_location.md) |
 | Secant / safeguarded secant | `rootfind.py` | V1, V_EF, k_VR and the event times themselves | [Root finding](root_finding.md) |
 | Linear / natural cubic spline / bilinear | `tables.py` | CL(α), CD(α), thrust(V, T) | [Interpolation](interpolation.md) |
-| Golden-section search | `optimize.py` | the field-length-minimizing VR (optional) | [Rotation speed](../rotation_speed.md) |
+| Brent's method (golden section + parabolic steps) | `optimize.py` | the field-length-minimizing VR | [Rotation speed](../rotation_speed.md) |
 
 ## Why the animation's stopping aircraft stops short of the red line
 

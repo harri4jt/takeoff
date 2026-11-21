@@ -116,6 +116,9 @@ Run everything from the project root with the `bfl` env active.
 - [ ] Why the secant method and not Newton? (No derivative of "a whole simulation".)
 - [ ] What is its convergence order, and where does the golden ratio come from?
       (e_{k+1} ≈ C e_k e_{k−1} → p² = p + 1.)
+- [ ] The VR optimizer uses Brent's method: why bracket + golden section as the safeguard,
+      and why the parabolic step converges faster near a smooth minimum? What happens at
+      a kink? (`docs/rotation_speed.md`, `tests/test_features.py::test_brent_min`.)
 - [ ] When can plain secant fail, and how does the safeguard fix it?
 - [ ] Name all four root solves in the code and their unknowns: event time s, V_EF,
       V1, k_VR.

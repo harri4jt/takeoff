@@ -293,6 +293,9 @@ details.adv[open] > summary::before { content: "▾ "; }
 .btn-run { width: 100%; margin: 16px 0 0; padding: 10px; font-size: 15px; }
 .btn-row { display: flex; gap: 6px; }
 .btn-row .btn { flex: 1; margin-right: 0; font-size: 13px; }
+.dl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 4px; }
+.dl-row .btn { margin-right: 0; font-size: 13px; }
+.dl-row .hint { margin-left: auto; }
 
 /* segmented control (scene mode) */
 .seg { display: inline-flex; background: rgba(255, 255, 255, 0.7); border: 1px solid #c7cfd8; border-radius: 9px; padding: 2px; }

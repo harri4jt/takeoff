@@ -15,11 +15,10 @@ from functools import lru_cache
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from bfl import RunConfig, compute_bfl, load_config, sweep_v1
 from bfl.atmosphere import RHO0_SLUGFT3
-from bfl.model import build_model
-from bfl.units import FTPS_TO_KTS, KTS_TO_FTPS, RAD_TO_DEG
 
 TRAJ_COLS = {
     "t": "t_s",
@@ -55,7 +54,7 @@ def build_config(aircraft: str, ui: dict[str, Any]) -> RunConfig:
         "procedure.rotation_rate_deg_s": ui["rotation_rate"],
         "procedure.chute_enabled": bool(ui["chute"]),
         "procedure.enforce_v2_min": bool(ui.get("enforce_v2", True)),
-        "procedure.optimize_vr": bool(ui.get("optimize_vr", False)),
+        "procedure.optimize_vr": bool(ui.get("optimize_vr", True)),
     }
     for key, path in (
         ("rules", "procedure.rules"),
@@ -91,12 +90,35 @@ def _event(tr: dict, name: str) -> dict | None:
     return next((e for e in tr["events"] if e["name"] == name), None)
 
 
+@lru_cache(maxsize=16)
+def _solve(cfg_json: str):
+    """(BFLResult, solve time) for a config; shared by the view and the CSV download."""
+    t0 = time.perf_counter()
+    res = compute_bfl(RunConfig.model_validate_json(cfg_json))
+    return res, time.perf_counter() - t0
+
+
+def timestep_csv(cfg_json: str) -> str:
+    """Every time step of the three branches (go, stop, all engines) as one CSV.
+
+    These are the time histories the plots and animation use: RK4 at the display step
+    (solver.trajectory_dt_s) at the solved V1 and VR, plus every event point. Speeds in
+    knots (V_air_kts is true airspeed, V_eas_kts equivalent), distances in ft."""
+    res, _ = _solve(cfg_json)
+    sqrt_sigma = math.sqrt(res.density_slugft3 / RHO0_SLUGFT3)
+    frames = []
+    for name, label in (("go", "go (engine out)"), ("stop", "stop"), ("aeo", "all engines")):
+        df = getattr(res, name).to_dataframe()
+        df.insert(0, "branch", label)
+        df.insert(df.columns.get_loc("V_air_kts") + 1, "V_eas_kts", df["V_air_kts"] * sqrt_sigma)
+        frames.append(df)
+    return pd.concat(frames, ignore_index=True).to_csv(index=False, float_format="%.6g")
+
+
 @lru_cache(maxsize=64)
 def _run_cached(cfg_json: str) -> dict[str, Any]:
     cfg = RunConfig.model_validate_json(cfg_json)
-    t0 = time.perf_counter()
-    res = compute_bfl(cfg)
-    t_solve = time.perf_counter() - t0
+    res, t_solve = _solve(cfg_json)
     sqrt_sigma = math.sqrt(res.density_slugft3 / RHO0_SLUGFT3)
     go = _trajectory(res.go, sqrt_sigma)
     stop = _trajectory(res.stop, sqrt_sigma)
@@ -113,7 +135,11 @@ def _run_cached(cfg_json: str) -> dict[str, Any]:
         "stop": stop,
         "aeo": aeo,
         "x_rest_ft": x_rest,
-        "allowance_ft": res.d_stop_ft - x_rest,
+        # the 2-s pad exists only under Part 25; elsewhere any difference is round-off
+        # between the RK45 distance and the RK4 display re-run
+        "allowance_ft": (
+            res.d_stop_ft - x_rest if cfg.resolved().procedure.t_v1_allowance_s > 0 else 0.0
+        ),
         "sqrt_sigma": sqrt_sigma,
         "v2_min_ratio": cfg.resolved().procedure.v2_min_ratio,
         "solve_time_s": t_solve,
@@ -138,22 +164,32 @@ def run(aircraft: str, ui: dict[str, Any]) -> dict[str, Any]:
 TRADE_METRICS = ("bfl_ft", "field_length_ft", "aeo_distance_ft", "max_tire_speed_kts")
 
 
-def _trade_cell(args: tuple[str, float, float]) -> tuple | None:
-    """(BFL, field length, AEO distance, max tire speed, balanced) at one (k_CL, k_CD);
-    None if it fails."""
-    cfg_json, k_cl, k_cd = args
+def _trade_cells(args: tuple[str, float, tuple[float, ...], bool]) -> list[tuple | None]:
+    """Solve a run of cells along k_CD at one k_CL, in order.
+
+    Each entry is (BFL, field length, AEO distance, max tire speed, balanced), or None
+    if that cell fails. With VR optimization on, each cell's optimal k_VR is the warm
+    start (``vr_hint``) for the next one: neighbouring cells have nearly the same
+    optimum, so a local search around it replaces the upward scan.
+    """
+    cfg_json, k_cl, kcds, warm = args
     cfg = RunConfig.model_validate_json(cfg_json)
-    try:
-        r = compute_bfl(cfg.with_updates({"multipliers.k_CL": k_cl, "multipliers.k_CD": k_cd}))
-        return (
-            r.bfl_ft,
-            r.field_length_ft,
-            r.aeo_distance_ft,
-            r.max_tire_speed_kts,
-            bool(r.balanced),
-        )
-    except Exception:  # noqa: BLE001 - a failed cell is shown blank
-        return None
+    hint: float | None = None
+    out: list[tuple | None] = []
+    for k_cd in kcds:
+        try:
+            r = compute_bfl(
+                cfg.with_updates({"multipliers.k_CL": k_cl, "multipliers.k_CD": k_cd}),
+                vr_hint=hint if warm else None,
+            )
+            hint = r.k_VR
+            out.append(
+                (r.bfl_ft, r.field_length_ft, r.aeo_distance_ft, r.max_tire_speed_kts,
+                 bool(r.balanced))
+            )  # fmt: skip
+        except Exception:  # noqa: BLE001 - a failed cell is shown blank
+            out.append(None)
+    return out
 
 
 _POOL: ProcessPoolExecutor | None = None
@@ -167,24 +203,37 @@ def _pool() -> ProcessPoolExecutor:
 
 
 @lru_cache(maxsize=16)
-def trade_map(cfg_json: str, kcl: tuple[float, ...], kcd: tuple[float, ...]) -> dict[str, Any]:
+def trade_map(
+    cfg_json: str, kcl: tuple[float, ...], kcd: tuple[float, ...], warm_start: bool = True
+) -> dict[str, Any]:
     """Full solves on a k_CL x k_CD grid for one configuration (parallel, RK45, no
-    display re-run). z[metric][i][j]: row i = k_CL, column j = k_CD."""
+    display re-run). z[metric][i][j]: row i = k_CL, column j = k_CD.
+
+    Each row is split at its middle into two runs that walk outward along k_CD, one
+    parallel task each, so the VR optimizer can warm-start every cell from its
+    neighbour (``warm_start``; see _trade_cells).
+    """
     fast = RunConfig.model_validate_json(cfg_json).with_updates({"solver.trajectory_dt_s": None})
     fj = fast.model_dump_json()
-    jobs = [(fj, a, b) for a in kcl for b in kcd]
+    n = len(kcd)
+    mid = n // 2
+    right = tuple(range(mid, n))  # middle -> high k_CD
+    left = tuple(range(mid - 1, -1, -1))  # just below the middle -> low k_CD
+    runs = [(i, idx) for i in range(len(kcl)) for idx in (right, left) if idx]
+    jobs = [(fj, kcl[i], tuple(kcd[j] for j in idx), warm_start) for i, idx in runs]
     t0 = time.perf_counter()
     try:
-        vals = list(_pool().map(_trade_cell, jobs, chunksize=4))
+        chunks = list(_pool().map(_trade_cells, jobs))
     except Exception:  # noqa: BLE001 - e.g. no multiprocessing available: run serially
-        vals = [_trade_cell(j) for j in jobs]
-    n = len(kcd)
+        chunks = [_trade_cells(j) for j in jobs]
+    vals: list[list[tuple | None]] = [[None] * n for _ in kcl]
+    for (i, idx), chunk in zip(runs, chunks, strict=True):
+        for j, v in zip(idx, chunk, strict=True):
+            vals[i][j] = v
     out: dict[str, Any] = {"k_CL": list(kcl), "k_CD": list(kcd), "z": {}, "balanced": []}
     for m, name in enumerate(TRADE_METRICS):
-        flat = [None if v is None else v[m] for v in vals]
-        out["z"][name] = [flat[i * n : (i + 1) * n] for i in range(len(kcl))]
-    bal = [None if v is None else v[len(TRADE_METRICS)] for v in vals]
-    out["balanced"] = [bal[i * n : (i + 1) * n] for i in range(len(kcl))]
+        out["z"][name] = [[None if v is None else v[m] for v in row] for row in vals]
+    out["balanced"] = [[None if v is None else v[len(TRADE_METRICS)] for v in row] for row in vals]
     out["time_s"] = time.perf_counter() - t0
     return out
 
@@ -194,40 +243,3 @@ def sweep(cfg_json: str, k_vr: float) -> dict[str, Any]:
     cfg = RunConfig.model_validate_json(cfg_json)
     df = sweep_v1(cfg, n=15, k_vr=k_vr)
     return df[["v1_kts", "d_go_ft", "d_stop_ft"]].to_dict(orient="list")
-
-
-@lru_cache(maxsize=32)
-def aircraft_data(cfg_json: str) -> dict[str, Any]:
-    """Aero tables (raw and with the multipliers) and the thrust curve, for display."""
-    cfg = RunConfig.model_validate_json(cfg_json)
-    vm = build_model(cfg)
-    aero = vm.aero
-    a0, a1 = aero.table.alpha_range_rad
-    alpha = np.linspace(a0, a1, 241)
-    cl_raw = aero.table.cl.evaluate(alpha)
-    cd_raw = aero.table.cd.evaluate(alpha)
-    knots = list(np.linspace(0.0, 200.0, 81))
-    per = [vm.propulsion.model.per_engine(v * KTS_TO_FTPS, vm.temp_R) for v in knots]
-    return {
-        "alpha_deg": (alpha * RAD_TO_DEG).tolist(),
-        "cl_raw": cl_raw.tolist(),
-        "cd_raw": cd_raw.tolist(),
-        "cl": (aero.k_CL * cl_raw).tolist(),
-        "cd": (aero.k_CD * cd_raw).tolist(),
-        "k_CL": aero.k_CL,
-        "k_CD": aero.k_CD,
-        "cl_max": aero.cl_max,
-        "theta_ground_deg": vm.theta_ground_rad * RAD_TO_DEG,
-        "theta_target_deg": vm.theta_target_rad * RAD_TO_DEG,
-        "dCD_eo": aero.dCD_engine_out,
-        "dCL_spoiler": aero.dCL_spoiler,
-        "dCD_spoiler": aero.dCD_spoiler,
-        "v_kts": knots,
-        "thrust_per_engine": per,
-        "idle_per_engine": vm.propulsion.idle_per_engine_lbf,
-        "n_engines": vm.propulsion.n_engines,
-        "temperature_F": vm.temp_R - 459.67,
-        "weight_lbf": vm.weight_lbf,
-        "S_ft2": vm.S_ft2,
-        "v_s_kts": vm.tas_to_eas(vm.stall_speed_tas()) * FTPS_TO_KTS,
-    }

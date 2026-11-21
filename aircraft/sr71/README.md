@@ -94,7 +94,7 @@ are at V1 = VR, because at the lowest legal VR the field does not balance (below
   nearly cancels the one engine's ≈29,600 lb. The aircraft creeps from 185 to about
   204 kt over roughly a minute before it lifts off. On a 95 °F day at 140,000 lb there is
   no one-engine liftoff at all.
-- **A later rotation fixes it** (`procedure.optimize_vr: true`, see
+- **A later rotation fixes it** (`procedure.optimize_vr`, on by default, see
   `docs/rotation_speed.md`). Held on the runway, where the only extra drag is rolling
   friction, the aircraft accelerates well on one engine. Rotating close to lift-off speed
   avoids the slow, high-drag crawl:
@@ -113,10 +113,27 @@ are at V1 = VR, because at the lowest legal VR the field does not balance (below
   stop grows more, but neither changes the conclusion. Neither does the chute. It is
   optional under MIL rules and off by default, and it only shortens the stop.
 - **It is not a drag-tuning problem.** At the lowest legal VR, with 30 % less drag
-  (k_CD 0.7), the go still beats the stop at every weight. With 20 % less (k_CD 0.8) the 140,000 lb engine-out go is
-  14,559 ft instead of 26,863 ft. The all-engines distance barely moves. No published
-  low-speed SR-71/YF-12 polar was found (NASA TM X-3532, sometimes cited, is the XB-70).
-  So the drag estimate is kept, not adjusted.
+  (k_CD 0.7), the go still beats the stop at every weight. With 20 % less (k_CD 0.8) the
+  140,000 lb engine-out go is 14,559 ft instead of 26,863 ft. The all-engines distance
+  barely moves. No published low-speed SR-71/YF-12 polar was found (NASA TM X-3532,
+  sometimes cited, is the XB-70). So the drag estimate is kept, not adjusted.
+- **With the optimized VR, drag hardly matters either.** At 140,000 lb, MIL-STD-3013:
+
+  | change | field length |
+  |---|---:|
+  | baseline | 11,688 ft |
+  | engine-out ΔCD 0.010 → 0.005 / 0 | 11,544 / 11,404 ft |
+  | all drag −10 % / −20 % (k_CD 0.9 / 0.8) | 11,458 / 11,238 ft |
+  | drag chute on | 10,679 ft |
+  | μ_brake 0.30 → 0.40 / 0.50 | 10,994 / 10,690 ft |
+  | engine-failure delay 3 s → 2 s | 11,462 ft |
+  | Part 25 rules (35 ft, 1 s + 2-s pad, chute credited) | 10,035 ft |
+
+  The balanced field is 6,090 ft of acceleration to V1 = 207 kt plus a 5,600 ft stop from
+  there. One J58 needs about 210 kt to fly the aircraft off, so V1 cannot be much lower,
+  and stopping a 140,000 lb aircraft from 207 kt takes about 5,600 ft whatever the drag.
+  The ~11,700 ft result follows from those two numbers. For scale, the SR-71's home base,
+  Beale AFB, has a runway of about 12,000 ft (not from the sources above).
 - **Fuel burn matters here.** It shortens the 140,000 lb engine-out go from 30,494 ft
   (constant weight) to 26,863 ft, because the aircraft sheds ~1,800 lb of fuel during the
   long crawl to lift-off.

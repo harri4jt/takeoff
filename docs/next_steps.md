@@ -328,3 +328,31 @@ Done:
       (tires) [kt]" metric; overrides for everything on the main panel (weight, temperature,
       elevation, wind, slope, runway condition, μ, rotation rate, ground effect, chute, V2
       rule, optimize VR).
+
+---
+
+## Round 5 (2026-11-21): optimizer speed, builder plots, downloads
+
+- [x] VR optimization is **on by default** (`procedure.optimize_vr: true`), so every run is
+      treated the same way. The SR-71 YF-12 speed check runs with it off (normal rotation).
+- [x] Faster optimizer: probe k_lo + 0.01 before scanning (the 747 settles in 2 extra solves,
+      0.38 s instead of 1.0 s); Brent's method (`bfl.optimize.brent_min`, golden section +
+      parabolic steps) instead of golden section; Δk_VR 0.005; the winning solve is reused
+      (one RK4 display re-run only).
+- [x] Warm starts (`compute_bfl(cfg, vr_hint=...)`): the trade study solves each row as two
+      runs outward from the middle k_CD, each cell starting from its neighbour's optimum.
+      Warm and cold agree to ~2 ft. An optimum against failed solves (end of the thrust
+      table) is bisected to the edge and flagged.
+- [x] Stale "UNBALANCED" warning dropped once the optimized VR balances.
+- [x] Brake-energy reference warning off (`warn: false`); only tire speed warns.
+- [x] Main page: "Aircraft data" tab removed; Run summary has *Download CSV* (every time
+      step of go/stop/all-engines) and *Download summary* (.txt). Scene 600 → 460 px.
+      "2-s allowance" strip only when the rules have one (not under MIL-STD-3013).
+- [x] Builder: Aero / Thrust tabs. Aero: CL(α), CD(α), polar side by side (no dual axis),
+      one colour per table across panels. Thrust: per-engine thrust vs airspeed; 2-D tables
+      one line per temperature, dark (cold) → light (hot), labelled.
+- [x] Tests for creating, editing, overwriting, rejecting and zipping aircraft through the
+      real builder callbacks (`tests/test_app_builder.py`), plus the downloads.
+- [x] k_CL already scales CLmax (and so V_S and VR); unchanged.
+- [ ] SR-71 drag left as is: with the optimized VR, −20 % drag only shortens the field
+      11,688 → 11,238 ft (stop from V1 ≈ 207 kt governs). Decision for the user.

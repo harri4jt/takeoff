@@ -2,10 +2,11 @@
 
 ## Can rotating later shorten the field?
 
-Yes, for some aircraft. By default the tool rotates at the **lowest legal VR**: k_VR = VR/V_S
-starts at 1.10 and is raised only as far as needed for V2 ≥ 1.2 V_S (and to avoid a
-touchback). That is the right choice for an aircraft with plenty of engine-out excess
-thrust, but not for every aircraft.
+Yes, for some aircraft. The **lowest legal VR** is where k_VR = VR/V_S starts at 1.10 and
+is raised only as far as needed for V2 ≥ 1.2 V_S (and to avoid a touchback). That is the
+right choice for an aircraft with plenty of engine-out excess thrust, but not for every
+aircraft, so by default the tool searches upward from there for the VR that gives the
+shortest field (`procedure.optimize_vr: true`; set it to false to fly the lowest legal VR).
 
 VR changes three things at once:
 
@@ -35,7 +36,7 @@ lower drag due to lift.
 * **747:** the field length rises steadily with VR, even with 25 % less lift and 25 % more
   drag. Four engines leave a lot of excess thrust with one out, so the rotated drag is not a
   problem, and the extra all-engines distance and the higher V1 dominate. The lowest legal
-  VR is already the optimum, and that is what the default does.
+  VR is already the optimum; the optimizer confirms it in two extra solves.
 * **SR-71:** with one J58 out, the drag at the 10° takeoff attitude (in ground effect,
   ≈ 27,000 lb) almost cancels the remaining engine's ≈ 29,600 lb. Rotating at 184 kt leaves
   it crawling to lift-off for about a minute, so the field never balances. Holding the
@@ -68,7 +69,8 @@ It costs something, and the tool shows the costs:
 
 So the optimized VR is the preferred plan **when the engine-out field length governs and
 the tire and brake limits still hold**. For an aircraft like the 747, where it does not
-help, the default (lowest legal VR) is already the answer.
+help, the optimizer returns the lowest legal VR. That is why it is on by default: it
+gives the right answer for both kinds of aircraft, the same way every time.
 
 ### A smarter way?
 
@@ -84,24 +86,72 @@ longer runway; this tool always balances) and the **engine-out rotation techniqu
 
 ## How the optimizer works
 
-`procedure.optimize_vr: true` (in the app: *Procedure & solver › Optimize VR*; trade-study
-override *Optimize VR*):
+`procedure.optimize_vr` (default **on**; in the app: *Procedure & solver › Optimize VR*;
+trade-study override *Optimize VR*). The objective is FL(k_VR), the field length from a
+full BFL solve at that rotation speed, on k_VR ≥ k_lo (the lowest legal value).
 
-1. Solve at the lowest legal VR as usual (V2 rule, touchback).
-2. **Scan** k_VR upward in steps of 0.05 (each point is a full BFL solve) until the field
-   length has risen twice in a row past its best value, or `procedure.k_VR_max` (1.6) is
-   reached. Solves that fail (for example past the end of a table) count as +∞.
-3. **Golden-section search** (`bfl.optimize.golden_section`, hand-written) on the bracket
-   around the best scan point, to Δk_VR = 0.002 (~0.3 kt).
-4. Re-solve at the best k_VR with the normal output settings. If it does not beat the
-   lowest legal VR, that result is kept.
+1. Solve at k_lo as usual (V2 rule, touchback).
+2. **Bracket the minimum.**
+   * **Probe** k_lo + 0.01 (about 1.5 kt of VR), then **scan** k_lo + 0.05, 0.10, … until
+     the field length has risen twice in a row past its best value, or `procedure.k_VR_max`
+     (1.6) is reached. If the probe and the first scan point are both worse, the lowest legal
+     VR is the answer: **2 extra solves** (the 747 case).
+   * **Warm start** (`compute_bfl(cfg, vr_hint=k)`, used by the trade study): evaluate the
+     hint and hint ± 0.02, and walk downhill in doubling steps until the best point has a
+     worse point on each side. If the hint is k_lo itself, one probe is enough.
+3. **Brent's method** (`bfl.optimize.brent_min`, hand-written) inside the bracket, started
+   from the best point found, to Δk_VR = 0.005 (~0.8 kt).
+4. If the best point sits next to a **failed** solve (past the end of the thrust table,
+   for example), the field length was still falling where the data ran out. That edge is
+   located by bisection to Δk_VR = 2·10⁻⁵ and the result carries a warning that it is the
+   data's limit, not a true optimum.
+5. If none of this beats k_lo, the k_lo result is kept. Otherwise the winning solve is used.
+   The search runs without display trajectories; if the app wants them, the winner is solved
+   once more with them. This is the only RK4 re-run, so the animation costs one extra
+   solve, not one per search point.
 
-Golden section suits this objective. FL(k_VR) is continuous but has kinks: it is the
-larger of the balanced and all-engines distances, and it switches from unbalanced to
-balanced. A derivative-free bracketing method only needs the function to be unimodal on
-the bracket. Each iteration keeps the part of the interval that must contain the minimum
-and shrinks it by 1/φ = 0.618. The scan supplies the bracket, so a second dip further out
-(not seen in practice) cannot be missed between scan points of 0.05.
+**Why these methods.** FL(k_VR) is continuous but has kinks: it is the larger of the
+balanced and all-engines distances, and it switches from unbalanced (V1 = VR) to balanced.
+There is no derivative to use. Golden-section search needs only a bracket and unimodality,
+and shrinks the bracket by 0.618 per evaluation whatever the shape. **Brent's method** keeps
+the same bracket and safeguards, but where f looks smooth it jumps to the vertex of the
+parabola through its three best points (order ≈ 1.32 instead of linear). It falls back to a
+golden step whenever the parabola is not trusted. On the SR-71 the minimum is smooth, so it
+needs about 4 evaluations where golden section needs about 8. On a pure kink it is no
+worse than golden section (`tests/test_features.py::test_brent_min`).
 
-Cost: 10–20 BFL solves, about 1 s for the examples. In the trade study, every cell
-runs its own optimization, so maps take about ten times longer with it on.
+### Run time, and what the speed-ups cost
+
+Each evaluation is a whole BFL solve (about 6 go/stop pairs, 0.05–0.17 s here), so the cost
+is the number of solves.
+
+| | solves added | time (this machine) |
+|---|---|---|
+| 747, before (scan + golden section, Δk 0.002) | 11 | 1.0 s |
+| 747, now (probe + first scan point) | 2 | 0.38 s (0.17 s without) |
+| SR-71, before | 16 | 1.1 s |
+| SR-71, now (probe, scan, Brent) | 10 | 0.63 s (0.05 s without) |
+| trade map 11×11, SR-71: off / cold / warm-started | – | 1.1 / 8.3 / 6.7 s |
+| trade map 11×11, 747: off / cold / warm-started | – | 1.7 / 4.3 / 3.6 s |
+
+What each speed-up gives up:
+
+* **Δk_VR 0.005 instead of 0.002.** VR moves by at most ~0.5 kt. The field length is flat
+  near the minimum (SR-71: within 4 ft over ±0.003 in k_VR), so the error is a few feet.
+* **"Probe and one scan point worse → stop".** This misses a *second* dip more than 0.05
+  above k_lo, after FL has risen. None has been seen in either aircraft at any k_CL/k_CD,
+  and the full scan had the same blind spot further out.
+* **Warm starts** find the minimum nearest the hint. If a cell had two separated minima,
+  a warm and a cold start could pick different ones. Over the 11×11 SR-71 map they agree to
+  within 2 ft (`test_optimize_vr_warm_start_agrees_with_cold`). Each row of the map is split
+  at its middle into two runs that walk outward along k_CD, one parallel task each, and only
+  the first cell of each run starts cold.
+
+Further speed-ups not taken:
+* A V1 warm start inside each solve (start the secant at the neighbour's V1 instead of
+  bracketing [V1_min, VR] afresh) would save about 2 of the ~6 go/stop pairs per solve.
+  This is a change to the core solver, kept separate from the optimizer.
+* Looser RK45 tolerances or a coarser V1 tolerance change every result, not only the
+  optimized ones.
+* Optimizing on a coarse grid and interpolating k_VR to the fine grid would be ~3× faster
+  for the trade study, but the cells between would not be true optima.

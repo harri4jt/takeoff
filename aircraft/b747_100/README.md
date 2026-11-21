@@ -99,7 +99,7 @@ weight. Nothing was tuned to match. Sensitivities found while checking:
   error roughly in half compared with no ground effect. It is on in the baseline; turn it
   off with `ground_effect.enabled: false` or the app's checkbox.
 - **Rotation speed:** the field length rises with VR, so the lowest legal VR is optimal
-  (`procedure.optimize_vr` finds the same VR).
+  (the VR optimizer, on by default, confirms it in two extra solves).
 - JT9D-3 thrust is used, while Boeing's chart is for the JT9D-3A.
 - Fuel burn (TSFC 0.36 /hr, **estimate**) is about 0.1 % of the weight and moves the
   result by ~0.1 %.

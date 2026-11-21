@@ -97,11 +97,11 @@ DATA_PAGES = {
             "drag at the 10° takeoff attitude nearly cancels the remaining thrust, so after "
             "rotating at 184 kt the aircraft crawls to lift-off: 29,300 ft to 50 ft. "
             "**Rotating later fixes it:** held on the runway (low drag) to about 212 kt, it "
-            "balances at about 11,700 ft (MIL-STD-3013; 10,000 ft under Part 25). Turn on "
-            "*Optimize VR* (Procedure & solver). The cost is a higher tire speed (229 vs 204 "
-            "kt) and more brake energy. See About › Rotation speed.",
-            "The VR check above uses the lowest legal VR, which matches the flight-test "
-            "all-engines rotation at about 180 KIAS.",
+            "balances at about 11,700 ft (MIL-STD-3013; 10,000 ft under Part 25). *Optimize "
+            "VR* (Procedure & solver, on by default) does this. The cost is a higher tire "
+            "speed (229 vs 204 kt) and more brake energy. See About › Rotation speed.",
+            "The VR check above uses the lowest legal VR (optimizer off), which matches the "
+            "flight-test all-engines rotation at about 180 KIAS.",
             "The SR-71 is military: its aircraft file sets MIL-STD-3013 (chute optional, off).",
         ],
         "not_tuned": "Nothing was tuned to match the flight-test speeds.",

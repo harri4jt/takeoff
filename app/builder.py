@@ -24,6 +24,7 @@ from typing import Any, Literal
 import plotly.graph_objects as go
 import yaml
 from dash import ALL, Input, Output, State, ctx, dcc, html, no_update
+from plotly.subplots import make_subplots
 from pydantic import BaseModel, ValidationError
 from pydantic_core import PydanticUndefined
 
@@ -31,6 +32,7 @@ from bfl import list_aircraft
 from bfl.aero import load_aero_table
 from bfl.config import AircraftConfig, default_aircraft_root, resolve_aircraft_dir
 from bfl.propulsion import load_thrust_table
+from bfl.tables import read_csv_table
 
 from . import figures
 
@@ -204,29 +206,99 @@ def check_csv(name: str, text: str) -> dict[str, Any]:
                 load_thrust_table(p)
                 msg = "thrust table" + (" (2-D, with temperature)" if "temperature_F" in cols
                                         else "") + (", with TSFC" if "tsfc_per_hr" in cols else "")  # fmt: skip  # noqa: E501
-                return {"kind": "thrust", "ok": True, "msg": msg}
+                df = read_csv_table(p, ["airspeed_kts", "thrust_lbf"])
+                curves = (
+                    [(f"{t:g} °F", g.sort_values("airspeed_kts"))
+                     for t, g in df.groupby("temperature_F")]
+                    if "temperature_F" in df.columns
+                    else [("", df.sort_values("airspeed_kts"))]
+                )  # fmt: skip
+                return {"kind": "thrust", "ok": True, "msg": msg,
+                        "curves": [(lab, g["airspeed_kts"].tolist(), g["thrust_lbf"].tolist())
+                                   for lab, g in curves]}  # fmt: skip
             return {"kind": "?", "ok": False,
                     "msg": "unknown table: needs alpha_deg,CL,CD or airspeed_kts,thrust_lbf"}  # fmt: skip  # noqa: E501
         except Exception as exc:  # noqa: BLE001
             return {"kind": "?", "ok": False, "msg": f"{type(exc).__name__}: {exc}"}
 
 
-def _csv_figure(files: dict[str, str]) -> go.Figure:
-    fig = go.Figure()
-    for name, text in files.items():
-        info = check_csv(name, text)
-        if info["kind"] == "aero" and info["ok"]:
-            fig.add_scatter(x=info["x"], y=info["cl"], name=f"{name} CL")
-            fig.add_scatter(x=info["x"], y=info["cd"], name=f"{name} CD", yaxis="y2",
-                            line={"dash": "dot"})  # fmt: skip
-    if not fig.data:
-        return figures.empty("Aero tables appear here once uploaded", 260)
-    figures._base_layout(fig, "Uploaded aero tables", 320)
-    fig.update_layout(
-        xaxis_title="alpha [deg]", yaxis_title="CL",
-        yaxis2={"title": "CD", "overlaying": "y", "side": "right", "showgrid": False},
-        hovermode="x unified",
-    )  # fmt: skip
+PLOT_TABS = (("aero", "Aero tables"), ("thrust", "Thrust tables"))
+
+
+def _tint(hex_color: str, f: float) -> str:
+    """Mix a colour with white by fraction f (0 = the colour, 1 = white)."""
+    r, g, b = (int(hex_color[k : k + 2], 16) for k in (1, 3, 5))
+    return "#{:02x}{:02x}{:02x}".format(*(round(x + (255 - x) * f) for x in (r, g, b)))
+
+
+def _table_color(i: int) -> str:
+    """One fixed colour per table (upload order), the same in both tabs' plots."""
+    return figures.CATEGORICAL[i % len(figures.CATEGORICAL)]
+
+
+def table_figure(files: dict[str, str], kind: str) -> go.Figure:
+    """Plot the uploaded tables of one kind, exactly as written in the CSVs.
+
+    Aero: CL(alpha), CD(alpha) and the drag polar side by side (one axis each, no
+    shared second axis); every table is one colour across the three panels, markers
+    are the table rows. Thrust: thrust per engine vs airspeed; a 2-D table draws one
+    line per temperature in the table's colour, dark (cold) to light (hot), each
+    labelled at its end.
+    """
+    infos = [(n, check_csv(n, t)) for n, t in files.items()]
+    infos = [(n, i) for n, i in infos if i["ok"] and i["kind"] == kind]
+    if not infos:
+        what = "Aero" if kind == "aero" else "Thrust"
+        return figures.empty(f"{what} tables appear here once uploaded or loaded", 300)
+    line = {"width": 2}
+    marker = {"size": 6}
+    if kind == "aero":
+        fig = make_subplots(
+            1, 3, subplot_titles=("lift CL(α)", "drag CD(α)", "drag polar CL vs CD"),
+            horizontal_spacing=0.09,
+        )  # fmt: skip
+        for i, (n, info) in enumerate(infos):
+            c = _table_color(i)
+            for col, (x, y) in enumerate(
+                ((info["x"], info["cl"]), (info["x"], info["cd"]), (info["cd"], info["cl"])), 1
+            ):
+                fig.add_scatter(
+                    x=x, y=y, mode="lines+markers", name=n, legendgroup=n,
+                    showlegend=col == 1, line={**line, "color": c},
+                    marker={**marker, "color": c}, row=1, col=col,
+                    hovertemplate=f"{n}<br>%{{x:.3g}}, %{{y:.4g}}<extra></extra>",
+                )  # fmt: skip
+        figures._base_layout(fig, "", 360)
+        fig.update_xaxes(title="α [deg]", row=1, col=1)
+        fig.update_xaxes(title="α [deg]", row=1, col=2)
+        fig.update_xaxes(title="CD", row=1, col=3)
+        fig.update_yaxes(title="CL", row=1, col=1)
+        fig.update_yaxes(title="CD", row=1, col=2)
+        fig.update_yaxes(title="CL", row=1, col=3)
+    else:
+        fig = go.Figure()
+        for i, (n, info) in enumerate(infos):
+            c = _table_color(i)
+            curves = info["curves"]
+            for j, (lab, v, t) in enumerate(curves):
+                # same hue per table; colder (more thrust) darker, hotter lighter
+                shade = _tint(c, 0.6 * j / max(len(curves) - 1, 1)) if len(curves) > 1 else c
+                name = f"{n} · {lab}" if lab else n
+                fig.add_scatter(
+                    x=v, y=t, mode="lines+markers", name=name, legendgroup=n,
+                    line={**line, "color": shade}, marker={"size": 5, "color": shade},
+                    hovertemplate=f"{name}<br>%{{x:.0f}} kt: %{{y:,.0f}} lbf<extra></extra>",
+                )  # fmt: skip
+                if lab:  # direct label at the end of each temperature line
+                    fig.add_annotation(
+                        x=v[-1], y=t[-1], text=lab, showarrow=False, xanchor="left",
+                        xshift=6, font={"size": 11, "color": figures.MUTED},
+                    )  # fmt: skip
+        figures._base_layout(fig, "", 360)
+        fig.update_xaxes(title="airspeed [kt] (true)")
+        fig.update_layout(margin={"r": 60})
+        fig.update_yaxes(title="thrust per engine [lbf]", tickformat=",", rangemode="tozero")
+    fig.update_layout(hovermode="closest", legend={"orientation": "h", "y": -0.22, "x": 0})
     return fig
 
 
@@ -341,10 +413,15 @@ def layout() -> html.Div:
                         children=[
                             html.H3("Check"),
                             html.Div(id="bf-valid"),
+                            dcc.Tabs(
+                                id="bf-plot-tab",
+                                value="aero",
+                                children=[dcc.Tab(label=lab, value=v) for v, lab in PLOT_TABS],
+                            ),  # fmt: skip
                             dcc.Graph(
                                 id="bf-plot",
                                 config={"displaylogo": False},
-                                figure=figures.empty("Aero tables appear here", 260),
+                                figure=figures.empty("Aero tables appear here", 300),
                             ),  # fmt: skip
                             html.H3("Export"),
                             html.Button(
@@ -476,7 +553,6 @@ def register(app) -> None:
     @app.callback(
         Output("bf-valid", "children"),
         Output("bf-yaml", "children"),
-        Output("bf-plot", "figure"),
         Input({"type": "bf", "path": ALL}, "value"),
         Input("bf-csvs", "data"),
         State({"type": "bf", "path": ALL}, "id"),
@@ -500,11 +576,15 @@ def register(app) -> None:
         else:
             box = html.Div([html.Div("Valid: ready to export", className="badge badge-pass"),
                             hint])  # fmt: skip
-        return (
-            box,
-            _yaml_text(data),
-            _csv_figure({n: t for n, t in (csvs or {}).items() if n in aero_files}),
-        )
+        return box, _yaml_text(data)
+
+    @app.callback(
+        Output("bf-plot", "figure"),
+        Input("bf-plot-tab", "value"),
+        Input("bf-csvs", "data"),
+    )
+    def on_plot(tab, csvs):
+        return table_figure(csvs or {}, tab or "aero")
 
     @app.callback(
         Output("bf-zip", "data"),

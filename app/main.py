@@ -5,6 +5,7 @@ python -m app            (or: python app/main.py)   then open http://127.0.0.1:8
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -325,7 +326,7 @@ def controls() -> html.Div:
                         options=init["ground-effect.options"],
                     ),
                     html.Div(
-                        ["Lift & drag curves: ", html.I("Engineering details › Aircraft data")],
+                        ["Table plots: ", html.A("Aircraft builder", href="/builder")],
                         className="hint",
                     ),
                 ],
@@ -385,7 +386,7 @@ def controls() -> html.Div:
                     ),
                     dcc.Checklist(
                         id="optimize-vr",
-                        value=[],
+                        value=["on"],
                         className="checks",
                         options=[
                             {
@@ -419,7 +420,6 @@ DETAIL_TABS = [
     ("angles", "Angles"),
     ("positions", "Positions"),
     ("limits", "Gear & limits"),
-    ("aircraft", "Aircraft data"),
     ("summary", "Run summary"),
 ]
 
@@ -492,7 +492,7 @@ def sim_page() -> html.Div:
                                 dcc.Graph(
                                     id="scene",
                                     config={**GRAPH_CFG, "displayModeBar": False},
-                                    style={"height": "600px"},
+                                    style={"height": f"{figures.SCENE_HEIGHT}px"},
                                 ),
                                 type="circle",
                             ),
@@ -531,6 +531,8 @@ def sim_page() -> html.Div:
                                         ],
                                     ),
                                     dcc.Loading(html.Div(id="detail-content"), type="dot"),
+                                    dcc.Download(id="dl-csv"),
+                                    dcc.Download(id="dl-summary"),
                                 ],
                             ),
                         ],
@@ -783,8 +785,8 @@ def readout(d: dict | None, base: dict | None) -> list:
             f"VR optimized: k_VR {vo['k_VR_old']:.2f} → {vo['k_VR_new']:.2f}, field "
             f"{vo['field_length_min_vr_ft']:,.0f} → {vo['field_length_opt_ft']:,.0f} ft"
         )
-    elif vo:
-        chips.append("VR optimization: the lowest legal VR is already best")
+    if vo and vo.get("limited_by_failed_solves"):
+        chips.append("VR optimum is at the edge of the data (e.g. thrust table end)")
     if s["chute_used"]:
         chips.append("Drag chute credited" + ("" if mil else " (outside Part 25)"))
     if any(a.get("reason") == "touchback" for a in d["vr_adjustments"]):
@@ -927,7 +929,7 @@ def create_app() -> Dash:
         label = [
             ("▾ " if is_open else "▸ ") + "Engineering details",
             html.Span(
-                "V1 trade · speeds · forces · angles · gear & limits · aircraft data · run summary",
+                "V1 trade · speeds · forces · angles · positions · gear & limits · run summary",
                 className="sub",
             ),
         ]
@@ -1071,7 +1073,9 @@ def create_app() -> Dash:
     )
     def on_scene(cur, base, exag, speed, ghosts, mode):
         if not cur or not cur.get("ok"):
-            return figures.empty("No result to animate" if cur else "Computing…", 600)
+            return figures.empty(
+                "No result to animate" if cur else "Computing…", figures.SCENE_HEIGHT
+            )
         return figures.scene(
             cur,
             base,
@@ -1137,19 +1141,32 @@ def create_app() -> Dash:
                 "Tire speed is the highest ground speed on the wheels in any branch; brake "
                 "energy is the integral of μ·N·V over the braking part of the rejected takeoff.",
             ]
-        elif tab == "aircraft":
-            fig = figures.aircraft(compute.aircraft_data(cur["cfg_json"]))
-            note = (
-                "Curves exactly as the solver sees them, multipliers included. The table is "
-                "interpolated linearly by default (cubic spline available in the config)."
-            )
         else:
             s = cur["scalars"]
             facts = (
                 f"k_VR {s['k_VR']:.3f} · {cur['method'].upper()} solve {cur['solve_time_s']:.2f} s"
             )
             return [
-                html.Div(facts, className="hint"),
+                html.Div(
+                    className="dl-row",
+                    children=[
+                        html.Button(
+                            "⤓ Download CSV",
+                            id="dl-csv-btn",
+                            n_clicks=0,
+                            className="btn",
+                            title="Every time step of the go, stop and all-engines runs",
+                        ),
+                        html.Button(
+                            "⤓ Download summary",
+                            id="dl-summary-btn",
+                            n_clicks=0,
+                            className="btn",
+                            title="The text below, as a .txt file",
+                        ),
+                        html.Span(facts, className="hint"),
+                    ],
+                ),
                 html.Pre(cur["summary"], style={"fontSize": "13px", "whiteSpace": "pre-wrap"}),
             ]
         children = [dcc.Graph(figure=fig, config=GRAPH_CFG)]
@@ -1157,7 +1174,36 @@ def create_app() -> Dash:
             children.append(html.Div(note, className="hint"))
         return children
 
+    @app.callback(
+        Output("dl-csv", "data"),
+        Input("dl-csv-btn", "n_clicks"),
+        State("current", "data"),
+        prevent_initial_call=True,
+    )
+    def on_dl_csv(n, cur):
+        if not n or not cur or not cur.get("ok"):
+            return no_update
+        name = _file_stem(cur["scalars"].get("aircraft_name", "run"))
+        return dcc.send_string(compute.timestep_csv(cur["cfg_json"]), f"{name}_timesteps.csv")
+
+    @app.callback(
+        Output("dl-summary", "data"),
+        Input("dl-summary-btn", "n_clicks"),
+        State("current", "data"),
+        prevent_initial_call=True,
+    )
+    def on_dl_summary(n, cur):
+        if not n or not cur or not cur.get("ok"):
+            return no_update
+        name = _file_stem(cur["scalars"].get("aircraft_name", "run"))
+        return dcc.send_string(cur["summary"], f"{name}_summary.txt")
+
     return app
+
+
+def _file_stem(name: str) -> str:
+    """'Boeing 747-100 (JT9D)' -> 'Boeing_747-100_JT9D'."""
+    return re.sub(r"[^A-Za-z0-9.-]+", "_", name).strip("_") or "run"
 
 
 def main() -> None:

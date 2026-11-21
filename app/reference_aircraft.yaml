@@ -8,13 +8,14 @@
 #               fuel_used_go_lbf    fuel burned in the engine-out continued takeoff
 #               field_length_ft     runway required (rule-set dependent)
 #             warn: false -> shown on the scale only, never a warning
+#             Only the tire speed warns by default: it is the limit with published data.
 #  aircraft:  name, warn (true -> exceeding any of its values raises a warning), values.
 #
 #  !! ALL VALUES BELOW ARE PLACEHOLDERS (rough, unsourced) - replace before relying on them.
 # =====================================================================================
 metrics:
   max_tire_speed_kts: {label: "Tire speed (max ground speed)", unit: "kt"}    # -> other tires
-  brake_energy_MJ:    {label: "Brake energy, rejected takeoff", unit: "MJ"}  # -> other brakes
+  brake_energy_MJ:    {label: "Brake energy, rejected takeoff", unit: "MJ", warn: false}  # shown only
   field_length_ft:    {label: "Runway required", unit: "ft", warn: false}
 
 aircraft:

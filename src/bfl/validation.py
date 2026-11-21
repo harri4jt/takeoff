@@ -314,7 +314,8 @@ def _aeo_liftoff_kts(r) -> float:
 
 def validate_sr71(write: bool = True) -> Status:
     cfg = load_config("sr71", overrides={"environment.weight_lbf": SR71_WEIGHT_LBF})
-    r = compute_bfl(cfg)
+    # the YF-12 speeds are the normal (all-engines) rotation: the lowest legal VR
+    r = compute_bfl(cfg.with_updates({"procedure.optimize_vr": False}))
     vr, vlof = r.vr_kts, _aeo_liftoff_kts(r)
     t = YF12_TOL_KT
     checks = [
@@ -333,7 +334,7 @@ def validate_sr71(write: bool = True) -> Status:
     runs = {
         "mil3013": r,
         "mil3013_opt_vr": compute_bfl(cfg.with_updates({"procedure.optimize_vr": True})),
-        "part25": compute_bfl(p25),
+        "part25": compute_bfl(p25.with_updates({"procedure.optimize_vr": False})),
         "part25_opt_vr": compute_bfl(p25.with_updates({"procedure.optimize_vr": True})),
     }
     status = Status(
