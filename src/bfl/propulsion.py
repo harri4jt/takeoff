@@ -18,6 +18,18 @@ class ThrustModel(Protocol):
     def per_engine(self, v_air_ftps: float, temp_R: float) -> float: ...
 
 
+class TsfcModel(Protocol):
+    def __call__(self, v_air_ftps: float, temp_R: float) -> float: ...
+
+
+@dataclass(frozen=True)
+class ConstantTsfc:
+    per_hr: float
+
+    def __call__(self, v_air_ftps: float, temp_R: float) -> float:
+        return self.per_hr
+
+
 @dataclass(frozen=True)
 class ConstantThrust:
     thrust_lbf: float
@@ -42,10 +54,54 @@ class TableThrust2D:
         return self.table(max(v_air_ftps, 0.0), temp_R)
 
 
+@dataclass(frozen=True)
+class _Tsfc1D:
+    table: Interpolator1D
+
+    def __call__(self, v_air_ftps: float, temp_R: float) -> float:
+        return self.table(max(v_air_ftps, 0.0))
+
+
+@dataclass(frozen=True)
+class _Tsfc2D:
+    table: Interpolator2D
+
+    def __call__(self, v_air_ftps: float, temp_R: float) -> float:
+        return self.table(max(v_air_ftps, 0.0), temp_R)
+
+
+def load_tsfc_column(
+    path: str | Path, method: str = "linear", out_of_range: str = "error"
+) -> TsfcModel | None:
+    """The optional ``tsfc_per_hr`` column of a thrust CSV (same layout as the thrust)."""
+    df = read_csv_table(path, ["airspeed_kts", "thrust_lbf"])
+    if "tsfc_per_hr" not in df.columns:
+        return None
+    name = Path(path).name
+    if "temperature_F" in df.columns:
+        x, y, z = grid_from_long(df, "airspeed_kts", "temperature_F", "tsfc_per_hr")
+        return _Tsfc2D(
+            Interpolator2D(
+                [v * KTS_TO_FTPS for v in x], [F_to_R(t) for t in y], z, out_of_range,
+                f"{name}:TSFC(V,temp)",
+            )
+        )
+    df = df.sort_values("airspeed_kts")
+    return _Tsfc1D(
+        Interpolator1D(
+            [v * KTS_TO_FTPS for v in df["airspeed_kts"]], df["tsfc_per_hr"], method,
+            out_of_range, f"{name}:TSFC(V)",
+        )
+    )
+
+
 def load_thrust_table(
     path: str | Path, method: str = "linear", out_of_range: str = "error"
 ) -> ThrustModel:
-    """``airspeed_kts, thrust_lbf`` (1-D) or ``airspeed_kts, temperature_F, thrust_lbf`` (2-D)."""
+    """``airspeed_kts, thrust_lbf`` (1-D) or ``airspeed_kts, temperature_F, thrust_lbf`` (2-D).
+
+    An optional ``tsfc_per_hr`` column is read separately by :func:`load_tsfc_column`.
+    """
     df = read_csv_table(path, ["airspeed_kts", "thrust_lbf"])
     name = Path(path).name
     if "temperature_F" in df.columns:
@@ -77,6 +133,13 @@ class Propulsion:
     n_engines: int
     idle_per_engine_lbf: float
     incidence_rad: float = 0.0
+    tsfc: TsfcModel | None = None  # None -> no fuel burn
+
+    def fuel_flow_lbm_s(self, thrust_lbf: float, v_air_ftps: float, temp_R: float) -> float:
+        """Fuel flow of the operating engines for the given total thrust [lbm/s]."""
+        if self.tsfc is None or thrust_lbf <= 0.0:
+            return 0.0
+        return self.tsfc(v_air_ftps, temp_R) * thrust_lbf / 3600.0
 
     def total(self, n_operating: int, idle: bool, v_air_ftps: float, temp_R: float) -> float:
         """Total thrust from the operating engines (failed engines give zero)."""

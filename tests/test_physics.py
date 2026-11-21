@@ -211,7 +211,7 @@ def test_v2_depends_on_vr_only(base_cfg, base_result):
     from bfl.takeoff import oei_v2_from_vr
     from bfl.units import KTS_TO_FTPS
 
-    cfg = base_cfg.with_updates({"procedure.k_VR": base_result.k_VR})
+    cfg = base_cfg.resolved().with_updates({"procedure.k_VR": base_result.k_VR})
     vm = build_model(cfg)
     v2 = oei_v2_from_vr(vm, base_result.k_VR * vm.stall_speed_tas(), cfg.procedure, cfg.solver)
     # rk45 takes different steps along the two paths, so agreement is to the solver

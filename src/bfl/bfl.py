@@ -179,15 +179,25 @@ def _solve(ctx: _Context) -> BFLResult:
     warnings.extend(prefix.warnings)
     trajectories = _display_trajectories(ctx, v1) or (go.trajectory(), stop.trajectory(), aeo.trajectory())
 
+    proc = cfg.procedure
     bfl = max(go.distance_ft, stop.distance_ft)
     aeo_d = aeo.distance_ft
-    field = max(bfl, cfg.procedure.field_length_aeo_factor * aeo_d)
+    field = max(bfl, proc.field_length_aeo_factor * aeo_d)
     v_s_k = ctx.eas_kts(ctx.v_s)
     v2_k = ctx.eas_kts(go.v2_tas)
-    if ctx.vm.chute is not None:
+    if ctx.vm.chute is not None and not proc.is_mil:
         warnings.append("drag chute credited in the stop: outside FAA Part 25 rules")
+    if proc.v_lof_min_ratio is not None and go.v_lof_tas < proc.v_lof_min_ratio * ctx.v_s:
+        warnings.append(
+            f"V_LO/V_S = {go.v_lof_tas / ctx.v_s:.3f} < {proc.v_lof_min_ratio:g} "
+            "(MIL-STD-3013 3.2.3.1a): raise k_VR"
+        )
+    if proc.is_mil and ctx.vm.v_mcg_eas_ftps is not None:
+        if ctx.vm.tas_to_eas(prefix.v_ef_tas) < ctx.vm.v_mcg_eas_ftps - 1e-9:
+            warnings.append("V_CEF is below V_mcg (MIL-STD-3013 3.2.11)")
     if cfg.aircraft.synthetic:
         warnings.append("aircraft data are SYNTHETIC (not a real airplane)")
+    refusal = _refusal_speed(ctx, cfg.environment.runway_available_ft, warnings)
 
     return BFLResult(
         bfl_ft=bfl,
@@ -199,7 +209,7 @@ def _solve(ctx: _Context) -> BFLResult:
         v_lof_kts=ctx.eas_kts(go.v_lof_tas),
         v2_kts=v2_k,
         aeo_distance_ft=aeo_d,
-        faa_field_length_ft=field,
+        field_length_ft=field,
         d_go_ft=go.distance_ft,
         d_stop_ft=stop.distance_ft,
         go=trajectories[0],
@@ -215,7 +225,57 @@ def _solve(ctx: _Context) -> BFLResult:
         synthetic=cfg.aircraft.synthetic,
         chute_used=ctx.vm.chute is not None,
         unbalanced_reason=reason,
+        rules=proc.rules,
+        screen_height_ft=float(proc.screen_height_ft),
+        field_length_aeo_factor=float(proc.field_length_aeo_factor),
+        t_recog_s=float(proc.t_recog_s),
+        runway_available_ft=cfg.environment.runway_available_ft,
+        refusal_v1_kts=refusal[0],
+        refusal_v_ef_kts=refusal[1],
+        polar_fit=ctx.vm.polar_fit.__dict__ if ctx.vm.polar_fit is not None else None,
     )
+
+
+def _refusal_speed(
+    ctx: _Context, runway_ft: float | None, warnings: list[str]
+) -> tuple[float | None, float | None]:
+    """Highest V1 (and its V_EF/V_CEF) from which the stop fits in ``runway_ft``.
+
+    The accelerate-stop distance grows with V1, so this is a secant solve of
+    d_stop(V1) = runway on [V1_min, VR] (MIL-STD-3013 3.2.12 refusal speed).
+    """
+    if runway_ft is None:
+        return None, None
+    cfg = ctx.cfg
+    p, s = cfg.procedure, cfg.solver
+    out: dict[float, tuple[float, float]] = {}
+
+    def g(v1: float) -> float:
+        prefix = engine_failure_prefix(ctx.vm, ctx.roll, v1, p, s)
+        d = simulate_stop(ctx.vm, prefix, p, s).distance_ft
+        out[v1] = (d, prefix.v_ef_tas)
+        return d - runway_ft
+
+    try:
+        g_lo, g_hi = g(ctx.v1_min), g(ctx.v_r)
+    except Exception as exc:  # noqa: BLE001 - optional output
+        warnings.append(f"refusal speed not computed: {exc}")
+        return None, None
+    if g_lo > 0.0:
+        warnings.append(
+            f"runway {runway_ft:,.0f} ft is shorter than the stop from V1_min: no refusal speed"
+        )
+        return None, None
+    if g_hi <= 0.0:
+        v1 = ctx.v_r  # can stop from any speed up to VR
+    else:
+        v1 = safeguarded_secant(
+            g, ctx.v1_min, ctx.v_r, xtol=1e-9, ftol=s.v1_tol_ft, maxiter=s.v1_maxiter,
+            fa=g_lo, fb=g_hi,
+        ).root
+        if v1 not in out:
+            g(v1)
+    return ctx.eas_kts(v1), ctx.eas_kts(out[v1][1])
 
 
 def _solve_at(cfg: RunConfig) -> BFLResult:
@@ -297,6 +357,7 @@ def compute_bfl(config: RunConfig) -> BFLResult:
        simulates both branches.
     On a touchback the whole solve is rerun with k_VR += vr_step.
     """
+    config = config.resolved()
     proc = config.procedure
     if not proc.enforce_v2_min:
         result = _solve_at(config)
@@ -323,7 +384,8 @@ def compute_bfl(config: RunConfig) -> BFLResult:
     ] + result.vr_adjustments
     result.warnings = [
         f"k_VR raised {k0:.3f} -> {k_star:.3f} so that V2 >= {proc.v2_min_ratio:g} V_S "
-        f"(V2/V_S was {r0:.3f}; Part 25.107, {info['evaluations']} rotate-and-climb "
+        f"(V2/V_S was {r0:.3f}; {'MIL-STD-3013 3.2.4' if proc.is_mil else 'Part 25.107'}, "
+        f"{info['evaluations']} rotate-and-climb "
         "simulations)"
     ] + result.warnings
     return result
@@ -387,6 +449,7 @@ def sweep_v1(
             rows.append(row)
         return pd.DataFrame(rows)
 
+    config = config.resolved()
     if k_vr is not None:
         config = config.with_updates({"procedure.k_VR": k_vr})
     df, _, _ = _with_vr_retries(config, run)

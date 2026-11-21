@@ -14,6 +14,12 @@ Airborne, state y = [x, h, V_a, gamma]   (air-mass frame, steady wind, alpha = t
     dh/dt     = V_a sin(gamma)
     dx/dt     = V_a cos(gamma) - V_w
 
+Optional last state component (both phases): fuel burned f [lbm], df/dt = TSFC*T/3600.
+The weight is then W = W0 - f and m = W/g. States without it (len 2 / 4) are accepted
+and treated as constant weight.
+
+Ground effect (optional): the aero model receives the height h (0 on the runway).
+
 Every right-hand side is a pure function of (t, y, params). ``forces`` returns the
 full set of intermediate quantities for output and plotting.
 """
@@ -70,11 +76,11 @@ def _chute_fraction(t: float, p: SegmentParams) -> float:
     return min(1.0, (t - p.chute_t_deploy) / c.inflation_time_s)
 
 
-def _aero_thrust(t: float, va: float, alpha: float, p: SegmentParams):
+def _aero_thrust(t: float, va: float, alpha: float, p: SegmentParams, h: float = 0.0):
     """Common aero/thrust evaluation. Returns (qbar, CL, CD, L, D, T, eps_T, D_chute)."""
     vm = p.vehicle
     qbar = 0.5 * vm.rho * va * va
-    cl, cd = vm.aero.coefficients(alpha, p.engine_out, p.spoilers)
+    cl, cd = vm.aero.coefficients(alpha, p.engine_out, p.spoilers, h)
     lift = qbar * vm.S_ft2 * cl
     d_chute = 0.0
     frac = _chute_fraction(t, p)
@@ -97,18 +103,22 @@ def ground_terms(t: float, y, p: SegmentParams):
     va = v + vm.env.wind(t, x, 0.0)
     alpha = theta_at(t, p)
     qbar, cl, cd, lift, drag, thrust, eps, d_chute = _aero_thrust(t, va, alpha, p)
-    w = vm.weight_lbf
+    w = vm.weight_lbf - (y[2] if len(y) > 2 else 0.0)
     phi = vm.env.slope_rad
     n_raw = w * math.cos(phi) - lift - thrust * math.sin(eps)
     n = n_raw if n_raw > 0.0 else 0.0
     f_fric = p.mu * n
-    accel = (thrust * math.cos(eps) - drag - f_fric - w * math.sin(phi)) / vm.mass_slug
+    accel = (thrust * math.cos(eps) - drag - f_fric - w * math.sin(phi)) / (w / vm.g)
     return va, alpha, qbar, cl, cd, lift, drag, thrust, n_raw, n, f_fric, accel, d_chute
 
 
 def ground_rhs(t: float, y: np.ndarray, p: SegmentParams) -> np.ndarray:
-    """d/dt [x, V] on the runway."""
-    return np.array([y[1], ground_terms(t, y, p)[11]])
+    """d/dt [x, V(, fuel)] on the runway."""
+    r = ground_terms(t, y, p)
+    if len(y) > 2:
+        vm = p.vehicle
+        return np.array([y[1], r[11], vm.propulsion.fuel_flow_lbm_s(r[7], r[0], vm.temp_R)])
+    return np.array([y[1], r[11]])
 
 
 def normal_force_raw(t: float, y, p: SegmentParams) -> float:
@@ -124,8 +134,9 @@ def air_terms(t: float, y, p: SegmentParams):
     x, h, va, gam = y[0], y[1], y[2], y[3]
     theta = theta_at(t, p)
     alpha = theta - gam
-    qbar, cl, cd, lift, drag, thrust, eps, d_chute = _aero_thrust(t, va, alpha, p)
-    m, g = vm.mass_slug, vm.g
+    qbar, cl, cd, lift, drag, thrust, eps, d_chute = _aero_thrust(t, va, alpha, p, h)
+    g = vm.g
+    m = (vm.weight_lbf - (y[4] if len(y) > 4 else 0.0)) / g
     vw = vm.env.wind(t, x, h)
     dva = (thrust * math.cos(eps) - drag) / m - g * math.sin(gam)
     dgam = (thrust * math.sin(eps) + lift) / (m * va) - g * math.cos(gam) / va
@@ -135,15 +146,22 @@ def air_terms(t: float, y, p: SegmentParams):
 
 
 def air_rhs(t: float, y: np.ndarray, p: SegmentParams) -> np.ndarray:
-    """d/dt [x, h, V_a, gamma] in the air."""
+    """d/dt [x, h, V_a, gamma(, fuel)] in the air."""
     r = air_terms(t, y, p)
+    if len(y) > 4:
+        vm = p.vehicle
+        ff = vm.propulsion.fuel_flow_lbm_s(r[7], y[2], vm.temp_R)
+        return np.array([r[9], r[10], r[11], r[12], ff])
     return np.array([r[9], r[10], r[11], r[12]])
 
 
 def ground_to_air_state(t: float, y_ground, p: SegmentParams) -> np.ndarray:
     """State conversion at liftoff: V_a = V + V_w, gamma = 0, h = 0."""
     vw = p.vehicle.env.wind(t, y_ground[0], 0.0)
-    return np.array([y_ground[0], 0.0, y_ground[1] + vw, 0.0])
+    out = [y_ground[0], 0.0, y_ground[1] + vw, 0.0]
+    if len(y_ground) > 2:
+        out.append(y_ground[2])
+    return np.array(out)
 
 
 RHS_BY_KIND = {"ground": ground_rhs, "air": air_rhs}
@@ -184,6 +202,7 @@ def forces(t: float, y, p: SegmentParams, kind: str) -> dict[str, float]:
             "q_bar_psf": qbar,
             "mu": p.mu,
             "accel_ftps2": accel,
+            "fuel_burned_lbf": y[2] if len(y) > 2 else 0.0,
         }
     theta, alpha, qbar, cl, cd, lift, drag, thrust, vw, dx, dh, dva, dgam = air_terms(t, y, p)
     return {
@@ -206,4 +225,5 @@ def forces(t: float, y, p: SegmentParams, kind: str) -> dict[str, float]:
         "q_bar_psf": qbar,
         "mu": 0.0,
         "accel_ftps2": dva,
+        "fuel_burned_lbf": y[4] if len(y) > 4 else 0.0,
     }

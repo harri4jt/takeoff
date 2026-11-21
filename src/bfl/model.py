@@ -9,11 +9,17 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from .aero import AeroModel, load_aero_table
+from .aero import AeroModel, GroundEffect, PolarFit, fit_parabolic_polar, load_aero_table
 from .atmosphere import atmosphere
 from .config import RunConfig
 from .environment import Environment, SteadyWind
-from .propulsion import ConstantThrust, Propulsion, load_thrust_table
+from .propulsion import (
+    ConstantThrust,
+    ConstantTsfc,
+    Propulsion,
+    load_thrust_table,
+    load_tsfc_column,
+)
 from .units import DEG_TO_RAD, G0_FTPS2, KTS_TO_FTPS
 
 
@@ -41,6 +47,7 @@ class VehicleModel:
     rotation_rate_rad_s: float
     chute: ChuteModel | None  # None when not deployed in this run
     v_mcg_eas_ftps: float | None
+    polar_fit: PolarFit | None = None  # set when ground effect is on
 
     # -- convenience ------------------------------------------------------------
     @property
@@ -80,6 +87,15 @@ def build_model(cfg: RunConfig) -> VehicleModel:
         sol.interpolation,
         sol.out_of_range,
     )
+    ge_cfg = ac.ground_effect
+    ground_effect, fit = None, None
+    if ge_cfg.enabled:
+        fit = fit_parabolic_polar(table, ge_cfg.fit_CL_fraction)
+        # The scaled polar is k_CD*CD0 + (k_CD/k_CL^2) K (k_CL CL)^2.
+        k_base = ge_cfg.K if ge_cfg.K is not None else fit.K
+        ground_effect = GroundEffect(
+            float(ge_cfg.span_ft), float(ge_cfg.wing_height_ft), k_base * mult.k_CD / mult.k_CL**2
+        )
     aero = AeroModel(
         table,
         mult.k_CL,
@@ -88,15 +104,25 @@ def build_model(cfg: RunConfig) -> VehicleModel:
         ac.spoilers.delta_CL,
         ac.spoilers.delta_CD,
         ac.aero.CLmax.get(ac.aero.takeoff_configuration),
+        ground_effect,
     )
 
     eng = ac.engines
+    tsfc = None
     if eng.thrust_mode == "constant":
         thrust = ConstantThrust(float(eng.thrust_per_engine_lbf))
     else:
-        thrust = load_thrust_table(d / str(eng.thrust_table), sol.interpolation, sol.out_of_range)
+        path = d / str(eng.thrust_table)
+        thrust = load_thrust_table(path, sol.interpolation, sol.out_of_range)
+        tsfc = load_tsfc_column(path, sol.interpolation, sol.out_of_range)
+    if tsfc is None and eng.tsfc_per_hr > 0.0:
+        tsfc = ConstantTsfc(eng.tsfc_per_hr)
     prop = Propulsion(
-        thrust, eng.n_engines, eng.idle_thrust_per_engine_lbf, eng.thrust_incidence_deg * DEG_TO_RAD
+        thrust,
+        eng.n_engines,
+        eng.idle_thrust_per_engine_lbf,
+        eng.thrust_incidence_deg * DEG_TO_RAD,
+        tsfc,
     )
 
     atm = atmosphere(env.elevation_ft, env.temperature_F, env.isa_delta_F)
@@ -135,4 +161,5 @@ def build_model(cfg: RunConfig) -> VehicleModel:
         rotation_rate_rad_s=proc.rotation_rate_deg_s * DEG_TO_RAD,
         chute=chute,
         v_mcg_eas_ftps=None if vmcg is None else vmcg * KTS_TO_FTPS,
+        polar_fit=fit,
     )

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from .dynamics import forces
@@ -30,6 +31,7 @@ TRAJECTORY_COLUMNS = [
     "F_friction_lbf",
     "q_bar_psf",
     "mu",
+    "fuel_burned_lbf",
     "phase",
 ]
 
@@ -91,7 +93,7 @@ class BFLResult:
     v_lof_kts: float
     v2_kts: float
     aeo_distance_ft: float
-    faa_field_length_ft: float
+    field_length_ft: float
     d_go_ft: float
     d_stop_ft: float
     go: Trajectory
@@ -108,10 +110,89 @@ class BFLResult:
     synthetic: bool = False
     chute_used: bool = False
     unbalanced_reason: str = ""
+    rules: str = "part25"
+    screen_height_ft: float = 35.0
+    field_length_aeo_factor: float = 1.15
+    t_recog_s: float = 1.0
+    runway_available_ft: float | None = None
+    refusal_v1_kts: float | None = None
+    refusal_v_ef_kts: float | None = None
+    polar_fit: dict[str, float] | None = None
 
     @property
     def v2_over_vs(self) -> float:
         return self.v2_kts / self.v_s_kts
+
+    @property
+    def is_mil(self) -> bool:
+        return self.rules == "mil3013"
+
+    @property
+    def faa_field_length_ft(self) -> float:
+        """Back-compatible name of :attr:`field_length_ft`."""
+        return self.field_length_ft
+
+    # -- gear / fuel outputs (from the reported time histories) -------------------------
+    @cached_property
+    def max_tire_speed_kts(self) -> float:
+        """Highest ground speed while on the wheels, over all three branches."""
+        best = 0.0
+        for tr in (self.go, self.stop, self.aeo):
+            df = tr.to_dataframe()
+            on = df[df["h_ft"] <= 0.0]
+            if len(on):
+                best = max(best, float(on["V_ground_kts"].max()))
+        return best
+
+    @cached_property
+    def brake_energy_MJ(self) -> float:
+        """Energy the brakes absorb in the rejected takeoff, integral of mu N V dt."""
+        df = self.stop.to_dataframe()
+        b = df[df["phase"] == "braking"]
+        if len(b) < 2:
+            return 0.0
+        power = b["F_friction_lbf"].to_numpy() * b["V_ground_kts"].to_numpy() * 1.6878098571011957
+        t = b["t_s"].to_numpy()
+        energy_ftlbf = float(np.sum(0.5 * (power[1:] + power[:-1]) * np.diff(t)))
+        return energy_ftlbf * 1.3558179483314004e-6
+
+    def _fuel(self, tr: Trajectory) -> float:
+        return float(tr.to_dataframe()["fuel_burned_lbf"].iloc[-1])
+
+    @cached_property
+    def fuel_used_go_lbf(self) -> float:
+        return self._fuel(self.go)
+
+    @cached_property
+    def fuel_used_stop_lbf(self) -> float:
+        return self._fuel(self.stop)
+
+    @cached_property
+    def fuel_used_aeo_lbf(self) -> float:
+        return self._fuel(self.aeo)
+
+    # labels that depend on the rule set
+    @property
+    def names(self) -> dict[str, str]:
+        if self.is_mil:
+            return {
+                "rules": "MIL-STD-3013",
+                "bfl": "Critical field length (CFL)",
+                "bfl_short": "CFL",
+                "v1": "V_brake (brakes on)",
+                "v_ef": "V_CEF (critical engine failure)",
+                "field": "Runway required (max of CFL, AEO to 50 ft)",
+                "v2": "V_obs (at 50 ft, OEI)",
+            }
+        return {
+            "rules": "FAA Part 25",
+            "bfl": "Balanced field length (BFL)",
+            "bfl_short": "BFL",
+            "v1": "V1 (decision)",
+            "v_ef": "V_EF (engine failure)",
+            "field": "FAA takeoff field length",
+            "v2": "V2 (at 35 ft, OEI)",
+        }
 
     def scalars(self) -> dict[str, Any]:
         keys = [
@@ -124,7 +205,7 @@ class BFLResult:
             "v_lof_kts",
             "v2_kts",
             "aeo_distance_ft",
-            "faa_field_length_ft",
+            "field_length_ft",
             "d_go_ft",
             "d_stop_ft",
             "k_VR",
@@ -135,14 +216,30 @@ class BFLResult:
             "synthetic",
             "chute_used",
             "unbalanced_reason",
+            "rules",
+            "screen_height_ft",
+            "field_length_aeo_factor",
+            "t_recog_s",
+            "runway_available_ft",
+            "refusal_v1_kts",
+            "refusal_v_ef_kts",
+            "max_tire_speed_kts",
+            "brake_energy_MJ",
+            "fuel_used_go_lbf",
+            "fuel_used_stop_lbf",
+            "fuel_used_aeo_lbf",
         ]
         out = {k: getattr(self, k) for k in keys}
+        out["faa_field_length_ft"] = self.field_length_ft
         out["v2_over_vs"] = self.v2_over_vs
+        out["polar_fit"] = self.polar_fit
         return out
 
     def summary(self) -> str:
         lines = []
-        title = f"Balanced Field Length - {self.aircraft_name}"
+        n = self.names
+        h = f"{self.screen_height_ft:.0f} ft"
+        title = f"{n['bfl'].split(' (')[0]} - {self.aircraft_name}  [{n['rules']}]"
         if self.synthetic:
             title += "  [SYNTHETIC DATA]"
         lines.append(title)
@@ -153,23 +250,38 @@ class BFLResult:
 
         status = "balanced" if self.balanced else f"UNBALANCED ({self.unbalanced_reason})"
         row("Status", status)
-        row("Balanced field length (BFL)", f"{self.bfl_ft:,.0f} ft")
-        row("  go distance at V1", f"{self.d_go_ft:,.1f} ft")
-        row("  stop distance at V1", f"{self.d_stop_ft:,.1f} ft")
-        row("AEO distance to 35 ft", f"{self.aeo_distance_ft:,.0f} ft")
-        row("1.15 x AEO", f"{1.15 * self.aeo_distance_ft:,.0f} ft")
-        row("FAA takeoff field length", f"{self.faa_field_length_ft:,.0f} ft")
+        row(n["bfl"], f"{self.bfl_ft:,.0f} ft")
+        row("  go distance", f"{self.d_go_ft:,.1f} ft")
+        row("  stop distance", f"{self.d_stop_ft:,.1f} ft")
+        row(f"AEO distance to {h}", f"{self.aeo_distance_ft:,.0f} ft")
+        f = self.field_length_aeo_factor
+        if f != 1.0:
+            row(f"{f:g} x AEO", f"{f * self.aeo_distance_ft:,.0f} ft")
+        row(n["field"], f"{self.field_length_ft:,.0f} ft")
         lines.append("  Speeds (KEAS ~ KCAS)")
         row("  V_S  (stall, takeoff config)", f"{self.v_s_kts:.1f} kt")
-        row("  V_EF (engine failure)", f"{self.v_ef_kts:.1f} kt")
-        row("  V1   (decision)", f"{self.v1_kts:.1f} kt")
+        row(f"  {n['v_ef']}", f"{self.v_ef_kts:.1f} kt")
+        row(f"  {n['v1']}", f"{self.v1_kts:.1f} kt")
         row("  VR   (rotation)", f"{self.vr_kts:.1f} kt  (k_VR={self.k_VR:.3f})")
         row("  V_LOF (liftoff, OEI)", f"{self.v_lof_kts:.1f} kt")
-        row("  V2   (at 35 ft, OEI)", f"{self.v2_kts:.1f} kt")
-        row("  V2 / V_S  (Part 25 wants >= 1.2)", f"{self.v2_over_vs:.3f}")
+        row(f"  {n['v2']}", f"{self.v2_kts:.1f} kt")
+        row("  V2 / V_S  (rule wants >= 1.2)", f"{self.v2_over_vs:.3f}")
+        if self.refusal_v1_kts is not None:
+            row(
+                f"  refusal speed ({self.runway_available_ft:,.0f} ft)",
+                f"{self.refusal_v_ef_kts:.1f} kt",
+            )
+        lines.append("  Gear and fuel")
+        row("  max ground speed on tires", f"{self.max_tire_speed_kts:.1f} kt")
+        row("  brake energy (rejected takeoff)", f"{self.brake_energy_MJ:,.0f} MJ")
+        if self.fuel_used_go_lbf > 0:
+            row(f"  fuel used, OEI go to {h}", f"{self.fuel_used_go_lbf:,.0f} lb")
         row("V1 solver evaluations (f calls)", f"{len(self.v1_solver_history)}")
         if self.chute_used:
-            lines.append("  NOTE: drag chute credited - outside FAA Part 25 rules.")
+            lines.append(
+                "  NOTE: drag chute credited"
+                + ("." if self.is_mil else " - outside FAA Part 25 rules.")
+            )
         if self.warnings:
             lines.append("  Warnings:")
             lines.extend(f"   - {w}" for w in self.warnings)

@@ -90,7 +90,7 @@ def aeo_ground_roll(vm: VehicleModel, v_r: float, solver: SolverConfig) -> Segme
     """All-engines roll from brake release (V = 0) to airspeed VR."""
     p = _base_params(vm, "aeo_roll", vm.propulsion.n_engines, False)
     events = [airspeed_event("ground", p, v_r, "VR"), liftoff_event(p)]
-    seg = run_segment("ground", p, 0.0, [0.0, 0.0], solver.t_max_s, events, solver)
+    seg = run_segment("ground", p, 0.0, [0.0, 0.0, 0.0], solver.t_max_s, events, solver)
     if seg.sol.terminal_event == "liftoff":
         raise TakeoffError("aircraft lifted off before VR at ground attitude; check aero table")
     if seg.sol.terminal_event != "VR":
@@ -188,7 +188,7 @@ def oei_v2_from_vr(
     and can be found by simulating only the rotation and climb. Raises TouchbackError.
     """
     n_oei = vm.propulsion.n_engines - 1
-    y_r = [0.0, v_r - vm.env.wind(0.0, 0.0, 0.0)]  # ground speed at airspeed VR
+    y_r = [0.0, v_r - vm.env.wind(0.0, 0.0, 0.0), 0.0]  # ground speed at airspeed VR
     branch = rotate_and_climb(vm, 0.0, y_r, n_oei, True, proc, solver, "v2_check", [], [])
     return branch.v2_tas
 
