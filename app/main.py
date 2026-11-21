@@ -431,6 +431,13 @@ SCENE_HELP = {
         "the orange one rejects it and brakes to a stop. Until the failure they are the "
         "same aircraft. Press ▶ Play."
     ),
+    "landing": (
+        "The landing: from 50 ft over the threshold at the approach speed, a constant-g "
+        "flare, touchdown, a short free roll, then brakes and spoilers (plus reversers "
+        "and the drag chute where the rules credit them). The runway strip shows the "
+        "landing distance, the landing runway required (Part 121 divides by 0.6) and, "
+        "faintly, the takeoff field length for comparison. Press ▶ Play."
+    ),
     "aeo": (
         "The normal, all-engines takeoff. Part 25 adds a 15 % margin to its distance to "
         "35 ft; the FAA field length is the larger of that and the balanced field length. "
@@ -478,6 +485,7 @@ def sim_page() -> html.Div:
                                         options=[
                                             {"label": "Engine failure", "value": "failure"},
                                             {"label": "All engines", "value": "aeo"},
+                                            {"label": "Landing", "value": "landing"},
                                         ],
                                     ),
                                     html.Button(
@@ -1094,6 +1102,8 @@ def create_app() -> Dash:
     def on_mode(mode):
         if mode == "aeo":
             return "Takeoff Field Length", SCENE_HELP["aeo"]
+        if mode == "landing":
+            return "Landing Field Length", SCENE_HELP["landing"]
         return "Balanced Field Length", SCENE_HELP["failure"]
 
     @app.callback(
@@ -1109,6 +1119,10 @@ def create_app() -> Dash:
         if not cur or not cur.get("ok"):
             return figures.empty(
                 "No result to animate" if cur else "Computing…", figures.SCENE_HEIGHT
+            )
+        if mode == "landing":
+            return figures.landing_scene(
+                cur, base, refs, float(exag or 1), float(speed or 4), "on" in (ghosts or [])
             )
         return figures.scene(
             cur,

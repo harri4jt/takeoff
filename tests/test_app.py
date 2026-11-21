@@ -121,3 +121,22 @@ def test_two_second_allowance_only_under_part25():
     mil = compute._run_cached(load_config("sr71").model_dump_json())
     assert p25["allowance_ft"] > 100.0
     assert mil["allowance_ft"] == 0.0
+
+
+def test_landing_animation_builds():
+    """Landing mode of the scene: frames, chute only when used, runway lines labelled."""
+    import json
+
+    from app import compute, figures
+
+    for ac, chute in (("b747_100", False), ("sr71", True)):
+        cur = compute._run_cached(load_config(ac).model_dump_json())
+        fig = figures.landing_scene(cur, None, [])
+        assert len(fig.frames) > 50
+        names = {tr.name for tr in fig.data if tr.name}
+        assert ("drag chute" in names) == chute
+        text = json.dumps([a.text for a in fig.layout.annotations])
+        assert "landing runway" in text and "takeoff field" in text
+    # a run without a landing result shows a message instead of failing
+    cur = dict(cur, landing_tr=None)
+    assert figures.landing_scene(cur, None, []).layout.annotations

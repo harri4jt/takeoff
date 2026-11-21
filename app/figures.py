@@ -221,6 +221,193 @@ def _states(tr: dict, times: np.ndarray, exag: float):
     )
 
 
+def _runway_strip(fig: go.Figure, shape, note, x_lo: float, x_hi: float, refs: list[dict]):
+    """Row 2 of a scene: the runway in plan view, with the reference runway lengths."""
+    shape(
+        2, type="rect", x0=x_lo, x1=x_hi, y0=-1, y1=1, fillcolor=GRASS, line_width=0, layer="below"
+    )
+    shape(
+        2,
+        type="rect",
+        x0=0,
+        x1=x_hi * 1.5,
+        y0=-0.42,
+        y1=0.42,
+        fillcolor=ASPHALT,
+        line_width=0,
+        layer="below",
+    )
+    for j in range(6):  # threshold "piano keys"
+        y0 = -0.36 + j * 0.125
+        shape(
+            2,
+            type="rect",
+            x0=0.004 * x_hi,
+            x1=0.022 * x_hi,
+            y0=y0,
+            y1=y0 + 0.07,
+            fillcolor="white",
+            line_width=0,
+            layer="below",
+        )
+    shape(
+        2,
+        type="line",
+        x0=0.035 * x_hi,
+        x1=x_hi * 1.5,
+        y0=0,
+        y1=0,
+        line={"color": "white", "width": 2, "dash": "dash"},
+        layer="below",
+    )
+
+    beyond = []
+    for r in refs:
+        L = float(r["length_ft"])
+        tag = f"{r.get('short', r['label'])} · {L:,.0f} ft"
+        if L <= x_hi:
+            right = L > 0.7 * x_hi  # labels near the right edge go on the left of their line
+            shape(
+                2,
+                type="line",
+                x0=L,
+                x1=L,
+                y0=-0.42,
+                y1=0.42,
+                line={"color": "white", "width": 2},
+                opacity=0.75,
+            )
+            note(
+                L,
+                -0.71,
+                tag,
+                row=2,
+                xanchor="right" if right else "left",
+                xshift=-3 if right else 3,
+                font={"size": 10, "color": "#243b20"},
+            )
+        else:
+            beyond.append(f"{tag} ›")
+    if beyond:  # the runway "continues" off the right edge
+        note(
+            x_hi,
+            -0.2,
+            "   ".join(beyond),
+            row=2,
+            xanchor="right",
+            xshift=-6,
+            font={"size": 10, "color": "#e6e9ee"},
+        )
+
+
+def _animation_layout(fig, frames, frame_ms, x_lo, x_hi, y_bot, y_top, screen, exag, height):
+    """Shared layout of the animated scenes: play/pause, scrubber, axes."""
+    ctl_y = 30.0 / (height - 114)  # play controls ~30 px below the plot, clear of the ticks
+    fig.update_layout(
+        height=height,
+        margin={"l": 52, "r": 16, "t": 36, "b": 78},
+        paper_bgcolor=SURFACE,
+        plot_bgcolor=SURFACE,
+        font={"color": INK, "size": 12, "family": FONT},
+        hovermode=False,
+        legend={
+            "orientation": "h",
+            "x": 1,
+            "xanchor": "right",
+            "y": 1.0,
+            "yanchor": "bottom",
+            "bgcolor": "rgba(255,255,255,0.6)",
+            "font": {"size": 12},
+        },
+        updatemenus=[
+            {
+                "type": "buttons",
+                "direction": "left",
+                "x": 0.0,
+                "y": -ctl_y,
+                "xanchor": "left",
+                "yanchor": "top",
+                "pad": {"t": 0, "r": 6},
+                "showactive": False,
+                "bgcolor": "white",
+                "bordercolor": "#c7cfd8",
+                "buttons": [
+                    {
+                        "label": "▶ Play",
+                        "method": "animate",
+                        "args": [
+                            None,
+                            {
+                                "frame": {"duration": frame_ms, "redraw": False},
+                                "fromcurrent": True,
+                                "transition": {"duration": 0},
+                            },
+                        ],
+                    },
+                    {
+                        "label": "❚❚ Pause",
+                        "method": "animate",
+                        "args": [
+                            [None],
+                            {"frame": {"duration": 0, "redraw": False}, "mode": "immediate"},
+                        ],
+                    },
+                ],
+            }
+        ],
+        sliders=[
+            {
+                "x": 0.16,
+                "y": -ctl_y,
+                "len": 0.84,
+                "yanchor": "top",
+                "pad": {"t": 0},
+                "currentvalue": {"visible": False},
+                "tickcolor": "rgba(0,0,0,0)",
+                "font": {"color": "rgba(0,0,0,0)"},
+                "steps": [
+                    {
+                        "label": "",
+                        "method": "animate",
+                        "args": [
+                            [f.name],
+                            {"mode": "immediate", "frame": {"duration": 0, "redraw": False}},
+                        ],
+                    }
+                    for f in frames[:: max(1, len(frames) // 120)]
+                ],
+            }
+        ],
+    )
+    fig.update_xaxes(range=[x_lo, x_hi], showgrid=False, zeroline=False, row=1, col=1)
+    fig.update_xaxes(
+        range=[x_lo, x_hi],
+        showgrid=False,
+        zeroline=False,
+        dtick=1000,
+        tickformat=",",
+        ticksuffix=" ft",
+        ticks="outside",
+        row=2,
+        col=1,
+    )
+    hs = int(round(screen))
+    ticks = [0, 10, 20, hs] if exag >= 6 else [0, hs]
+    fig.update_yaxes(
+        range=[y_bot, y_top],
+        tickvals=[v * exag for v in ticks],
+        ticktext=[f"{v} ft" for v in ticks],
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.5)",
+        zeroline=False,
+        fixedrange=True,
+        row=1,
+        col=1,
+    )
+    fig.update_yaxes(range=[-1, 1], visible=False, fixedrange=True, row=2, col=1)
+    return fig
+
+
 def scene(
     cur: Data,
     base: Data | None,
@@ -441,82 +628,7 @@ def scene(
     for _, lab, x, _ in marks:
         note(x, 0.3 * y_bot, lab, font={"size": 10, "color": "#1d3f1a"})
 
-    # ---- runway strip (row 2, plan view) ---------------------------------------------
-    shape(
-        2, type="rect", x0=x_lo, x1=x_hi, y0=-1, y1=1, fillcolor=GRASS, line_width=0, layer="below"
-    )
-    shape(
-        2,
-        type="rect",
-        x0=0,
-        x1=x_hi * 1.5,
-        y0=-0.42,
-        y1=0.42,
-        fillcolor=ASPHALT,
-        line_width=0,
-        layer="below",
-    )
-    for j in range(6):  # threshold "piano keys"
-        y0 = -0.36 + j * 0.125
-        shape(
-            2,
-            type="rect",
-            x0=0.004 * x_hi,
-            x1=0.022 * x_hi,
-            y0=y0,
-            y1=y0 + 0.07,
-            fillcolor="white",
-            line_width=0,
-            layer="below",
-        )
-    shape(
-        2,
-        type="line",
-        x0=0.035 * x_hi,
-        x1=x_hi * 1.5,
-        y0=0,
-        y1=0,
-        line={"color": "white", "width": 2, "dash": "dash"},
-        layer="below",
-    )
-
-    beyond = []
-    for r in refs:
-        L = float(r["length_ft"])
-        tag = f"{r.get('short', r['label'])} · {L:,.0f} ft"
-        if L <= x_hi:
-            right = L > 0.7 * x_hi  # labels near the right edge go on the left of their line
-            shape(
-                2,
-                type="line",
-                x0=L,
-                x1=L,
-                y0=-0.42,
-                y1=0.42,
-                line={"color": "white", "width": 2},
-                opacity=0.75,
-            )
-            note(
-                L,
-                -0.71,
-                tag,
-                row=2,
-                xanchor="right" if right else "left",
-                xshift=-3 if right else 3,
-                font={"size": 10, "color": "#243b20"},
-            )
-        else:
-            beyond.append(f"{tag} ›")
-    if beyond:  # the runway "continues" off the right edge
-        note(
-            x_hi,
-            -0.2,
-            "   ".join(beyond),
-            row=2,
-            xanchor="right",
-            xshift=-6,
-            font={"size": 10, "color": "#e6e9ee"},
-        )
+    _runway_strip(fig, shape, note, x_lo, x_hi, refs)
 
     def vline(x: float, color: str, width: float, dash: str | None, opacity: float) -> None:
         fig.add_shape(
@@ -722,110 +834,184 @@ def scene(
         if tr.text is not None:
             fig.data[idx].text = tr.text
 
-    ctl_y = 30.0 / (height - 114)  # play controls ~30 px below the plot, clear of the ticks
-    fig.update_layout(
-        height=height,
-        margin={"l": 52, "r": 16, "t": 36, "b": 78},
-        paper_bgcolor=SURFACE,
-        plot_bgcolor=SURFACE,
-        font={"color": INK, "size": 12, "family": FONT},
-        hovermode=False,
-        legend={
-            "orientation": "h",
-            "x": 1,
-            "xanchor": "right",
-            "y": 1.0,
-            "yanchor": "bottom",
-            "bgcolor": "rgba(255,255,255,0.6)",
-            "font": {"size": 12},
-        },
-        updatemenus=[
-            {
-                "type": "buttons",
-                "direction": "left",
-                "x": 0.0,
-                "y": -ctl_y,
-                "xanchor": "left",
-                "yanchor": "top",
-                "pad": {"t": 0, "r": 6},
-                "showactive": False,
-                "bgcolor": "white",
-                "bordercolor": "#c7cfd8",
-                "buttons": [
-                    {
-                        "label": "▶ Play",
-                        "method": "animate",
-                        "args": [
-                            None,
-                            {
-                                "frame": {"duration": frame_ms, "redraw": False},
-                                "fromcurrent": True,
-                                "transition": {"duration": 0},
-                            },
-                        ],
-                    },
-                    {
-                        "label": "❚❚ Pause",
-                        "method": "animate",
-                        "args": [
-                            [None],
-                            {"frame": {"duration": 0, "redraw": False}, "mode": "immediate"},
-                        ],
-                    },
-                ],
-            }
-        ],
-        sliders=[
-            {
-                "x": 0.16,
-                "y": -ctl_y,
-                "len": 0.84,
-                "yanchor": "top",
-                "pad": {"t": 0},
-                "currentvalue": {"visible": False},
-                "tickcolor": "rgba(0,0,0,0)",
-                "font": {"color": "rgba(0,0,0,0)"},
-                "steps": [
-                    {
-                        "label": "",
-                        "method": "animate",
-                        "args": [
-                            [f.name],
-                            {"mode": "immediate", "frame": {"duration": 0, "redraw": False}},
-                        ],
-                    }
-                    for f in frames[:: max(1, len(frames) // 120)]
-                ],
-            }
-        ],
+    return _animation_layout(fig, frames, frame_ms, x_lo, x_hi, y_bot, y_top, screen, exag, height)
+
+
+def landing_scene(
+    cur: Data,
+    base: Data | None,
+    refs: list[dict],
+    exaggeration: float = 25.0,
+    speed: float = 4.0,
+    show_base: bool = True,
+    height: int = SCENE_HEIGHT,
+) -> go.Figure:
+    """Animated landing: from 50 ft over the threshold to a stop, over the runway strip.
+
+    The runway strip marks the landing distance, the landing runway required (the
+    rule's factor applied) and, faintly, the takeoff field length for comparison.
+    """
+    s = cur["scalars"]
+    tr = cur.get("landing_tr")
+    if not tr:
+        return empty("No landing result for this run", height)
+    exag = float(exaggeration)
+    screen = 50.0
+    land_d = s["landing_distance_ft"]
+    land_req = s["landing_runway_required_ft"]
+    takeoff = s["faa_field_length_ft"]
+    has_base = show_base and _ok(base) and bool(base.get("landing_tr"))
+
+    far = max(land_req, takeoff)
+    if has_base:
+        far = max(far, base["scalars"].get("landing_runway_required_ft", 0.0))
+    x_hi = 1.12 * far
+    x_lo = -0.085 * x_hi
+    y_top = screen * exag * 1.45
+    y_bot = -0.14 * y_top
+    px = _Px((x_hi - x_lo) / SCENE_PX[0], (y_top - y_bot) / SCENE_PX[1])
+    fig = make_subplots(
+        rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.0
     )
-    fig.update_xaxes(range=[x_lo, x_hi], showgrid=False, zeroline=False, row=1, col=1)
-    fig.update_xaxes(
-        range=[x_lo, x_hi],
-        showgrid=False,
-        zeroline=False,
-        dtick=1000,
-        tickformat=",",
-        ticksuffix=" ft",
-        ticks="outside",
-        row=2,
-        col=1,
+
+    def shape(row: int = 1, **kw) -> None:
+        fig.add_shape(row=row, col=1, **kw)
+
+    def note(x: float, y: float, text: str, row: int = 1, **kw) -> None:
+        kw.setdefault("showarrow", False)
+        fig.add_annotation(x=x, y=y, text=text, row=row, col=1, **kw)
+
+    # backdrop
+    shape(type="rect", x0=x_lo, x1=x_hi, y0=y_bot, y1=0, fillcolor=GRASS, line_width=0,
+          layer="below")  # fmt: skip
+    shape(type="rect", x0=0, x1=x_hi, y0=-0.025 * y_top, y1=0, fillcolor=ASPHALT,
+          line_width=0, layer="below")  # fmt: skip
+    shape(type="line", x0=x_lo, x1=x_hi, y0=screen * exag, y1=screen * exag,
+          line={"color": MUTED, "width": 1, "dash": "dot"})  # fmt: skip
+    note(x_hi, screen * exag, "50 ft over the threshold", xanchor="right", yanchor="bottom",
+         xshift=-6, font={"color": MUTED, "size": 11})  # fmt: skip
+
+    # flight path and events
+    fig.add_scatter(x=tr["x"], y=np.asarray(tr["h"]) * exag, mode="lines",
+                    line={"color": LAND_C, "width": 1.2, "dash": "dot"}, opacity=0.7,
+                    hoverinfo="skip", showlegend=False, row=1, col=1)  # fmt: skip
+    marks = [(n, lab, _event_x(tr, n)) for n, lab in
+             (("flare", "flare"), ("touchdown", "touchdown"), ("brakes", "brakes"),
+              ("stopped", "stop"))]  # fmt: skip
+    marks = [m for m in marks if m[2] is not None]
+    fig.add_scatter(
+        x=[m[2] for m in marks],
+        y=[_at(tr, "h", _event_t(tr, m[0])) * exag for m in marks],
+        mode="markers", marker={"size": 6, "color": "white",
+                                "line": {"color": LAND_C, "width": 2}},
+        hoverinfo="skip", showlegend=False, row=1, col=1,
+    )  # fmt: skip
+    for k, (_, lab, x) in enumerate(marks):  # staggered: touchdown and brakes are close
+        note(x, (0.3 if k % 2 == 0 else 0.72) * y_bot, lab, font={"size": 10, "color": "#1d3f1a"})
+    factor = s.get("landing_field_factor", 1.0)
+    info = (
+        f"approach {s['landing_v_approach_kts']:.0f} kt · touchdown "
+        f"{s['landing_v_touchdown_kts']:.0f} kt · {s['landing_weight_lbf']:,.0f} lb"
     )
-    hs = int(round(screen))
-    ticks = [0, 10, 20, hs] if exag >= 6 else [0, hs]
-    fig.update_yaxes(
-        range=[y_bot, y_top],
-        tickvals=[v * exag for v in ticks],
-        ticktext=[f"{v} ft" for v in ticks],
-        showgrid=True,
-        gridcolor="rgba(255,255,255,0.5)",
-        zeroline=False,
-        fixedrange=True,
-        row=1,
-        col=1,
+    note(x_hi, 0.97 * y_top, info, xanchor="right", yanchor="top", xshift=-6,
+         font={"color": INK, "size": 12})  # fmt: skip
+
+    _runway_strip(fig, shape, note, x_lo, x_hi, refs)
+
+    def vline(x: float, color: str, width: float, dash: str | None, opacity: float) -> None:
+        fig.add_shape(type="line", xref="x", yref="paper", x0=x, x1=x, y0=0, y1=1,
+                      line={"color": color, "width": width, "dash": dash},
+                      opacity=opacity)  # fmt: skip
+
+    land_dark = "#9a6a00"
+    vline(takeoff, FAA_C, 2, "dot", 0.5)
+    note(takeoff, -0.72, f"takeoff field {takeoff:,.0f} ft", row=2,
+         xanchor="left" if takeoff < land_req else "right",
+         xshift=5 if takeoff < land_req else -5,
+         font={"size": 10, "color": "white"})  # fmt: skip
+    if has_base:
+        vline(base["scalars"]["landing_runway_required_ft"], land_dark, 2, "dash", 0.55)
+    if factor != 1.0:
+        vline(land_d, LAND_C, 2.5, None, 1.0)
+        note(land_d, 0.72, f"<b>landing distance {land_d:,.0f} ft</b>", row=2,
+             xanchor="right", xshift=-5, bgcolor=LAND_C, font={"color": "white", "size": 12},
+             borderpad=3)  # fmt: skip
+    vline(land_req, land_dark, 3.5, None, 1.0)
+    req_label = f"<b>landing runway {land_req:,.0f} ft</b>" + (
+        f" (÷ {1 / factor:.2g})" if factor != 1.0 else ""
     )
-    fig.update_yaxes(range=[-1, 1], visible=False, fixedrange=True, row=2, col=1)
-    return fig
+    note(land_req, 0.72, req_label, row=2, xanchor="left", xshift=5, bgcolor=land_dark,
+         font={"color": "white", "size": 12}, borderpad=3)  # fmt: skip
+
+    # animation
+    t_end = tr["t"][-1]
+    if has_base:
+        t_end = max(t_end, base["landing_tr"]["t"][-1])
+    dt_frame = speed / FPS
+    if t_end / dt_frame > MAX_FRAMES:
+        dt_frame = t_end / MAX_FRAMES
+    frame_ms = 1000.0 * dt_frame / speed
+    times = np.arange(0.0, t_end + dt_frame, dt_frame)
+    movers = []
+    if has_base:
+        movers.append((_states(base["landing_tr"], times, exag), GHOST, "baseline"))
+    movers.append((_states(tr, times, exag), LAND_C, "Landing"))
+    dyn: list[int] = []
+    for (x, y, th), color, name in movers:
+        ax, ay = _aircraft(px, x[0], y[0], th[0])
+        dyn.append(len(fig.data))
+        fig.add_scatter(x=ax, y=ay, mode="lines", fill="toself", fillcolor=color,
+                        line={"color": color, "width": 1},
+                        opacity=0.55 if color == GHOST else 1.0, hoverinfo="skip", name=name,
+                        showlegend=True, row=1, col=1)  # fmt: skip
+    states = movers[-1][0]
+    t_chute = _event_t(tr, "chute_deploy")
+    if t_chute is not None:
+        dyn += [len(fig.data), len(fig.data) + 1]
+        fig.add_scatter(x=[], y=[], mode="lines", line={"color": "#6b7280", "width": 1},
+                        hoverinfo="skip", showlegend=False, row=1, col=1)  # fmt: skip
+        fig.add_scatter(x=[], y=[], mode="lines", fill="toself", fillcolor="#f2f2f2",
+                        line={"color": land_dark, "width": 1.5}, hoverinfo="skip",
+                        name="drag chute", showlegend=True, row=1, col=1)  # fmt: skip
+    dyn.append(len(fig.data))
+    fig.add_scatter(x=[x_lo + 0.012 * (x_hi - x_lo)], y=[0.86 * y_top], mode="text",
+                    text=[""], textposition="middle right", hoverinfo="skip",
+                    showlegend=False, textfont={"size": 13, "color": INK, "family": FONT},
+                    row=1, col=1)  # fmt: skip
+
+    def caption(t: float) -> str:
+        tt = min(t, tr["t"][-1])
+        return (
+            f"t = {t:4.1f} s     airspeed {_at(tr, 'veas', tt):3.0f} kt     "
+            f"height {_at(tr, 'h', tt):4.1f} ft"
+        )
+
+    def frame_data(i: int, t: float) -> list:
+        data = []
+        for (x, y, th), *_ in movers:
+            ax, ay = _aircraft(px, x[i], y[i], th[i])
+            data.append(go.Scatter(x=ax, y=ay))
+        if t_chute is not None:
+            if t >= t_chute:
+                (cx, cy), (lx, ly) = _chute(px, states[0][i], states[1][i])
+            else:
+                cx = cy = lx = ly = []
+            data += [go.Scatter(x=lx, y=ly), go.Scatter(x=cx, y=cy)]
+        data.append(go.Scatter(text=[caption(t)]))
+        return data
+
+    frames = [
+        go.Frame(data=frame_data(i, t), traces=dyn, name=f"{t:.2f}") for i, t in enumerate(times)
+    ]
+    fig.frames = frames
+    for idx, f in zip(dyn, frames[0].data, strict=True):
+        if f.x is not None:
+            fig.data[idx].x = f.x
+            fig.data[idx].y = f.y
+        if f.text is not None:
+            fig.data[idx].text = f.text
+    return _animation_layout(fig, frames, frame_ms, x_lo, x_hi, y_bot, y_top, screen, exag,
+                             height)  # fmt: skip
 
 
 # ====================================================================================
