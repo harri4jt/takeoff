@@ -7,7 +7,9 @@ Two studies on the Boeing 747-100:
   2. Operations: takeoff weight x outside air temperature at a 5,000 ft airport.
 
 ``trade_study`` solves every combination (in parallel) and returns a pandas DataFrame,
-one row per case. Anything ``load_config(overrides=...)`` accepts can be varied.
+one row per case. Inputs use the short names (weight_lbf, temperature_F, k_CL, mu_brake,
+...; see bfl.config.INPUT_ALIASES) or any dotted path. "runway_required_ft" is the larger
+of the takeoff field length and the landing runway.
 """
 
 from __future__ import annotations
@@ -30,16 +32,16 @@ def aero_study() -> None:
     df = trade_study(
         cfg,
         {
-            "multipliers.k_CL": np.linspace(0.8, 1.2, 9),
-            "multipliers.k_CD": np.linspace(0.8, 1.2, 9),
+            "k_CL": np.linspace(0.8, 1.2, 9),
+            "k_CD": np.linspace(0.8, 1.2, 9),
         },
     )
     print(f"aero study: {len(df)} cases in {time.perf_counter() - t0:.1f} s")
     df.to_csv(OUT / "aero_kcl_kcd.csv", index=False)
 
     # the field length as a k_CL x k_CD table
-    fl = grid(df, x="multipliers.k_CD", y="multipliers.k_CL", value="field_length_ft")
-    print("\nrunway required [ft]  (rows: k_CL, columns: k_CD)")
+    fl = grid(df, x="k_CD", y="k_CL", value="runway_required_ft")
+    print("\nrunway required, takeoff or landing [ft]  (rows: k_CL, columns: k_CD)")
     print(fl.round(-1).to_string(float_format=lambda v: f"{v:,.0f}"))
 
     # contour plot
@@ -56,22 +58,29 @@ def aero_study() -> None:
 
 
 def ops_study() -> None:
-    cfg = load_config("b747_100", overrides={"environment.elevation_ft": 5000.0})
+    cfg = load_config("b747_100", overrides={"elevation_ft": 5000.0})
     df = trade_study(
         cfg,
         {
-            "environment.temperature_F": [30, 59, 80, 100],
-            "environment.weight_lbf": np.arange(550_000, 710_001, 40_000),
+            "temperature_F": [30, 59, 80, 100],
+            "weight_lbf": np.arange(550_000, 710_001, 40_000),
         },
-        outputs=("field_length_ft", "v1_kts", "vr_kts", "max_tire_speed_kts", "balanced"),
+        outputs=(
+            "field_length_ft",
+            "landing_runway_required_ft",
+            "runway_required_ft",
+            "v1_kts",
+            "vr_kts",
+            "max_tire_speed_kts",
+            "balanced",
+        ),  # fmt: skip
     )
     df.to_csv(OUT / "ops_weight_temperature.csv", index=False)
     failed = df[df["error"] != ""]
     if len(failed):
         print(f"\n{len(failed)} case(s) did not solve, e.g.: {failed['error'].iloc[0]}")
 
-    fl = grid(df, x="environment.weight_lbf", y="environment.temperature_F",
-              value="field_length_ft")  # fmt: skip
+    fl = grid(df, x="weight_lbf", y="temperature_F", value="runway_required_ft")
     print("\nrunway required [ft] at 5,000 ft elevation (rows: OAT [F], columns: weight [lb])")
     print(fl.to_string(float_format=lambda v: f"{v:,.0f}"))
 

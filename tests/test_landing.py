@@ -113,3 +113,47 @@ def test_load_aircraft_from_zip_yaml_and_folder(tmp_path, monkeypatch):
         f.writestr("../evil/aircraft.yaml", "name: x")
     with pytest.raises(ValueError, match="unsafe"):
         load_config(bad)
+
+
+def test_landing_weight_never_exceeds_takeoff_weight():
+    light = compute_landing(load_config("b747_100", overrides={"weight_lbf": 500_000.0}))
+    assert light.weight_lbf == 500_000.0  # the file says 564,000 lb (max landing weight)
+    heavy = compute_landing(load_config("b747_100"))
+    assert heavy.weight_lbf == 564_000.0
+
+
+def test_analyze_one_call(tmp_path):
+    from bfl import analyze
+
+    a = analyze("b747_100", weight_lbf=650_000, temperature_F=95, elevation_ft=5000)
+    assert a.config.weight_lbf == 650_000
+    assert a.runway_required_ft == max(a.takeoff.field_length_ft, a.landing.runway_required_ft)
+    assert a.governed_by in ("takeoff", "landing")
+    s = a.scalars()
+    assert s["runway_required_ft"] == a.runway_required_ft and "landing_v_approach_kts" in s
+    assert "Runway required" in a.summary().splitlines()[0]
+    d = a.save(tmp_path / "case")
+    names = {p.name for p in d.iterdir()}
+    assert {
+        "summary.txt",
+        "results.csv",
+        "time_history_go.csv",
+        "time_history_landing.csv",
+    } <= names
+    # dotted paths and a loaded config work too
+    b = analyze(a.config, **{"aircraft.landing.free_roll_s": 4.0})
+    assert b.landing.ground_roll_ft > a.landing.ground_roll_ft
+
+
+def test_short_input_names_and_errors():
+    from bfl.config import InputError
+
+    cfg = load_config("b747_100", overrides={"k_CL": 1.1, "mu_brake": 0.2, "rules": "mil3013"})
+    assert cfg.multipliers.k_CL == 1.1 and cfg.environment.mu_brake == 0.2
+    assert cfg.resolved().procedure.is_mil
+    with pytest.raises(KeyError, match="did you mean 'weight_lbf'"):
+        load_config("b747_100", overrides={"wieght_lbf": 1.0})
+    with pytest.raises(InputError, match="environment.weight_lbf: input should be greater than 0"):
+        load_config("b747_100", overrides={"weight_lbf": -5.0})
+    df = trade_study(load_config("b747_100"), {"k_CL": [1.0, 1.1]}, workers=1)
+    assert list(df.columns[:1]) == ["k_CL"] and "runway_required_ft" in df.columns

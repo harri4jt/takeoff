@@ -147,7 +147,8 @@ def landing_config(config: RunConfig) -> tuple[RunConfig, dict[str, Any], list[s
     rule["reverse"] = reverse
     rule["chute"] = bool(chute)
     updates = {
-        "environment.weight_lbf": lc.weight_lbf or cfg.weight_lbf,
+        # never heavier than the takeoff weight (a light takeoff lands light)
+        "environment.weight_lbf": min(lc.weight_lbf or cfg.weight_lbf, cfg.weight_lbf),
         "multipliers.k_CL": cfg.multipliers.k_CL * lc.k_CL,
         "multipliers.k_CD": cfg.multipliers.k_CD * lc.k_CD,
         "aircraft.aero.takeoff_configuration": lc.configuration or ac.aero.takeoff_configuration,

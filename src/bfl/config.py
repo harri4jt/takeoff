@@ -11,16 +11,18 @@ airspeed indicator. See docs/assumptions.md.
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import io
 import os
 import shutil
+import typing
 import zipfile
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 
 class _Model(BaseModel):
@@ -31,7 +33,7 @@ class _Model(BaseModel):
 # aircraft
 # ------------------------------------------------------------------------------------
 class GeometryConfig(_Model):
-    wing_area_ft2: float = Field(gt=0)
+    wing_area_ft2: float = Field(gt=0, description="reference wing area S_ref [ft^2]")
 
 
 class WeightConfig(_Model):
@@ -216,8 +218,8 @@ class LandingConfig(_Model):
     weight_lbf: float | None = Field(
         default=None,
         gt=0,
-        description="landing weight; blank -> the takeoff weight "
-        "(an immediate return, the worst case)",
+        description="landing weight (e.g. max landing weight), capped at the takeoff "
+        "weight; blank -> the takeoff weight (an immediate return, the worst case)",
     )
     configuration: str | None = Field(
         default=None, description="aero table to start from; blank -> the takeoff table"
@@ -458,17 +460,28 @@ class RunConfig(_Model):
     multipliers: Multipliers = Multipliers()
 
     def with_updates(self, updates: dict[str, Any]) -> RunConfig:
-        """Copy with dotted-path overrides, e.g. ``{"multipliers.k_CL": 1.1}`` (validated)."""
+        """Copy with overrides (validated). Keys are dotted paths,
+        ``{"multipliers.k_CL": 1.1}``, or the short names in INPUT_ALIASES,
+        ``{"k_CL": 1.1, "weight_lbf": 650e3}``."""
         data = self.model_dump()
-        for path, value in updates.items():
+        for path, value in expand_inputs(updates).items():
             node = data
             keys = path.split(".")
-            for k in keys[:-1]:
-                node = node[k]
-            if keys[-1] not in node:
-                raise KeyError(f"unknown config field '{path}'")
+            for i, k in enumerate(keys):
+                if not isinstance(node, dict) or k not in node:
+                    known = list(node) if isinstance(node, dict) else []
+                    close = difflib.get_close_matches(k, known, n=1)
+                    fix = ".".join(keys[:i] + close[:1] + keys[i + 1 :])
+                    hint = f" (did you mean '{fix}'?)" if close else ""
+                    raise KeyError(f"unknown config field '{path}'{hint}")
+                if i < len(keys) - 1:
+                    node = node[k]
             node[keys[-1]] = value
-        return RunConfig.model_validate(data)
+        try:
+            return RunConfig.model_validate(data)
+        except ValidationError as exc:
+            lines = explain_validation_error(exc, RunConfig)
+            raise InputError("invalid input:\n" + "\n".join(f"  - {x}" for x in lines)) from None
 
     @property
     def weight_lbf(self) -> float:
@@ -484,6 +497,52 @@ class RunConfig(_Model):
         into the procedure (idempotent)."""
         c = self.aircraft.certification
         return self.model_copy(update={"procedure": self.procedure.resolved(c.rules, c.t_recog_s)})
+
+
+# Short names for the inputs scripts change most. Any dotted path works as well.
+INPUT_ALIASES: dict[str, str] = {
+    "weight_lbf": "environment.weight_lbf",
+    "temperature_F": "environment.temperature_F",
+    "isa_delta_F": "environment.isa_delta_F",
+    "elevation_ft": "environment.elevation_ft",
+    "headwind_kts": "environment.headwind_kts",
+    "runway_slope_deg": "environment.runway_slope_deg",
+    "mu_brake": "environment.mu_brake",
+    "mu_roll": "environment.mu_roll",
+    "k_CL": "multipliers.k_CL",
+    "k_CD": "multipliers.k_CD",
+    "rules": "aircraft.certification.rules",
+    "aero_table": "aircraft.aero.takeoff_configuration",
+    "thrust_table": "aircraft.engines.thrust_table",
+    "ground_effect": "aircraft.ground_effect.enabled",
+    "optimize_vr": "procedure.optimize_vr",
+    "chute": "procedure.chute_enabled",
+    "landing_weight_lbf": "aircraft.landing.weight_lbf",
+    "landing_k_CL": "aircraft.landing.k_CL",
+    "landing_k_CD": "aircraft.landing.k_CD",
+}
+
+
+class InputError(ValueError):
+    """An input value that is out of range or of the wrong type."""
+
+
+def expand_inputs(updates: dict[str, Any] | None) -> dict[str, Any]:
+    """Short names -> dotted paths (dotted paths pass through unchanged)."""
+    out: dict[str, Any] = {}
+    for k, v in (updates or {}).items():
+        if "." in k:
+            out[k] = v
+        elif k in INPUT_ALIASES:
+            out[INPUT_ALIASES[k]] = v
+        else:
+            close = difflib.get_close_matches(k, list(INPUT_ALIASES), n=1)
+            hint = f" (did you mean '{close[0]}'?)" if close else ""
+            raise KeyError(
+                f"unknown input '{k}'{hint}; short names: {', '.join(INPUT_ALIASES)}, "
+                "or use a dotted path such as 'environment.weight_lbf'"
+            )
+    return out
 
 
 # ------------------------------------------------------------------------------------
@@ -560,14 +619,98 @@ def resolve_aircraft_dir(aircraft: str | Path) -> Path:
     raise FileNotFoundError(f"no aircraft.yaml found for '{aircraft}' (looked in {p} and {q})")
 
 
+class AircraftFileError(ValueError):
+    """An aircraft file that cannot be used, with every problem listed in plain words."""
+
+
+def _field_info(model: type[BaseModel], loc: tuple) -> tuple[Any, type[BaseModel] | None]:
+    """(pydantic FieldInfo or None, model that owns the last key) for an error location."""
+    owner: type[BaseModel] | None = model
+    info = None
+    for key in loc:
+        if owner is None or not isinstance(key, str) or key not in owner.model_fields:
+            return None, owner
+        info = owner.model_fields[key]
+        ann = info.annotation
+        args = [a for a in typing.get_args(ann) if a is not type(None)] or [ann]
+        nxt = args[0]
+        owner_prev = owner
+        owner = nxt if isinstance(nxt, type) and issubclass(nxt, BaseModel) else None
+        if key == loc[-1]:
+            return info, owner_prev
+    return info, owner
+
+
+def explain_validation_error(exc: ValidationError, model: type[BaseModel] = None) -> list[str]:
+    """One plain-English line per problem in a pydantic ValidationError."""
+    model = model or AircraftConfig
+    lines = []
+    for e in exc.errors():
+        loc = tuple(x for x in e["loc"] if not isinstance(x, int))
+        path = ".".join(str(x) for x in loc) or "(top level)"
+        info, owner = _field_info(model, loc)
+        kind = e["type"]
+        what = f" ({info.description})" if info is not None and info.description else ""
+        if kind == "missing":
+            lines.append(f"{path}: missing, and it is required{what}")
+        elif kind == "model_type" and e.get("input") is None:
+            sub = typing.get_args(info.annotation) if info is not None else ()
+            sub_model = next(
+                (a for a in sub if isinstance(a, type)), getattr(info, "annotation", None)
+            )
+            need = []
+            if isinstance(sub_model, type) and issubclass(sub_model, BaseModel):
+                need = [k for k, f in sub_model.model_fields.items() if f.is_required()]
+            lines.append(
+                f"{path}: the section is empty" + (f"; it needs {', '.join(need)}" if need else "")
+            )
+        elif kind == "extra_forbidden":
+            known = list(owner.model_fields) if owner is not None else []
+            close = difflib.get_close_matches(str(loc[-1]), known, n=1)
+            hint = f" (did you mean '{close[0]}'?)" if close else ""
+            lines.append(f"{path}: not a known setting{hint}")
+        else:
+            got = e.get("input")
+            shown = f", got {got!r}" if got is not None and not isinstance(got, dict) else ""
+            lines.append(f"{path}: {e['msg'][0].lower() + e['msg'][1:]}{shown}{what}")
+    return lines
+
+
+def _check_tables(ac: AircraftConfig, d: Path) -> list[str]:
+    """Every CSV the aircraft lists must exist next to its aircraft.yaml."""
+    need = [("aero.configurations", f) for f in ac.aero.configurations.values()]
+    if ac.engines.thrust_mode == "table":
+        need += [("engines.thrust_tables", f) for f in ac.engines.thrust_tables.values()]
+    return [
+        f"{where}: table file '{f}' not found in {d}" for where, f in need if not (d / f).is_file()
+    ]
+
+
 def load_aircraft(aircraft: str | Path) -> AircraftConfig:
     d = resolve_aircraft_dir(aircraft)
     p = Path(aircraft).expanduser()
     yaml_file = p if p.is_file() and p.suffix.lower() in (".yaml", ".yml") else d / "aircraft.yaml"
-    with open(yaml_file) as fh:
-        data = yaml.safe_load(fh)
+    try:
+        with open(yaml_file) as fh:
+            data = yaml.safe_load(fh)
+    except yaml.YAMLError as exc:
+        raise AircraftFileError(f"{yaml_file} is not valid YAML:\n  {exc}") from None
+    if not isinstance(data, dict):
+        raise AircraftFileError(f"{yaml_file} is empty or not a mapping of settings")
     data["directory"] = str(d)
-    return AircraftConfig.model_validate(data)
+    try:
+        ac = AircraftConfig.model_validate(data)
+    except ValidationError as exc:
+        problems = explain_validation_error(exc)
+    else:
+        problems = _check_tables(ac, d)
+        if not problems:
+            return ac
+    n = len(problems)
+    raise AircraftFileError(
+        f"{yaml_file} has {n} problem{'s' if n > 1 else ''}:\n"
+        + "\n".join(f"  {i}. {p}" for i, p in enumerate(problems, 1))
+    )
 
 
 def load_config(

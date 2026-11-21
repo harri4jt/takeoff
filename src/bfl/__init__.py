@@ -4,6 +4,7 @@ Numerical core (RK4, Dormand-Prince RK45, secant root finding, event location,
 interpolation) is written from scratch in this package.
 """
 
+from .analysis import Analysis, analyze
 from .bfl import BFLError, compute_bfl, sweep_v1
 from .config import RunConfig, list_aircraft, load_config
 from .landing import LandingError, LandingResult, compute_landing
@@ -12,6 +13,8 @@ from .takeoff import TakeoffError, TouchbackError
 from .trade import trade_study
 
 __all__ = [
+    "analyze",
+    "Analysis",
     "compute_bfl",
     "compute_landing",
     "LandingResult",

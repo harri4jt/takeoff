@@ -34,7 +34,9 @@ from .landing import compute_landing
 
 #: columns returned by default (any BFLResult.scalars() key can be asked for)
 DEFAULT_OUTPUTS = (
+    "runway_required_ft",
     "field_length_ft",
+    "landing_runway_required_ft",
     "bfl_ft",
     "aeo_distance_ft",
     "balanced",
@@ -154,4 +156,10 @@ def trade_study(
 
 def grid(df: pd.DataFrame, x: str, y: str, value: str) -> pd.DataFrame:
     """One output as a 2-D table: rows = ``y`` values, columns = ``x`` values."""
+    missing = [c for c in (x, y, value) if c not in df.columns]
+    if missing:
+        raise KeyError(
+            f"column(s) {missing} not in the study; columns are {list(df.columns)} "
+            "(ask for more with trade_study(..., outputs=...))"
+        )
     return df.pivot_table(index=y, columns=x, values=value, aggfunc="first")

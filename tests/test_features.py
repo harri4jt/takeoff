@@ -328,3 +328,41 @@ def test_trade_study_reports_failed_cases():
     assert math.isnan(df["field_length_ft"].iloc[1])
     with pytest.raises(Exception):  # noqa: B017 - a mistyped path fails before solving
         trade_study(cfg, {"multipliers.k_XX": [1.0]})
+
+
+# ---------------------------------------------------------------------------------
+# error reporting
+# ---------------------------------------------------------------------------------
+def test_broken_aircraft_file_lists_every_problem(tmp_path):
+    import shutil
+
+    from bfl.config import AircraftFileError, default_aircraft_root
+
+    d = tmp_path / "broken"
+    shutil.copytree(default_aircraft_root() / "b747_100", d)
+    y = (d / "aircraft.yaml").read_text()
+    y = y.replace("wing_area_ft2:", "wing_area:").replace("n_engines: 4", "n_engines: four")
+    (d / "aircraft.yaml").write_text(y)
+    (d / "thrust.csv").unlink()
+    with pytest.raises(AircraftFileError) as e:
+        load_config(d)
+    msg = str(e.value)
+    assert "geometry.wing_area_ft2: missing, and it is required (reference wing area" in msg
+    assert "geometry.wing_area: not a known setting (did you mean 'wing_area_ft2'?)" in msg
+    assert "engines.n_engines" in msg and "'four'" in msg
+    # tables are checked once the settings themselves are valid
+    (d / "aircraft.yaml").write_text(
+        (default_aircraft_root() / "b747_100" / "aircraft.yaml").read_text()
+    )
+    with pytest.raises(AircraftFileError, match="table file 'thrust.csv' not found"):
+        load_config(d)
+    (d / "aircraft.yaml").write_text("geometry: [1, 2\n")
+    with pytest.raises(AircraftFileError, match="not valid YAML"):
+        load_config(d)
+
+
+def test_mistyped_override_suggests_the_field():
+    with pytest.raises(KeyError, match="did you mean 'environment.weight_lbf'"):
+        load_config("b747_100", overrides={"environment.wieght_lbf": 5.0})
+    with pytest.raises(KeyError, match="did you mean 'environment.weight_lbf'"):
+        load_config("b747_100", overrides={"enviroment.weight_lbf": 5.0})
