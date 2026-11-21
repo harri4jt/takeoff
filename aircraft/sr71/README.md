@@ -7,8 +7,9 @@ which writes the CSVs.
 
 **Scope:** sea-level pressure altitude, −38 to 40 °C (−36 to 104 °F). The thrust table
 is not rescaled for altitude. The SR-71 is a military aircraft. Its manual uses a
-*refusal speed* and an acceleration check, not a Part 25 balanced field, so the
-Part 25 numbers here are a what-if comparison.
+*refusal speed* and an acceleration check, not a Part 25 balanced field. MIL-STD-3013 is
+the natural rule set for it (`procedure.rules: mil3013`); the Part 25 numbers are a
+comparison.
 
 ## Sources
 
@@ -37,6 +38,7 @@ Section and figure numbers are the manual's own.
 | CD(α) | CD0 + CL·tan(α_ind − α0) | **Estimate** (note 5) |
 | Engine-out ΔCD | 0.010 | **Estimate**: windmilling J58 plus rudder and sideslip trim |
 | Spoilers | none | the SR-71 has no spoilers |
+| TSFC | 1.9 /hr | **Estimate**: J58 maximum afterburner, sea-level static |
 | V_mcg | not set | note 6 |
 
 ### Notes
@@ -75,34 +77,44 @@ Section and figure numbers are the manual's own.
    weight here. So with V_mcg set there is no legal V1, and the tool stops with an
    error. Real SR-71 procedure is the same: abort before rotation speed, continue after.
 
-## What the model gives (sea level, ISA, chute on)
+## What the model gives (sea level, ISA)
 
-| Weight (klb) | VR / V_LOF (OEI) / V2 (kt) | All engines to 35 ft | Stop from V1 | Engine-out go |
-|---:|---|---:|---:|---:|
-| 100 | 156 / 171 / 189 | 4,369 ft | 5,098 ft | 7,288 ft |
-| 120 | 170 / 188 / 200 | 5,881 ft | 6,552 ft | 12,506 ft |
-| 140 | 184 / 204 / 209 | 7,747 ft | 8,206 ft | 30,494 ft |
+Fuel burn is on (J58 maximum-afterburner TSFC 1.9 /hr, an **estimate**). Stop distances
+are at V1 = VR, because the field never balances (below).
 
-- **The field never balances.** Even at V1 = VR, stopping is shorter than going on, so
-  V1 = VR and the go distance governs. At a 10° attitude in ground effect, the drag
-  (≈27,000 lb with the engine-out increment) nearly cancels the one engine's
-  ≈29,600 lb. The aircraft creeps from 185 to 204 kt over about 70 s before it lifts
-  off. This matches the manual's engine-failure procedure, which says to dump fuel to
-  stay airborne at heavy weight and, if unable to hold altitude and accelerate, to
-  eject. On a 95 °F day at 140,000 lb there is no one-engine liftoff at all.
-- **That result rests on the drag estimate.** With 20% less drag (k_CD 0.8) the
-  140,000 lb engine-out go is 15,070 ft instead of 30,494 ft. Without the
-  engine-out increment it is 19,229 ft. The all-engines distance barely moves
-  (7,544 ft).
+| Weight (klb) | VR / V_LOF (OEI) / V2 (kt) | Part 25: AEO to 35 ft | stop (chute) | engine-out go | MIL-STD-3013: AEO to 50 ft | stop (no chute / chute) | engine-out go to 50 ft |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 100 | 156 / 171 / 188 | 4,340 | 5,088 | 7,133 | 4,664 | 5,954 / 4,858 | 8,079 |
+| 120 | 170 / 188 / 200 | 5,831 | 6,537 | 12,046 | 6,229 | 7,604 / 6,303 | 13,369 |
+| 140 | 184 / 203 / 208 | 7,658 | 8,182 | 26,863 | 8,139 | 9,459 / 7,948 | 29,269 |
+
+- **The field never balances, under either rule set.** Even at V1 = VR, stopping is
+  shorter than going on, so V1 = VR and the go distance governs. At a 10° attitude in
+  ground effect, the drag (≈27,000 lb with the engine-out increment) nearly cancels the one
+  engine's ≈29,600 lb. The aircraft creeps from 185 to about 204 kt over roughly a minute
+  before it lifts off. This matches the manual's engine-failure procedure, which says to
+  dump fuel to stay airborne at heavy weight and, if unable to hold altitude and
+  accelerate, to eject. On a 95 °F day at 140,000 lb there is no one-engine liftoff at all.
+- **Under MIL-STD-3013** (3-s delay, no 2-s pad, go to 50 ft) the go grows a little and the
+  stop grows more, but neither changes the conclusion. Neither does the chute. It is
+  optional under MIL rules and off by default, and it only shortens the stop.
+- **It is not a drag-tuning problem.** With 30 % less drag (k_CD 0.7) the go still beats the
+  stop at every weight. With 20 % less (k_CD 0.8) the 140,000 lb engine-out go is
+  14,559 ft instead of 26,863 ft. The all-engines distance barely moves. No published
+  low-speed SR-71/YF-12 polar was found (NASA TM X-3532, sometimes cited, is the XB-70).
+  So the drag estimate is kept, not adjusted.
+- **Fuel burn matters here.** It shortens the 140,000 lb engine-out go from 30,494 ft
+  (constant weight) to 26,863 ft, because the aircraft sheds ~1,800 lb of fuel during the
+  long crawl to lift-off.
 - **Check against flight test, all engines.** [YF12] says the nosewheel comes up at
   about 180 KIAS, the aircraft is held at 10°, and it lifts off at about 200 KIAS. The
-  model at 140,000 lb rotates at 184 kt and lifts off at 204 kt (120,000 lb: 170 and
-  188 kt).
+  model at 140,000 lb rotates at 184 kt and lifts off at 204 kt. This is checked by
+  `tests/test_validation.py` (±10 kt) and shown on the app's SR-71 data page.
 - **Real practice.** Operational SR-71s often took off with partial fuel and refueled
   in the air soon after ([TB]: "a takeoff with approximately 35,000 lb of fuel"), i.e.
   near 95–100k lb, where the engine-out continuation is far less marginal.
-- The drag chute shortens the stop by about 17% (110k lb: 5,801 ft with, 6,996 ft
-  without). The manual's chute deployment limit is 210 KIAS.
+- The drag chute shortens the stop by about 17 % (110k lb, Part 25: 5,788 ft with,
+  6,986 ft without). The manual's chute deployment limit is 210 KIAS.
 
 The manual's own takeoff-distance charts (Appendix I, Part II) were not available in
 the public scans, so there is no runway-length validation like the 747's.

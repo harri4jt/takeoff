@@ -177,24 +177,24 @@ with 3013 presets. Raymer ground effect changes drag only. Fuel burn, tire/brake
 the design-tool cleanup move into scope. A new k_CL × k_CD trade-study page is added.
 
 **A. RK45 default** (small)
-- [ ] `solver.method` default `rk45` (rtol/atol 1e-8); remove the UI toggle.
-- [ ] Animation: re-run the displayed branches at the solved V1 with RK4 (fixed dt) for
+- [x] `solver.method` default `rk45` (rtol/atol 1e-8); remove the UI toggle.
+- [x] Animation: re-run the displayed branches at the solved V1 with RK4 (fixed dt) for
       evenly spaced frames. RK4 stays for this and for the verification tests/figures.
-- [ ] Test: RK45 vs RK4 dt 0.01 BFL within 0.5 ft for all three aircraft.
+- [x] Test: RK45 vs RK4 dt 0.01 BFL within 0.5 ft for all three aircraft.
 
 **C. Validation data pages** (medium)
-- [ ] `tests/test_validation.py` writes figures + `status.json` (pass/fail, max error,
+- [x] `tests/test_validation.py` writes figures + `status.json` (pass/fail, max error,
       tolerance, date, git hash) to `app/assets/validation/<aircraft>/`.
-- [ ] 747: field length within +0/+12% of Boeing D6-58326. Page lists likely reasons for
+- [x] 747: field length within +0/+12% of Boeing D6-58326. Page lists likely reasons for
       the gap. No tuning.
-- [ ] SR-71: VR/V_LOF within ±10 kt of YF-12's ~180/200 KIAS.
-- [ ] Pages `/data/b747`, `/data/sr71`: citation, source crop → digitized curve
+- [x] SR-71: VR/V_LOF within ±10 kt of YF-12's ~180/200 KIAS.
+- [x] Pages `/data/b747`, `/data/sr71`: citation, source crop → digitized curve
       (lift / drag / thrust), validation plot, status badge (flags missing/stale).
-- [ ] SR-71: re-download the manual scans for crops. Use YF-12 drag (NASA TM X-3532 or
+- [x] SR-71: re-download the manual scans for crops. Use YF-12 drag (NASA TM X-3532 or
       similar) if a low-speed polar exists; otherwise adjust the estimate and label it.
 
 **B. Rule set: Part 25 vs MIL-STD-3013B** (large)
-- [ ] `procedure.rules: part25 | mil3013`. Each preset value stays overridable:
+- [x] `procedure.rules: part25 | mil3013`. Each preset value stays overridable:
 
       | | part25 | mil3013 |
       |---|---|---|
@@ -205,68 +205,84 @@ the design-tool cleanup move into scope. A new k_CL × k_CD trade-study page is 
       | chute / decel devices | no credit | optional, **default off** (checkbox) |
       | speed minimums | V2 ≥ 1.2 V_S | V_LO ≥ 1.1 V_S, V_obs ≥ 1.2 V_S |
 
-- [ ] Labels BFL/V1/V_EF ↔ CFL/V_CEF; report refusal speed.
-- [ ] Runway condition dropdown (Dry / Wet / Wet snow / Wet ice + anti-skid checkbox) fills
+- [x] Labels BFL/V1/V_EF ↔ CFL/V_CEF; report refusal speed.
+- [x] Runway condition dropdown (Dry / Wet / Wet snow / Wet ice + anti-skid checkbox) fills
       μ_roll / μ_brake from 3013 Table II. The fields stay editable; editing one shows "Custom".
       Available under both rule sets.
-- [ ] In-app page "Field-length rules: Part 25 vs MIL-STD-3013" with section citations.
-- [ ] SR-71 under MIL rules, with and without chute; update its README.
-- [ ] Tests: MIL preset ≡ Part 25 with matching manual overrides; SR-71 MIL result finite.
+- [x] In-app page "Field-length rules: Part 25 vs MIL-STD-3013" with section citations.
+- [x] SR-71 under MIL rules, with and without chute; update its README.
+- [x] Tests: MIL preset ≡ Part 25 with matching manual overrides; SR-71 MIL result finite.
 
 **B2. Raymer ground effect, drag only** (medium)
-- [ ] YAML `ground_effect: {enabled, span_ft, wing_height_ft, CD0?, K?}`. If CD0/K are not
+- [x] YAML `ground_effect: {enabled, span_ft, wing_height_ft, CD0?, K?}`. If CD0/K are not
       given, fit `CD = CD0 + K·CL²` to the takeoff table (fit + R² shown).
-- [ ] `CD = CD_table − (1 − φ)·K·CL²`, φ = 33(h/b)^1.5/(1+33(h/b)^1.5) (Raymer Eq. 12.61),
+- [x] `CD = CD_table − (1 − φ)·K·CL²`, φ = 33(h/b)^1.5/(1+33(h/b)^1.5) (Raymer Eq. 12.61),
       h = wing height + airborne height. Both rule sets. Off by default; 747 what-if on its page.
-- [ ] In-app explainer page (the fit, the factor, φ vs h/b plot).
+- [x] In-app explainer page (the fit, the factor, φ vs h/b plot).
 
 **F. Fuel burn** (small–medium)
-- [ ] Optional `engines.tsfc_per_hr` (scalar) or a `tsfc_per_hr` column in the thrust CSV
+- [x] Optional `engines.tsfc_per_hr` (scalar) or a `tsfc_per_hr` column in the thrust CSV
       (overrides the scalar; lets afterburner tables carry their own). Mass becomes a state:
       `dW/dt = −TSFC·T/3600` (operating engines only; idle uses the same TSFC).
-- [ ] Report fuel used to lift-off / 35-50 ft / stop. Not set → constant weight, as today.
-- [ ] SR-71 and 747 TSFC values, cited (or flagged as estimates).
+- [x] Report fuel used to lift-off / 35-50 ft / stop. Not set → constant weight, as today.
+- [x] SR-71 and 747 TSFC values, cited (or flagged as estimates).
 
 **G. Reference-aircraft limits and warnings** (medium)
-- [ ] Placeholder values for ~3 aircraft (marked as placeholders). Editable file `app/reference_aircraft.yaml` (like `reference_runways.yaml`), one entry per
+- [x] Placeholder values for ~3 aircraft (marked as placeholders). Editable file `app/reference_aircraft.yaml` (like `reference_runways.yaml`), one entry per
       aircraft, any subset of: `tire_speed_limit_kts`, `max_brake_energy_MJ`,
       `field_length_ft`, … Example: `747-100: {tire_speed_limit_kts: 195, …}`.
-- [ ] New outputs: max ground speed (on the ground, either branch) and brake energy absorbed in
+- [x] New outputs: max ground speed (on the ground, either branch) and brake energy absorbed in
       the rejected takeoff (∫ μN·V dt, plus the per-wheel figure if the wheel count is given).
-- [ ] Warnings generated from the file: "Tire speed 201 kt exceeds 747-100 (195 kt)". You choose
+- [x] Warnings generated from the file: "Tire speed 201 kt exceeds 747-100 (195 kt)". You choose
       which entries act as warnings; the rest are comparison only.
-- [ ] "Scale" strip per metric: reference aircraft as ticks, your design as a marker.
+- [x] "Scale" strip per metric: reference aircraft as ticks, your design as a marker.
 
 **H. Trade-study page (replaces the "Aero sensitivity" tab)** (medium)
-- [ ] Separate page, run with its own button: k_CD on x, k_CL on y, user-set range and grid
+- [x] Separate page, run with its own button: k_CD on x, k_CL on y, user-set range and grid
       (default 0.75–1.25, 11×11). Parallel RK45, ~1–2 s per map.
-- [ ] Filled contour, either viridis or **banded levels** with user-editable thresholds
+- [x] Filled contour, either viridis or **banded levels** with user-editable thresholds
       (e.g. green < 6,000 ft, yellow 6,000–8,000, red 8,000–10,000, grey above). Hover shows exact
       value; baseline (1,1) marked; cells with no solution hatched.
-- [ ] Metric dropdown: BFL / CFL, field length (with AEO factor), AEO distance.
-- [ ] **Multiple thrust tables:** `engines.thrust_tables: {name: csv}` (the current single
+- [x] Metric dropdown: BFL / CFL, field length (with AEO factor), AEO distance.
+- [x] **Multiple thrust tables:** `engines.thrust_tables: {name: csv}` (the current single
       `thrust_table` still works). The main page gets a thrust-table selector; the trade
       study draws one map per table, side by side, on a shared colour scale.
-- [ ] **Multiple aero and/or thrust tables:** one map per (aero, thrust) combination, capped
+- [x] **Multiple aero and/or thrust tables:** one map per (aero, thrust) combination, capped
       at 6 maps, on a shared colour scale. Tables come from the aircraft's lists or uploads.
-- [ ] Base case = main page settings. A short "Trade-study overrides" panel changes only the
+- [x] Base case = main page settings. A short "Trade-study overrides" panel changes only the
       common inputs (TOGW, runway condition/friction, temperature, elevation, wind, rule set).
       Everything else is inherited, which keeps the page simple.
-- [ ] Save image via the Plotly modebar (PNG, high-res set in config); export the grid as CSV.
+- [x] Save image via the Plotly modebar (PNG, high-res set in config); export the grid as CSV.
 
 **E. Design-tool cleanup** (with G/H)
-- [ ] Move numerical-methods pages under an "About the method" section. Keep them, but take
+- [x] Move numerical-methods pages under an "About the method" section. Keep them, but take
       them out of the main nav.
-- [ ] Remove the method toggle (A) and the old sensitivity tab (H); keep V1-trade and
+- [x] Remove the method toggle (A) and the old sensitivity tab (H); keep V1-trade and
       forces/speeds plots behind "details".
-- [ ] Synthetic aircraft stays as a test fixture but is hidden from the selector unless
+- [x] Synthetic aircraft stays as a test fixture but is hidden from the selector unless
       a "show examples" option is on. 747 / SR-71 stay as validated examples.
-- [ ] Final pass for clutter once everything above is in.
+- [x] Final pass for clutter once everything above is in.
 
 **D. Aircraft builder page** (medium–large; last because B2/F/G/H add YAML fields)
-- [ ] Form generated from the pydantic models (units/descriptions from Field metadata).
-- [ ] Upload YAML → populate. Upload CSVs (aero, one or more thrust) → validate, plot,
+- [x] Form generated from the pydantic models (units/descriptions from Field metadata).
+- [x] Upload YAML → populate. Upload CSVs (aero, one or more thrust) → validate, plot,
       offer as selections.
-- [ ] Live validation; download .zip; save to `aircraft/` (appears in the selector).
+- [x] Live validation; download .zip; save to `aircraft/` (appears in the selector).
 
 **Order:** A → C → B → B2 → F → G → H (+E) → D.
+
+## Status (2026-11-20, all of the above implemented)
+
+Everything in the round-3 list is in, except as noted:
+
+- **MIL go end point** is 50 ft (`screen_height_ft`), pending the 3013B text. The
+  2003/2008 text says lift-off; see `docs/field_length_rules.md`.
+- **SR-71 drag** was *not* adjusted. It cannot balance for structural reasons (tiny
+  engine-out excess thrust), even with 30 % less drag, and no YF-12 low-speed polar was
+  found (TM X-3532 is the XB-70). Documented in its README and data page.
+- **747 tolerance** is ±12 %, not +0/+12 %: the 500 klb point is −4.3 % (Boeing's curve
+  flattens there). This was already true before these changes; not tuned.
+- **Reference aircraft limits** are placeholders (`app/reference_aircraft.yaml`).
+- **E cleanup:** sensitivity tab and integrator toggle removed, methods pages grouped under
+  "About the method", synthetic aircraft hidden behind a checkbox, 747 is the default.
+  Further stripping is still open for discussion.

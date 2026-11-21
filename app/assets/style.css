@@ -412,3 +412,9 @@ details.adv[open] > summary::before { content: "▾ "; }
 .bf-save { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
 .bf-side ul { font-size: 12px; color: #a3172b; padding-left: 18px; }
 @media (max-width: 1000px) { .builder-grid, .bf-top { grid-template-columns: 1fr; } }
+/* Dash 4 checklists: keep the box and its text on one line (also inside .trade-controls) */
+.checks label.dash-options-list-option,
+.trade-controls .checks label.dash-options-list-option {
+  display: flex; align-items: center; gap: 4px; margin: 3px 0;
+  font-size: inherit; color: var(--ink);
+}

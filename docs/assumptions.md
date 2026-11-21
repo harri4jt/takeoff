@@ -104,16 +104,26 @@ diagnostic. Enforcing it is closer to how real takeoff speeds are scheduled.
 * **No reverse thrust credit** (Part 25 dry-runway rule). The operating engines go to
   idle 1 s after V1. The failed engine stays at zero thrust and keeps its drag
   increment.
-* **Constant weight.** No fuel burn during the roll; `m = W/g₀`.
+* **Weight.** Constant (`m = W/g₀`) unless the engines have a TSFC
+  (`engines.tsfc_per_hr`, or a `tsfc_per_hr` column in the thrust CSV). Then the fuel
+  burned is an extra state, `df/dt = TSFC·T/3600` for the operating engines, and
+  `W = W₀ − f`. The V2 rule's rotate-and-climb shortcut starts at the brake-release weight,
+  which is a negligible difference.
 * **Point-mass, longitudinal model.** No pitch dynamics: θ is *prescribed* (constant,
   then a ramp at the rotation rate, then held). No lateral or directional dynamics.
-* **No ground effect** in Phase 1. The aero table is free-air. The loader is designed
-  so that a later `h_over_b` column can make it two-dimensional.
+* **Ground effect** is optional (Raymer, drag only; see `ground_effect.md`). By default the
+  aero table is used as given.
 * **Flat-ground airborne segment** (see `equations.md` §5).
 * **Steady headwind** only in Phase 1. The `WindModel` interface is the hook for
   gusts in Phase 3.
-* **Friction** is a single coefficient: μ_roll before brakes, μ_brake after. No
-  anti-skid or brake-energy limits.
+* **Friction** is a single coefficient: μ_roll before brakes, μ_brake after. Anti-skid
+  enters only through the value you choose (the app's runway-condition presets use
+  MIL-STD-3013 Table II). Brake-energy and tire-speed limits are not enforced. The
+  model reports the maximum ground speed on the tires and the brake energy of the
+  rejected takeoff, and the app warns against the reference aircraft in
+  `app/reference_aircraft.yaml`.
+* **Rule set.** Part 25 by default. MIL-STD-3013 changes only procedure values (delay,
+  pad, 50 ft, no 1.15 factor, chute optional). See `field_length_rules.md`.
 * **Thrust** lookups use `max(V_a, 0)`. With a tailwind at brake release the airspeed
   is briefly negative.
 * **Uphill slope.** At a fixed V1, the slope makes the *acceleration to V1* longer, so

@@ -34,6 +34,8 @@ Page numbers are the documents' own (e.g. "2.0-7"), not PDF page numbers.
 | Ground attitude | 2.0° (WRP) | Fuselage taken as level on the ground (FRL 0°), so WRP = 2° |
 | Tail-strike attitude | 15.0° (WRP) | ≈13° fuselage, measured on the [ACAP] 2.2.1 side view (note 3) |
 | Idle thrust | 2,000 lb/engine | **Estimate**, not from a source |
+| TSFC | 0.36 /hr | **Estimate**: JT9D-3 class at takeoff thrust (fuel burn ~0.1 % of TOGW) |
+| Span, wing height (ground effect) | 195.7 ft, 16 ft | span: D6-58326; wing height **estimated** (quarter-chord MAC on the gear) |
 | Ground spoilers ΔCL / ΔCD | −0.60 / +0.070 | **Estimate**, not from a source (note 4) |
 
 ### Notes
@@ -71,26 +73,32 @@ Page numbers are the documents' own (e.g. "2.0-7"), not PDF page numbers.
 
 [ACAP] 3.3.1 gives the FAR takeoff field length (the larger of 1.15 × the all-engines
 distance to 35 ft and the engine-failure distance) for the 747-100, standard day.
-Sea-level curve against the model (flaps 20, defaults otherwise). Reproduce with
-`python scripts/validate_b747.py`:
+Sea-level curve against the model (flaps 20, defaults otherwise, fuel burn on).
+`tests/test_validation.py` runs this, checks every point is within ±12 %, and writes the
+figures shown on the app's 747 data page. `python scripts/validate_b747.py` does the same
+from the command line:
 
-| Weight (klb) | Boeing (ft) | Model (ft) | Error |
-|---:|---:|---:|---:|
-| 500 | 4,880 | 4,672 | −4.3% |
-| 540 | 5,180 | 5,441 | +5.0% |
-| 580 | 5,880 | 6,357 | +8.1% |
-| 620 | 6,750 | 7,367 | +9.1% |
-| 660 | 7,750 | 8,478 | +9.4% |
-| 690 | 8,720 | 9,382 | +7.6% |
-| 705 | 9,230 | 9,858 | +6.8% |
+| Weight (klb) | Boeing (ft) | Model (ft) | Error | + ground effect (ft) | Error |
+|---:|---:|---:|---:|---:|---:|
+| 500 | 4,880 | 4,669 | −4.3% | 4,612 | −5.5% |
+| 540 | 5,180 | 5,437 | +5.0% | 5,285 | +2.0% |
+| 580 | 5,880 | 6,352 | +8.0% | 6,067 | +3.2% |
+| 620 | 6,750 | 7,360 | +9.0% | 7,023 | +4.0% |
+| 660 | 7,750 | 8,470 | +9.3% | 8,072 | +4.2% |
+| 690 | 8,720 | 9,373 | +7.5% | 8,923 | +2.3% |
+| 705 | 9,230 | 9,848 | +6.7% | 9,371 | +1.5% |
 
 The model is 5–9% conservative over most of the weight range. In the model the
 all-engines case (1.15 × AEO distance) sets the field length at every weight.
-Sensitivities found while checking:
+Nothing was tuned to match. Sensitivities found while checking:
 
 - Rolling friction μ = 0.03 (project default) → 0.02 brings the error to +3–6%.
-- No ground effect, so liftoff and the air segment are longer.
+- **Ground effect** (Raymer, optional, span 195.7 ft, wing height 16 ft **estimated**)
+  cuts the error roughly in half. It is off by default; turn it on with
+  `ground_effect.enabled` or the app's checkbox.
 - JT9D-3 thrust is used, while Boeing's chart is for the JT9D-3A.
+- Fuel burn (TSFC 0.36 /hr, **estimate**) is about 0.1 % of the weight and moves the
+  result by ~0.1 %.
 - Below about 520k lb Boeing's curve flattens near 4,900 ft. The model keeps
   falling. This is probably a minimum-speed or control limit the model does not
   include.
