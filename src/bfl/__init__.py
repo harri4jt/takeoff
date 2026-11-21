@@ -8,10 +8,12 @@ from .bfl import BFLError, compute_bfl, sweep_v1
 from .config import RunConfig, list_aircraft, load_config
 from .results import BFLResult, Trajectory
 from .takeoff import TakeoffError, TouchbackError
+from .trade import trade_study
 
 __all__ = [
     "compute_bfl",
     "sweep_v1",
+    "trade_study",
     "load_config",
     "list_aircraft",
     "RunConfig",

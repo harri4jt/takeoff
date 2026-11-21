@@ -20,11 +20,12 @@ import base64
 from dash import dcc, html
 
 # Planform, nose to the right, in a 120 x 80 box. Each part is a <g> with its own
-# keyframes; one cycle is CYCLE seconds:
-#   0-12 % fuselage grows from the nose   12-30 % wings slide in from the sides
-#   30-42 % tail slides in from behind    42-52 % engines drop onto the wings
-#   52-78 % complete aircraft (gentle bob)  78-100 % everything flies apart and fades
-CYCLE = 3.2
+# keyframes; one cycle is CYCLE seconds, and something moves from the very first frame
+# (most solves finish in well under a second, so the start is what people see):
+#   0-18 % fuselage slides in   0-28 % wings close in from the sides
+#   10-38 % tail slides in      38-50 % engines pop onto the wings
+#   50-80 % complete aircraft (gentle bob)  80-100 % everything flies apart and fades
+CYCLE = 2.4
 
 _SVG = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 80'>
 <style>
@@ -36,31 +37,31 @@ _SVG = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 80'>
  .eng {{ transform-origin: center; animation-name: eng; }}
  .all {{ transform-box: view-box; animation-name: bob; }}
  @keyframes fus {{
-   0% {{ transform: scaleX(0); opacity: 0 }}
-   12%, 80% {{ transform: scaleX(1); opacity: 1 }}
-   95%, 100% {{ transform: scaleX(0.2); opacity: 0 }} }}
+   0% {{ transform: translateX(-40px); opacity: 0.3 }}
+   18%, 80% {{ transform: none; opacity: 1 }}
+   100% {{ transform: translateX(30px); opacity: 0 }} }}
  @keyframes wt {{
-   0%, 12% {{ transform: translateY(-34px); opacity: 0 }}
-   30%, 78% {{ transform: none; opacity: 1 }}
-   92%, 100% {{ transform: translate(-8px, -34px) rotate(-20deg); opacity: 0 }} }}
+   0% {{ transform: translateY(-30px); opacity: 0.3 }}
+   28%, 80% {{ transform: none; opacity: 1 }}
+   100% {{ transform: translate(-10px, -30px) rotate(-20deg); opacity: 0 }} }}
  @keyframes wb {{
-   0%, 12% {{ transform: translateY(34px); opacity: 0 }}
-   30%, 78% {{ transform: none; opacity: 1 }}
-   92%, 100% {{ transform: translate(-8px, 34px) rotate(20deg); opacity: 0 }} }}
+   0% {{ transform: translateY(30px); opacity: 0.3 }}
+   28%, 80% {{ transform: none; opacity: 1 }}
+   100% {{ transform: translate(-10px, 30px) rotate(20deg); opacity: 0 }} }}
  @keyframes tail {{
-   0%, 30% {{ transform: translateX(-30px); opacity: 0 }}
-   42%, 78% {{ transform: none; opacity: 1 }}
-   92%, 100% {{ transform: translateX(-30px); opacity: 0 }} }}
+   0%, 10% {{ transform: translateX(-30px); opacity: 0.2 }}
+   38%, 80% {{ transform: none; opacity: 1 }}
+   100% {{ transform: translateX(-30px); opacity: 0 }} }}
  @keyframes eng {{
-   0%, 42% {{ transform: scale(0); opacity: 0 }}
-   50% {{ transform: scale(1.25); opacity: 1 }}
-   54%, 78% {{ transform: scale(1); opacity: 1 }}
-   88%, 100% {{ transform: scale(0); opacity: 0 }} }}
+   0%, 38% {{ transform: scale(0); opacity: 0 }}
+   46% {{ transform: scale(1.3); opacity: 1 }}
+   50%, 80% {{ transform: scale(1); opacity: 1 }}
+   92%, 100% {{ transform: scale(0); opacity: 0 }} }}
  @keyframes bob {{
-   0%, 52% {{ transform: none }}
-   60% {{ transform: translateY(-2px) }}
-   70% {{ transform: translateY(1.5px) }}
-   78%, 100% {{ transform: none }} }}
+   0%, 50% {{ transform: none }}
+   58% {{ transform: translateY(-2.5px) rotate(-1deg) }}
+   68% {{ transform: translateY(2px) rotate(1deg) }}
+   80%, 100% {{ transform: none }} }}
  @media (prefers-reduced-motion: reduce) {{ g {{ animation: none !important; }} }}
 </style>
 <g class='all'>
@@ -122,7 +123,7 @@ def loading(children, text: str = "Computing…", min_height: int = 0, **colors:
     return dcc.Loading(
         children,
         custom_spinner=spinner(text, **colors),
-        delay_show=250,  # results that come back faster than this never flash it
+        delay_show=120,  # results that come back faster than this never flash it
         overlay_style={"visibility": "visible", "opacity": 0.35, "filter": "blur(1px)"},
         parent_style={"minHeight": f"{min_height}px"} if min_height else None,
     )

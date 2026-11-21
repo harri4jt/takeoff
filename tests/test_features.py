@@ -298,3 +298,33 @@ def test_optimize_vr_flags_table_limited_optimum():
     assert any("not a true optimum" in w for w in r.warnings)
     w = compute_bfl(cfg, vr_hint=r.k_VR - 0.03)
     assert w.field_length_ft == pytest.approx(r.field_length_ft, abs=5.0)
+
+
+# ---------------------------------------------------------------------------------
+# trade studies
+# ---------------------------------------------------------------------------------
+def test_trade_study_grid_order_and_values():
+    """Rows come back in grid order (last input fastest) even for unsorted values, and
+    each row equals a single solve of that case."""
+    from bfl import trade_study
+
+    cfg = load_config("b747_100")
+    vary = {"environment.weight_lbf": [700_000.0, 600_000.0], "multipliers.k_CD": [1.1, 0.9, 1.0]}
+    df = trade_study(cfg, vary, outputs=("field_length_ft", "k_VR"), workers=1)
+    assert list(df["environment.weight_lbf"]) == [700_000.0] * 3 + [600_000.0] * 3
+    assert list(df["multipliers.k_CD"]) == [1.1, 0.9, 1.0] * 2
+    assert (df["error"] == "").all()
+    one = compute_bfl(cfg.with_updates({"environment.weight_lbf": 600_000.0,
+                                        "multipliers.k_CD": 0.9}))  # fmt: skip
+    assert df["field_length_ft"].iloc[4] == pytest.approx(one.field_length_ft, abs=1.0)
+
+
+def test_trade_study_reports_failed_cases():
+    from bfl import trade_study
+
+    cfg = load_config("sr71")
+    df = trade_study(cfg, {"multipliers.k_CL": [1.0, 0.75]}, workers=1)
+    assert df["error"].iloc[0] == "" and df["error"].iloc[1] != ""
+    assert math.isnan(df["field_length_ft"].iloc[1])
+    with pytest.raises(Exception):  # noqa: B017 - a mistyped path fails before solving
+        trade_study(cfg, {"multipliers.k_XX": [1.0]})

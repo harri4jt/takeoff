@@ -944,6 +944,7 @@ def forces_angles(cur: Data, base: Data | None, tab: str, branch: str) -> go.Fig
             ("L", C3, "lift"),
             ("N", C4, "normal force"),
             ("F", C5, "friction"),
+            ("W", INK, "weight"),
         ]
         if tab == "forces"
         else [

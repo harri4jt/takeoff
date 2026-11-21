@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from bfl import RunConfig, compute_bfl, load_config, sweep_v1
+from bfl import RunConfig, compute_bfl, load_config, sweep_v1, trade_study
 from bfl.atmosphere import RHO0_SLUGFT3
 
 TRAJ_COLS = {
@@ -72,7 +72,7 @@ def build_config(aircraft: str, ui: dict[str, Any]) -> RunConfig:
     return load_config(aircraft, overrides=overrides)
 
 
-def _trajectory(tr, sqrt_sigma: float) -> dict[str, Any]:
+def _trajectory(tr, sqrt_sigma: float, weight_lbf: float) -> dict[str, Any]:
     df = tr.to_dataframe()
     stride = max(1, len(df) // MAX_ROWS)
     keep = np.zeros(len(df), dtype=bool)
@@ -82,6 +82,7 @@ def _trajectory(tr, sqrt_sigma: float) -> dict[str, Any]:
     sub = df[keep]
     out: dict[str, Any] = {k: sub[c].tolist() for k, c in TRAJ_COLS.items()}
     out["veas"] = (sub["V_air_kts"].to_numpy() * sqrt_sigma).tolist()  # KEAS, like V-speeds
+    out["W"] = (weight_lbf - sub["fuel_burned_lbf"].to_numpy()).tolist()  # falls as fuel burns
     out["events"] = [e.__dict__ for e in tr.events]
     return out
 
@@ -105,12 +106,14 @@ def timestep_csv(cfg_json: str) -> str:
     (solver.trajectory_dt_s) at the solved V1 and VR, plus every event point. Speeds in
     knots (V_air_kts is true airspeed, V_eas_kts equivalent), distances in ft."""
     res, _ = _solve(cfg_json)
+    w0 = RunConfig.model_validate_json(cfg_json).weight_lbf
     sqrt_sigma = math.sqrt(res.density_slugft3 / RHO0_SLUGFT3)
     frames = []
     for name, label in (("go", "go (engine out)"), ("stop", "stop"), ("aeo", "all engines")):
         df = getattr(res, name).to_dataframe()
         df.insert(0, "branch", label)
         df.insert(df.columns.get_loc("V_air_kts") + 1, "V_eas_kts", df["V_air_kts"] * sqrt_sigma)
+        df.insert(df.columns.get_loc("L_lbf"), "W_lbf", w0 - df["fuel_burned_lbf"])
         frames.append(df)
     return pd.concat(frames, ignore_index=True).to_csv(index=False, float_format="%.6g")
 
@@ -120,9 +123,10 @@ def _run_cached(cfg_json: str) -> dict[str, Any]:
     cfg = RunConfig.model_validate_json(cfg_json)
     res, t_solve = _solve(cfg_json)
     sqrt_sigma = math.sqrt(res.density_slugft3 / RHO0_SLUGFT3)
-    go = _trajectory(res.go, sqrt_sigma)
-    stop = _trajectory(res.stop, sqrt_sigma)
-    aeo = _trajectory(res.aeo, sqrt_sigma)
+    w0 = cfg.weight_lbf
+    go = _trajectory(res.go, sqrt_sigma, w0)
+    stop = _trajectory(res.stop, sqrt_sigma, w0)
+    aeo = _trajectory(res.aeo, sqrt_sigma, w0)
     x_rest = _event(stop, "stopped")["x_ft"]
     return {
         "ok": True,
@@ -164,34 +168,6 @@ def run(aircraft: str, ui: dict[str, Any]) -> dict[str, Any]:
 TRADE_METRICS = ("bfl_ft", "field_length_ft", "aeo_distance_ft", "max_tire_speed_kts")
 
 
-def _trade_cells(args: tuple[str, float, tuple[float, ...], bool]) -> list[tuple | None]:
-    """Solve a run of cells along k_CD at one k_CL, in order.
-
-    Each entry is (BFL, field length, AEO distance, max tire speed, balanced), or None
-    if that cell fails. With VR optimization on, each cell's optimal k_VR is the warm
-    start (``vr_hint``) for the next one: neighbouring cells have nearly the same
-    optimum, so a local search around it replaces the upward scan.
-    """
-    cfg_json, k_cl, kcds, warm = args
-    cfg = RunConfig.model_validate_json(cfg_json)
-    hint: float | None = None
-    out: list[tuple | None] = []
-    for k_cd in kcds:
-        try:
-            r = compute_bfl(
-                cfg.with_updates({"multipliers.k_CL": k_cl, "multipliers.k_CD": k_cd}),
-                vr_hint=hint if warm else None,
-            )
-            hint = r.k_VR
-            out.append(
-                (r.bfl_ft, r.field_length_ft, r.aeo_distance_ft, r.max_tire_speed_kts,
-                 bool(r.balanced))
-            )  # fmt: skip
-        except Exception:  # noqa: BLE001 - a failed cell is shown blank
-            out.append(None)
-    return out
-
-
 _POOL: ProcessPoolExecutor | None = None
 
 
@@ -206,34 +182,29 @@ def _pool() -> ProcessPoolExecutor:
 def trade_map(
     cfg_json: str, kcl: tuple[float, ...], kcd: tuple[float, ...], warm_start: bool = True
 ) -> dict[str, Any]:
-    """Full solves on a k_CL x k_CD grid for one configuration (parallel, RK45, no
-    display re-run). z[metric][i][j]: row i = k_CL, column j = k_CD.
-
-    Each row is split at its middle into two runs that walk outward along k_CD, one
-    parallel task each, so the VR optimizer can warm-start every cell from its
-    neighbour (``warm_start``; see _trade_cells).
-    """
-    fast = RunConfig.model_validate_json(cfg_json).with_updates({"solver.trajectory_dt_s": None})
-    fj = fast.model_dump_json()
-    n = len(kcd)
-    mid = n // 2
-    right = tuple(range(mid, n))  # middle -> high k_CD
-    left = tuple(range(mid - 1, -1, -1))  # just below the middle -> low k_CD
-    runs = [(i, idx) for i in range(len(kcl)) for idx in (right, left) if idx]
-    jobs = [(fj, kcl[i], tuple(kcd[j] for j in idx), warm_start) for i, idx in runs]
+    """bfl.trade_study on a k_CL x k_CD grid, reshaped for the plots:
+    z[metric][i][j] with row i = k_CL, column j = k_CD (None where a case failed)."""
+    cfg = RunConfig.model_validate_json(cfg_json)
     t0 = time.perf_counter()
     try:
-        chunks = list(_pool().map(_trade_cells, jobs))
-    except Exception:  # noqa: BLE001 - e.g. no multiprocessing available: run serially
-        chunks = [_trade_cells(j) for j in jobs]
-    vals: list[list[tuple | None]] = [[None] * n for _ in kcl]
-    for (i, idx), chunk in zip(runs, chunks, strict=True):
-        for j, v in zip(idx, chunk, strict=True):
-            vals[i][j] = v
-    out: dict[str, Any] = {"k_CL": list(kcl), "k_CD": list(kcd), "z": {}, "balanced": []}
-    for m, name in enumerate(TRADE_METRICS):
-        out["z"][name] = [[None if v is None else v[m] for v in row] for row in vals]
-    out["balanced"] = [[None if v is None else v[len(TRADE_METRICS)] for v in row] for row in vals]
+        df = trade_study(cfg, {"multipliers.k_CL": kcl, "multipliers.k_CD": kcd},
+                         outputs=(*TRADE_METRICS, "balanced"), warm_start=warm_start,
+                         executor=_pool())  # fmt: skip
+    except (OSError, RuntimeError):  # e.g. no multiprocessing available: run serially
+        df = trade_study(cfg, {"multipliers.k_CL": kcl, "multipliers.k_CD": kcd},
+                         outputs=(*TRADE_METRICS, "balanced"), warm_start=warm_start,
+                         workers=1)  # fmt: skip
+    ok = df["error"] == ""
+
+    def table(col: str) -> list[list]:
+        vals = [v if good else None for v, good in zip(df[col], ok, strict=True)]
+        n = len(kcd)
+        return [vals[i * n : (i + 1) * n] for i in range(len(kcl))]  # grid order
+
+    out: dict[str, Any] = {"k_CL": list(kcl), "k_CD": list(kcd), "z": {}}
+    for name in TRADE_METRICS:
+        out["z"][name] = [[None if v is None else float(v) for v in row] for row in table(name)]
+    out["balanced"] = [[None if v is None else bool(v) for v in row] for row in table("balanced")]
     out["time_s"] = time.perf_counter() - t0
     return out
 

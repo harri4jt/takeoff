@@ -356,3 +356,53 @@ Done:
 - [x] k_CL already scales CLmax (and so V_S and VR); unchanged.
 - [ ] SR-71 drag left as is: with the optimized VR, −20 % drag only shortens the field
       11,688 → 11,238 ft (stop from V1 ≈ 207 kt governs). Decision for the user.
+
+---
+
+## Round 6 (2026-11-21): design-tool wording, weight on the forces plot, Python trade studies
+
+- [x] Titles: "Balanced Field Length" / "Takeoff Field Length" (scene modes; hover keeps the
+      detail); header subtitle "Conceptual design tool".
+- [x] Forces plot shows weight (start weight minus fuel burned); the CSV download has `W_lbf`.
+- [x] Loader: motion from the first frame (most solves end in < 1 s), 2.4 s loop, shown after
+      120 ms.
+- [x] `bfl.trade_study(cfg, {path: values, ...})`: any inputs, full grid, parallel, warm-started
+      VR along the last input, one DataFrame row per case (`error` column for failures);
+      `bfl.trade.grid` pivots one output. The app's trade page uses it.
+      Template: `scripts/trade_study_example.py`; docs: `docs/python_usage.md` (About page).
+
+## Proposal: landing distance (not started)
+
+Goal: answer "what runway does landing need?" next to the takeoff answer, for both rule sets.
+
+**Is it always shorter than takeoff?** Usually for transports at maximum takeoff weight, but
+not always: the civil landing factor (÷0.6, below) is large, a wet runway adds 15 %, and an
+aircraft that must land near takeoff weight, or a fighter without its chute, can be
+landing-critical. So it is worth computing, not assuming.
+
+**Rules (to confirm against the texts):**
+* Part 25.125: from 50 ft at V_REF ≥ 1.23 V_SR0 (landing flaps), steady approach (≈3°),
+  flare, touchdown, max braking, **no reverse-thrust credit**, dry runway. Operating rule
+  (Part 121.195): runway required = landing distance / 0.6 (×1.667); wet: ×1.15 more.
+* MIL-STD-3013: landing distance over a 50 ft obstacle, approach at a multiple of V_S, drag
+  chute and reverse thrust may be credited; field factors per the program. (Check 3013B.)
+
+**Model (mostly reuses what exists):**
+1. Air segment 50 ft → touchdown: steady glide at γ (thrust set to hold it), then a flare at
+   constant load factor (≈1.1–1.2 g) to a touchdown sink rate. Integrated with the same
+   RK45 + event location (events: flare start, touchdown).
+2. Free roll (≈1–2 s: spoilers deploy, brakes on), then braking with idle (or reverse)
+   thrust, spoilers, optional chute, to a stop: the existing stop branch.
+3. No root finding needed (nothing to balance), so one landing solve is ~0.05 s.
+
+**Inputs to add:** landing aero table (e.g. 747 flaps 25/30), landing weight (default: max
+landing weight in the aircraft file), approach speed ratio and glide angle, free-roll time,
+reverse thrust (fraction of max, MIL only by default), wet/dry.
+
+**Outputs:** air distance, ground roll, landing distance, landing runway required, and
+**runway required = max(takeoff field length, landing runway required)**. App: a "Landing"
+scene mode, a result tile, a trade-study metric; validation against the 747-100 landing
+chart from the same Boeing airport-planning document as the takeoff chart.
+
+**Open decisions:** default landing weight (MLW vs takeoff weight minus fuel), reverse thrust
+credit, wet runway option, flare model detail (constant-g vs Raymer's flare radius).

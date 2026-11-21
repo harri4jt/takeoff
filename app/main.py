@@ -459,7 +459,7 @@ def sim_page() -> html.Div:
                                 className="card-head",
                                 children=[
                                     html.H3(
-                                        "Engine failure at the worst moment: go or stop?",
+                                        "Balanced Field Length",
                                         id="scene-title",
                                     ),
                                     tip(
@@ -631,7 +631,7 @@ def topbar() -> html.Div:
                 children=[
                     html.Span(TITLE, className="brand-title"),
                     html.Span(
-                        "balanced field length · engine-out go/stop · Part 25 & MIL-STD-3013",
+                        "Conceptual design tool",
                         className="brand-sub",
                     ),
                 ],
@@ -1063,8 +1063,8 @@ def create_app() -> Dash:
     )
     def on_mode(mode):
         if mode == "aeo":
-            return "All engines: where the FAA field length comes from", SCENE_HELP["aeo"]
-        return "Engine failure at the worst moment: go or stop?", SCENE_HELP["failure"]
+            return "Takeoff Field Length", SCENE_HELP["aeo"]
+        return "Balanced Field Length", SCENE_HELP["failure"]
 
     @app.callback(
         Output("scene", "figure"),

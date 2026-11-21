@@ -23,6 +23,7 @@ DOC_PAGES: dict[str, tuple[str, str, list[tuple[str, str, Path]]]] = {
         "What the tool computes, the rules and models behind it, and the assumptions.",
         [
             ("how-it-works", "How it works", DOCS / "methods" / "overview.md"),
+            ("python", "Using it from Python (trade-study scripts)", DOCS / "python_usage.md"),
             ("rules", "Field-length rules: Part 25 vs MIL", DOCS / "field_length_rules.md"),
             ("rotation-speed", "Rotation speed and VR optimization",
              DOCS / "rotation_speed.md"),
