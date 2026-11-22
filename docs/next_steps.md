@@ -463,3 +463,8 @@ credit, wet runway option, flare model detail (constant-g vs Raymer's flare radi
 - Findings: 747-100 moderate gusts: +395 ft (+4.1 %) covers 95 % of takeoffs; landing
   barely moves unless an approach speed additive is flown. The SR-71 is far more sensitive
   (+9 % moderate, +20 % severe at P95).
+- [ ] **Vertical gust length scale.** Our OU for w_g has Dryden's σ_w but twice its low-frequency
+      content: the Dryden vertical spectrum σ²(L/π)(1+3(LΩ)²)/(1+(LΩ)²)² has integral scale L/2,
+      the OU with L_w = h has L. Matching it means L_w = h/2 in the OU. Tested (moderate, 400 runs,
+      same gusts): 747 P95 +376 → +380 ft (no change), SR-71 +1,093 → +985 ft (−10 %). Not yet
+      changed in the code (waiting for the user).

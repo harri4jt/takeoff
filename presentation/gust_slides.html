@@ -69,6 +69,13 @@
   .banner .lab { display: block; font-family: "Noto Sans", sans-serif; font-size: 13px; font-weight: 700; margin-top: 2px; }
   .banner span.part { display: inline-block; padding: 2px 10px; border-radius: 8px; vertical-align: top; text-align: center; }
   .p-old { background: #eef1f4; } .p-pull { background: #e6f0fb; color: #1f5fae; } .p-kick { background: #fdeee4; color: #b4501d; }
+  .fbox { font-family: "DejaVu Serif", serif; font-size: 17px; line-height: 1.75; background: white;
+          border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 16px; }
+  .fbox .c { font-family: "Noto Sans", sans-serif; font-size: 12.5px; color: var(--muted); }
+  .dtab { border-collapse: collapse; font-size: 13.5px; width: 100%; }
+  .dtab th, .dtab td { padding: 3px 8px; text-align: right; border-bottom: 1px solid var(--line); }
+  .dtab th { font-size: 12px; color: var(--muted); border-bottom: 2px solid var(--line); }
+  .dtab td:first-child, .dtab th:first-child { text-align: left; }
   .four { display: grid; grid-template-columns: 1.05fr 1fr 1fr; gap: 12px; margin-top: 4px; }
   .four .box { font-size: 13.2px; line-height: 1.4; padding: 9px 13px; }
   .four .box h4 { margin: 0 0 3px; font-size: 14.5px; }
@@ -136,7 +143,7 @@
       <div class="cap"><b>Takeoff field length</b> per run = the larger of go, stop and 1.15 × all-engines (the full
         Part 25 field length, not only the BFL; SR-71, military rules: × 1.0; calm 747: 1.15 × 8,281 = 9,523 ft governs over the 9,104 ft BFL).
         Read it as: pick the share of gusty-day takeoffs you want to cover (x), read the cushion (y).
-        Shaded: how sure the estimate is (slide 7).</div>
+        Shaded: how sure the estimate is (slide 8).</div>
     </div>
   </div>
   <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>2</span></div>
@@ -161,7 +168,7 @@
         <span class="tag-pull">pull back toward 0</span> (the memory) +
         <span class="tag-kick">a random kick</span>, Z a standard normal random number.
         Result: a curve that wanders around 0 with typical size σ and changes over about T seconds
-        (an Ornstein–Uhlenbeck process; the kicks add up to Brownian motion). Piece by piece: next slide.</div></div>
+        (an Ornstein–Uhlenbeck process; the kicks add up to Brownian motion). The formulas: next slide; the rule piece by piece: the one after.</div></div>
       <div class="st"><div class="n">5</div><div><b>Drawn up front, built as you go:</b> the Z's for a run come from a
         random seed before it starts (same seed → same run); the curve is built step by step because σ, L and T
         depend on the aircraft's current height and speed.</div></div>
@@ -177,7 +184,48 @@
 </section>
 
 
-<!-- ============================================================ 4: THE UPDATE RULE -->
+
+<!-- ============================================================ 4: DRYDEN -->
+<section class="slide">
+  <h2>What the Dryden turbulence model gives us</h2>
+  <div class="two" style="grid-template-columns: 450px 1fr; gap: 20px;">
+    <div>
+      <div class="note" style="margin-bottom: 6px;">Dryden low-altitude model (MIL-F-8785C; MIL-HDBK-1797), for heights below
+        1,000 ft. Inputs: <b>W<sub>20</sub></b>, the wind speed at 20 ft (light 15, moderate 30, severe 45 kt, also from
+        the spec), and the aircraft's height <b>h</b> in ft (held at ≥ 10 ft on the runway).</div>
+      <div class="fbox">
+        σ<sub>w</sub> = 0.1 · W<sub>20</sub> <span class="c">vertical spread</span><br>
+        σ<sub>u</sub> = σ<sub>w</sub> / (0.177 + 0.000823 h)<sup>0.4</sup> <span class="c">along the runway</span><br>
+        L<sub>w</sub> = h <span class="c">vertical length</span><br>
+        L<sub>u</sub> = h / (0.177 + 0.000823 h)<sup>1.2</sup> <span class="c">along the runway</span>
+      </div>
+      <table class="dtab" style="margin-top: 8px;">
+        <tr><th>moderate (W<sub>20</sub> = 30 kt)</th><th>σ<sub>u</sub></th><th>σ<sub>w</sub></th><th>L<sub>u</sub></th><th>L<sub>w</sub></th></tr>
+        <tr><td>h = 10 ft (on the runway)</td><td>5.9 kt</td><td>3.0 kt</td><td>76 ft</td><td>10 ft</td></tr>
+        <tr><td>h = 20 ft</td><td>5.8 kt</td><td>3.0 kt</td><td>144 ft</td><td>20 ft</td></tr>
+        <tr><td>h = 50 ft (screen height)</td><td>5.5 kt</td><td>3.0 kt</td><td>311 ft</td><td>50 ft</td></tr>
+      </table>
+      <div class="note" style="margin-top: 8px;">Light and severe scale every σ by ½ and 1½; the lengths do not change.
+        <b>Not from Dryden</b> (our additions): averaging over the wingspan, gusts moving past at ≥ 10 kt when the
+        aircraft is slow, the pilot lag.</div>
+    </div>
+    <div>
+      <img class="fig" src="fig_gu_dryden.svg" alt="Dryden sigma and L against height, and spectra" style="height: 400px; width: auto; margin: 0 auto;">
+      <div class="box" style="font-size: 12.8px; line-height: 1.38; margin-top: 4px;">
+        <b>③ The spectrum</b> (also from Dryden) says how gust energy is spread over wavelengths. Along the runway,
+        <span class="m">Φ<sub>u</sub>(Ω) = σ<sub>u</sub>² (2L<sub>u</sub>/π) / (1 + (L<sub>u</sub>Ω)²)</span>: exactly what
+        our update rule produces with T = L<sub>u</sub>/V. Vertically, <span class="m">Φ<sub>w</sub>(Ω) = σ<sub>w</sub>²
+        (L<sub>w</sub>/π)(1 + 3(L<sub>w</sub>Ω)²) / (1 + (L<sub>w</sub>Ω)²)²</span> has a different shape: ours has the
+        right size σ<sub>w</sub> but twice the slow content (as if L<sub>w</sub> were 2h).
+        <b>Known approximation:</b> with L<sub>w</sub> = h/2, which matches Dryden's slow content, the moderate P95 is
+        unchanged for the 747 (+380 vs +376 ft, 400 runs) and about 10 % lower for the SR-71 (+985 vs +1,093 ft).
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>4</span></div>
+</section>
+
+<!-- ============================================================ 5: THE UPDATE RULE -->
 <section class="slide">
   <h2>The update rule, piece by piece</h2>
   <div class="banner">
@@ -200,10 +248,10 @@
       same whatever the step. <b>√(2/T)</b>: each step the pull removes ≈ 2Δt/T of the variance and the kick adds
       σ²·2Δt/T; they balance when <span class="m">Var = σ²</span>. So the gust's typical size is σ, whatever T.</div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>4</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>5</span></div>
 </section>
 
-<!-- ============================================================ 5: GUSTS INTO A TAKEOFF -->
+<!-- ============================================================ 6: GUSTS INTO A TAKEOFF -->
 <section class="slide">
   <h2>From gusts to a takeoff: a fixed schedule, read with a lag</h2>
   <div class="two" style="grid-template-columns: 540px 1fr;">
@@ -231,10 +279,10 @@
         the orange dot). Grey: what the airflow does. Black: what the crew acts on.</div>
     </div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>5</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>6</span></div>
 </section>
 
-<!-- ============================================================ 6: WHAT A GUST IS -->
+<!-- ============================================================ 7: WHAT A GUST IS -->
 <section class="slide">
   <h2>What a gust physically is, and why the wing averages small ones out</h2>
   <div class="two" style="grid-template-columns: 560px 1fr;">
@@ -287,10 +335,10 @@
         All it needs is the wingspan.</div>
     </div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>6</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>7</span></div>
 </section>
 
-<!-- ============================================================ 7: SAMPLING ERROR -->
+<!-- ============================================================ 8: SAMPLING ERROR -->
 <section class="slide">
   <h2>Sampling error: how sure is the P95?</h2>
   <img class="fig" src="fig_gu_sampling.svg" alt="one study's P95 and the spread of P95 over repeated studies" style="height: 392px; width: auto; margin: 0 auto;">
@@ -305,7 +353,7 @@
       closer, so the width shrinks like <b>1/√N</b>: ±86 → ±47 → ±21 ft for 125 → 500 → 2,000 runs. The time-step error
       at Δt = 0.01 s is only a few feet, so accuracy comes from more runs, not smaller steps.</div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>7</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>8</span></div>
 </section>
 
 </body>

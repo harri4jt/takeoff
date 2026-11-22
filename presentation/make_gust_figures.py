@@ -131,6 +131,55 @@ def fig_ou() -> None:
 
 
 # ------------------------------------------------------------------------------------
+# slide 4: what the Dryden model provides
+# ------------------------------------------------------------------------------------
+def fig_dryden() -> None:
+    w20 = 30.0  # moderate
+    h = np.linspace(10, 300, 300)
+    base = 0.177 + 0.000823 * h
+    sw = 0.1 * w20 * np.ones_like(h)
+    su = sw / base**0.4
+    lw, lu = h, h / base**1.2
+    fig = plt.figure(figsize=(7.4, 5.0), constrained_layout=True)
+    gs = fig.add_gridspec(2, 2, height_ratios=[1.05, 1])
+    a, b, c = fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1]), fig.add_subplot(gs[1, :])
+    a.plot(su, h, color=BLUE, lw=2.4, label="σ_u (along the runway)")
+    a.plot(sw, h, color=ORANGE, lw=2.4, label="σ_w (vertical)")
+    a.set(xlabel="gust spread σ [kt]", ylabel="height h [ft]", xlim=(0, 7))
+    a.legend(fontsize=10.5, loc="upper left")
+    b.plot(lu, h, color=BLUE, lw=2.4, label="L_u")
+    b.plot(lw, h, color=ORANGE, lw=2.4, label="L_w = h")
+    b.set(xlabel="gust length L [ft]", xlim=(0, 1500))
+    b.legend(fontsize=10.5, loc="lower right")
+    for ax in (a, b):
+        for hh, lab in ((10, "wheels (held at 10 ft)"), (50, "50 ft")):
+            ax.axhline(hh, color=MUTED, lw=0.8, ls=":")
+        ax.set_ylim(0, 300)
+    a.text(0.0, 1.03, "① spread vs height (moderate)", transform=a.transAxes, fontweight="bold",
+           fontsize=12)  # fmt: skip
+    b.text(0.0, 1.03, "② length vs height", transform=b.transAxes, fontweight="bold",
+           fontsize=12)  # fmt: skip
+    # spectra at 20 ft, per unit variance, against spatial frequency
+    L_u, L_w = 20 / (0.177 + 0.000823 * 20) ** 1.2, 20.0
+    om = np.logspace(-4, 0.5, 300)  # rad/ft
+    ou = lambda L: (2 * L / np.pi) / (1 + (L * om) ** 2)  # noqa: E731
+    dry_w = (L_w / np.pi) * (1 + 3 * (L_w * om) ** 2) / (1 + (L_w * om) ** 2) ** 2
+    c.loglog(om, ou(L_u), color=BLUE, lw=2.4, label="horizontal: Dryden = ours")
+    c.loglog(om, dry_w, color=ORANGE, lw=2.4, label="vertical: Dryden")
+    c.loglog(om, ou(L_w), color=ORANGE, lw=1.8, ls="--", label="vertical: ours (L = h)")
+    c.set(xlabel="spatial frequency Ω [rad/ft]", ylabel="spectrum / σ² [ft]")
+    c.legend(fontsize=10.5, loc="lower left")
+    c.text(0.0, 1.03, "③ how gust energy is spread (20 ft)", transform=c.transAxes,
+           fontweight="bold", fontsize=12)  # fmt: skip
+    fig.savefig(OUT / "fig_gu_dryden.svg")
+    plt.close(fig)
+    for hh in (10, 20, 50):
+        bb = 0.177 + 0.000823 * hh
+        print(f"  h {hh}: sigma_u {3.0 / bb**0.4:.2f} kt, sigma_w 3.00 kt, L_u {hh / bb**1.2:.0f} ft, "
+              f"L_w {hh} ft")  # fmt: skip
+
+
+# ------------------------------------------------------------------------------------
 # slide 4: the update rule, piece by piece
 # ------------------------------------------------------------------------------------
 def fig_decay() -> None:
@@ -304,6 +353,8 @@ def main() -> None:
     table(data)
     fig_ou()
     fig_decay()
+    print('\nDryden, moderate:')
+    fig_dryden()
     fig_run(data)
     print("\nwing averaging, moderate:")
     fig_wing()
