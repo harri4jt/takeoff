@@ -78,6 +78,8 @@ def fit_parabolic_polar(table: AeroTable, cl_fraction: float = 0.85) -> PolarFit
     Only the attached-flow part of the curve is used: near CLmax the drag rises faster
     than the parabola. Linear least squares in (1, CL^2) via the normal equations.
     """
+    # TABLE-CODE: fits the polar to the table's raw rows (.cl.y / .cd.y); if the table code is re-
+    # done, this will need to be addressed.
     cl = np.asarray(table.cl.y)
     cd = np.asarray(table.cd.y)
     top = cl_fraction * cl.max()
@@ -132,6 +134,9 @@ class AeroModel:
         base = self.table.cl_max if self.cl_max_override is None else self.cl_max_override
         return self.k_CL * base
 
+    # TABLE-CODE: inverts the lift curve from the table's raw points (.cl.x / .cl.y), linear between
+    # points even when the table is read as a cubic spline. Used by the landing approach/flare and
+    # the gust analysis; if the table code is re-done, this will need to be addressed.
     def alpha_for_cl(self, cl: float) -> float:
         """Angle of attack [rad] at which the (scaled) table gives ``cl``.
 

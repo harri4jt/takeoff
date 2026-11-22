@@ -426,6 +426,9 @@ def _optimize_vr(config: RunConfig, base: BFLResult, hint: float | None = None) 
             try:
                 r = _solve_at(fast.with_updates({"procedure.k_VR": k}))
                 seen[k], solved[k] = r.field_length_ft, r
+            # TABLE-CODE: relies on the tables raising (TableRangeError) outside their range, so a
+            # too-high VR counts as infeasible rather than extrapolating; if the table code is re-
+            # done, this will need to be addressed.
             except Exception:  # noqa: BLE001 - e.g. table range; treat as infeasible
                 seen[k] = math.inf
         return seen[k]

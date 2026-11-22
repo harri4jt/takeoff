@@ -175,10 +175,16 @@ class _Sim:
         self.sin_phi = math.sin(vm.env.slope_rad)
         self.trace = trace
         self.rows: list[tuple] = []
+        # TABLE-CODE: reads the aero table's alpha range to hold alpha inside it under gusts (a
+        # stall plateau). Relies on AeroTable.alpha_range_rad; if the table code is re-done, this
+        # will need to be addressed.
         self.a_lo, self.a_hi = vm.aero.table.alpha_range_rad
         self.v_stall_check = 0.8 * vm.stall_speed_tas()
         self.stall_steps = 0  # steps where gusts pushed alpha past the table at flying speed
         tab = getattr(vm.propulsion.model, "table", None)
+        # TABLE-CODE: finds the thrust table's highest airspeed through the interpolator's .x list
+        # (Interpolator1D / Interpolator2D), to hold thrust at the table's edge when a gust pushes
+        # the airspeed past it; if the table code is re-done, this will need to be addressed.
         xs = getattr(tab, "x", None)
         self.v_thrust_max = max(xs) if xs else math.inf
         self.thrust_clamp_steps = 0
@@ -220,6 +226,8 @@ class _Sim:
     def _thrust(self, m: _Mode, va: float) -> float:
         p = self.vm.propulsion
         v = max(va, 0.0)
+        # TABLE-CODE: plateau past the end of the thrust table (gust analysis only); if the table
+        # code is re-done, this will need to be addressed.
         if v > self.v_thrust_max:  # a gust past the end of the thrust table: hold its edge
             self.thrust_clamp_steps += 1
             v = self.v_thrust_max

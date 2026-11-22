@@ -6,6 +6,11 @@
 
 Out-of-range queries either raise (``"error"``, default) or are clamped to the end
 of the table with a one-time warning (``"clamp"``).
+
+Code elsewhere that depends on how these tables work (their attributes, the error
+raised outside the range, linear-vs-spline reading) is marked with the comment tag
+TABLE-CODE; `grep -rn TABLE-CODE src app` lists it. If the table code is replaced (e.g. by a
+larger code base's own tables), each of those places will need to be addressed.
 """
 
 from __future__ import annotations

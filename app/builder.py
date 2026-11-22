@@ -201,6 +201,9 @@ def check_csv(name: str, text: str) -> dict[str, Any]:
         header = next((ln for ln in text.splitlines() if ln and not ln.startswith("#")), "")
         cols = [c.strip() for c in header.split(",")]
         try:
+            # TABLE-CODE: the builder checks and plots CSVs with the solver's loaders and reads
+            # their raw points (.cl.x / .cl.y / .cd.y); if the table code is re-done, this will need
+            # to be addressed.
             if "alpha_deg" in cols:
                 t = load_aero_table(p)
                 return {"kind": "aero", "ok": True, "msg": f"aero table, {len(t.cl.x)} rows",

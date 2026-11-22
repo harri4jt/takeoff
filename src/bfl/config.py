@@ -458,6 +458,8 @@ class SolverConfig(_Model):
     t_max_s: float = Field(default=300.0, gt=0, description="hard cap per simulated branch")
     touchback_tolerance_ft: float = Field(default=0.01, gt=0)
     interpolation: Literal["linear", "cubic"] = "linear"
+    # TABLE-CODE: how tables behave outside their range ("error" is relied on by the VR optimizer
+    # and the validation); if the table code is re-done, this will need to be addressed.
     out_of_range: Literal["error", "clamp"] = "error"
 
 

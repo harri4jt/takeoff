@@ -51,6 +51,8 @@ class TableThrust2D:
     table: Interpolator2D  # x: airspeed ft/s, y: temperature R
 
     def per_engine(self, v_air_ftps: float, temp_R: float) -> float:
+        # TABLE-CODE: thrust read at max(V, 0) (a tailwind at brake release); if the table code is
+        # re-done, this will need to be addressed.
         return self.table(max(v_air_ftps, 0.0), temp_R)
 
 
