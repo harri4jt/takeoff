@@ -125,8 +125,57 @@ def fig_ou() -> None:
     b.set(xlabel="time [s]", ylabel="gust [kt]")
     b.text(0.0, 1.02, "② the same numbers through the update rule, two memories T",
            transform=b.transAxes, fontweight="bold", fontsize=12.5)
-    b.legend(loc="lower left", fontsize=11)
+    b.legend(loc="lower right", fontsize=10.5)
     fig.savefig(OUT / "fig_gu_ou.svg")
+    plt.close(fig)
+
+
+# ------------------------------------------------------------------------------------
+# slide 4: the update rule, piece by piece
+# ------------------------------------------------------------------------------------
+def fig_decay() -> None:
+    fig, (a, b) = plt.subplots(1, 2, figsize=(11.6, 4.0), constrained_layout=True)
+    dt, g0 = 0.1, 10.0
+    tt = np.linspace(0, 6, 400)
+    for tc, c in ((0.5, ORANGE), (2.0, BLUE)):
+        a.plot(tt, g0 * np.exp(-tt / tc), color=c, lw=2.4, label=f"T = {tc:g} s:  g₀·e$^{{-t/T}}$")
+        n = int(6 / dt)
+        g = [g0]
+        for _ in range(n):  # the rule without the kick, coarse steps to make them visible
+            g.append(g[-1] - g[-1] / tc * dt)
+        a.plot(np.arange(n + 1) * dt, g, "o", ms=3.5, color=c, alpha=0.7)
+    a.axhline(g0 * math.exp(-1), color=MUTED, lw=1, ls=":")
+    a.text(6, g0 * math.exp(-1) + 0.25, "37 % left after one T", ha="right", color=MUTED, fontsize=11)
+    a.set(xlabel="time after the kick [s]", ylabel="gust [kt]", xlim=(-0.2, 6))
+    a.text(0, 1.03, "① one kick of +10 kt, no more kicks: it fades exponentially", transform=a.transAxes,
+           fontweight="bold", fontsize=12.5)  # fmt: skip
+    a.legend(loc="upper right", fontsize=11.5)
+    a.text(1.6, 6.5, "dots: the rule step by step (Δt = 0.1 s)", color=MUTED, fontsize=10.5)
+
+    rng = np.random.default_rng(3)
+    tc = 1.0
+    times = np.array([0.4, 1.3, 1.9, 3.1, 3.6, 4.8])
+    sizes = rng.normal(0, 4.5, len(times))
+    tt = np.linspace(0, 6.5, 700)
+    total = np.zeros_like(tt)
+    for t0, k in zip(times, sizes, strict=True):
+        part = np.where(tt >= t0, k * np.exp(-(tt - t0) / tc), 0.0)
+        total += part
+        b.plot(tt, part, color="#b8c4d1", lw=1.3)
+    b.plot(tt, total, color=INK, lw=2.6, label="the gust = sum of the fading kicks")
+    for t0, k in zip(times, sizes, strict=True):  # each kick: an arrow from before to after
+        before = float(np.sum([kk * math.exp(-(t0 - tk) / tc) for tk, kk in
+                               zip(times, sizes, strict=True) if tk < t0]))  # fmt: skip
+        b.annotate("", (t0, before + k), (t0, before),
+                   arrowprops={"arrowstyle": "-|>", "color": ORANGE, "lw": 2.2})  # fmt: skip
+    b.plot([], [], color=ORANGE, lw=2.2, label="kicks (random size and sign)")
+    b.plot([], [], color="#b8c4d1", lw=1.3, label="each kick fading on its own")
+    b.axhline(0, color=MUTED, lw=1)
+    b.set(xlabel="time [s]", ylabel="gust [kt]")
+    b.text(0, 1.03, "② several kicks (T = 1 s) add up", transform=b.transAxes,
+           fontweight="bold", fontsize=12.5)  # fmt: skip
+    b.legend(loc="lower right", fontsize=10.5)
+    fig.savefig(OUT / "fig_gu_decay.svg")
     plt.close(fig)
 
 
@@ -254,6 +303,7 @@ def main() -> None:
     fig_margin(data)
     table(data)
     fig_ou()
+    fig_decay()
     fig_run(data)
     print("\nwing averaging, moderate:")
     fig_wing()
