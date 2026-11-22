@@ -93,6 +93,21 @@ g.samples              # one row per run (go, stop, all-engines, field length, l
 method and time step, the seed, the pilot lag and the approach speed additive. See
 [Gust analysis](gusts.md).
 
+## Data uncertainty
+
+```python
+from bfl.uncertainty import UncertaintySettings, uncertainty_study
+
+u = uncertainty_study(load_config("b747_100"),
+                      UncertaintySettings(sigma_CL=0.04, sigma_CD=0.08, sigma_T=0.03, n=500))
+print(u.summary())
+u.percentiles()       # nominal, P50/P90/P95/P99 with confidence intervals
+u.sensitivity()       # each table's share of the runway spread
+u.samples             # one row per draw: k_CL, k_CD, k_T and every output
+```
+
+See [Data uncertainty](uncertainty.md).
+
 ## Aircraft that are not in `aircraft/`
 
 `analyze`, `load_config` and `trade_study` take any of:

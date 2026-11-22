@@ -15,7 +15,9 @@ The result to design to is **runway required = max(takeoff field length, landing
 required)**. A web app (simulator with animations, trade-study maps, aircraft builder)
 and a Python API give the same numbers. A separate **gust analysis** simulates hundreds of
 takeoffs and landings in random turbulence (a stochastic differential equation per run)
-and answers how much extra runway covers 95 % or 99 % of gusty days.
+and answers how much extra runway covers 95 % or 99 % of gusty days. A **data-uncertainty**
+analysis does the same for lift, drag and thrust tables known only to within a stated
+percentage, and shows which table's uncertainty matters most.
 
 ![Simulator](docs/simulator.png)
 
@@ -76,7 +78,7 @@ folder, an `aircraft.yaml` path, or a builder `.zip`.
 
 | path | contents |
 |---|---|
-| `src/bfl/` | the solver: `analysis` (one-call API), `bfl` (takeoff), `landing`, `trade` (trade studies), `gusts` (gust analysis), `sde` (stochastic methods), `config` (inputs and validation), physics (`atmosphere`, `aero`, `propulsion`, `dynamics`, `model`, `takeoff`, `phases`), numerics (`integrators`, `rootfind`, `optimize`, `tables`), `results`, `validation`, `plotting` |
+| `src/bfl/` | the solver: `analysis` (one-call API), `bfl` (takeoff), `landing`, `trade` (trade studies), `gusts` (gust analysis), `sde` (stochastic methods), `uncertainty` (data uncertainty), `config` (inputs and validation), physics (`atmosphere`, `aero`, `propulsion`, `dynamics`, `model`, `takeoff`, `phases`), numerics (`integrators`, `rootfind`, `optimize`, `tables`), `results`, `validation`, `plotting` |
 | `app/` | the Dash app; it calls only the public `bfl` API. `reference_aircraft.yaml` (tire-speed references, **placeholder values**) and `reference_runways.yaml` are editable |
 | `aircraft/` | the aircraft (yaml + CSV + README with sources) |
 | `docs/` | the documentation the app shows (About and Methods pages) |
@@ -86,7 +88,8 @@ folder, an `aircraft.yaml` path, or a builder `.zip`.
 
 All numerical methods (RK4, Dormand–Prince RK45, event location, secant and safeguarded
 secant, Brent's method, linear / natural cubic spline / bilinear interpolation,
-Euler–Maruyama and stochastic Heun, order-statistic confidence intervals) are
+Euler–Maruyama and stochastic Heun, order-statistic confidence intervals, Latin hypercube
+sampling) are
 hand-written; scipy is used only in the tests as an independent reference. The project
 started as a numerical-methods course project.
 

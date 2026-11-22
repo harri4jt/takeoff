@@ -7,6 +7,7 @@
 [Why is VR higher than 1.1 V_S?](#q-vr) ·
 [Is landing a concern for my design?](#q-landing) ·
 [How much extra runway for a gusty day?](#q-gusts) ·
+[How much margin for uncertain lift, drag and thrust data?](#q-data) ·
 [What do the warnings mean?](#q-warnings)
 
 **Inputs**
@@ -84,6 +85,17 @@ calm-day schedule through random Dryden gusts, and the runway that covers 90, 95
 of them. For the 747-100 in moderate turbulence, covering 95 % costs about +4 % on the
 takeoff field length and under 1 % on the landing. It is a probability, not a worst
 case. Details: [Gust analysis](gusts.md).
+
+<a id="q-data"></a>
+### How much margin for uncertain lift, drag and thrust data?
+
+The **Data uncertainty** page (☰ menu): state how far off each table might be (1σ, %), and
+it runs hundreds of full solves with randomly perturbed tables. The answer is the runway
+that is enough with 90, 95 or 99 % confidence, and each table's share of the spread. For
+the 747-100 with "typical CFD / NPSS" uncertainty (lift 4 %, drag 8 %, thrust 3 %), 95 %
+confidence costs about +1,000 ft (+11 %), mostly from lift. For single what-ifs (k_CL 0.95
+exactly), use the multiplier sliders or the trade study instead. Details:
+[Data uncertainty](uncertainty.md).
 
 <a id="q-warnings"></a>
 ### What do the warnings mean?

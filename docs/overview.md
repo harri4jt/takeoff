@@ -26,6 +26,7 @@ are physics-based and validated, but they are not certified performance.
 | add or edit an aircraft | **Aircraft builder** (☰ menu), then [Aircraft data](aircraft_data.md) for what each field means |
 | map runway length over lift and drag (or engine/aero tables) | **Trade study** (☰ menu) |
 | know how much extra runway a gusty day needs | **Gust analysis** (☰ menu) |
+| know how much margin uncertain lift / drag / thrust data needs | **Data uncertainty** (☰ menu) |
 | run cases from a script | [Using it from Python](python_usage.md) |
 | know what a number means or why it changed | [Questions and answers](faq.md) |
 | check the method or the numerics | the **Methods** page (☰ menu) |

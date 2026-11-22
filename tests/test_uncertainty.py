@@ -1,0 +1,123 @@
+"""Data uncertainty: sampling, statistics with failed draws, sensitivity, and the page."""
+
+from __future__ import annotations
+
+import json
+import math
+from statistics import NormalDist
+
+import numpy as np
+import pytest
+
+from bfl import load_config
+from bfl.uncertainty import (
+    UncertaintySettings,
+    quantile_ci_inf,
+    sample_factors,
+    uncertainty_study,
+)
+
+ND = NormalDist()
+
+
+def test_latin_hypercube_one_draw_per_stratum():
+    s = UncertaintySettings(sigma_CL=0.05, sigma_CD=0.1, sigma_T=0.03, n=200, method="lhs")
+    f = sample_factors(s)
+    lo, hi = ND.cdf(-3.0), ND.cdf(3.0)
+    for k, sig in s.sigmas().items():
+        u01 = (np.array([ND.cdf(v) for v in (f[k] - 1.0) / sig]) - lo) / (hi - lo)
+        strata = np.floor(u01 * s.n).astype(int)
+        assert sorted(strata) == list(range(s.n))  # every stratum exactly once
+        assert np.all(np.abs(f[k] - 1.0) <= 3.0 * sig + 1e-12)  # cut at 3 sigma
+
+
+def test_monte_carlo_draws_have_the_right_spread():
+    s = UncertaintySettings(sigma_CL=0.05, sigma_CD=0.0, sigma_T=0.02, n=4000, method="mc")
+    f = sample_factors(s)
+    assert f["k_CL"].mean() == pytest.approx(1.0, abs=0.004)
+    assert f["k_CL"].std() == pytest.approx(0.05 * 0.986, rel=0.05)  # truncation trims ~1.4 %
+    assert (f["k_CD"] == 1.0).all()
+    with pytest.raises(ValueError):
+        sample_factors(UncertaintySettings(method="sobol"))
+
+
+def test_quantile_ci_inf_keeps_failed_draws():
+    x = np.array([1.0, 2.0, 3.0, 4.0, math.inf, math.inf])
+    assert quantile_ci_inf(x, 0.5)[0] == 3.0
+    assert quantile_ci_inf(x, 0.9)[0] == math.inf  # a third of the draws never solve
+    y = np.arange(1, 1001, dtype=float)
+    est, lo, hi = quantile_ci_inf(y, 0.95)
+    assert est == 950.0 and lo < est < hi and hi - lo == pytest.approx(27, abs=3)
+
+
+def test_zero_uncertainty_is_the_nominal_answer():
+    cfg = load_config("b747_100")
+    u = uncertainty_study(cfg, UncertaintySettings(0.0, 0.0, 0.0, n=6))
+    assert (u.samples["error"] == "").all()
+    assert np.allclose(u.samples["takeoff_field_ft"], u.nominal["takeoff_field_ft"])
+    assert u.nominal["takeoff_field_ft"] == pytest.approx(9523, rel=1e-3)
+
+
+def test_sensitivity_finds_the_uncertain_table():
+    cfg = load_config("b747_100")
+    u = uncertainty_study(cfg, UncertaintySettings(0.05, 0.0, 0.0, n=40, landing=False))
+    sens = u.sensitivity("takeoff_field_ft")
+    assert list(sens["factor"]) == ["k_CL"]
+    assert sens["variance_share"].iloc[0] == pytest.approx(sens["r2"].iloc[0], rel=1e-6)
+    assert sens["per_sigma_ft"].iloc[0] < 0  # more lift, shorter field
+    both = uncertainty_study(cfg, UncertaintySettings(0.04, 0.08, 0.03, n=60, landing=False))
+    s2 = both.sensitivity("takeoff_field_ft")
+    assert s2["variance_share"].sum() == pytest.approx(s2["r2"].iloc[0], rel=1e-6)
+    assert "Data uncertainty" in both.summary()
+
+
+def test_draws_without_a_solution_count_as_infinite_runway():
+    """The 140,000 lb SR-71 is so marginal on one engine that a few % less lift or thrust
+    means no lift-off at all; those draws must not be dropped."""
+    u = uncertainty_study(load_config("sr71"), UncertaintySettings(0.04, 0.08, 0.03, n=60))
+    f = u.failure_rate("takeoff_field_ft")
+    assert 0.0 < f < 1.0
+    x = u.values("takeoff_field_ft")
+    assert np.isinf(x).sum() == round(f * len(x))
+    assert np.isfinite(u.values("landing_runway_ft")).all()  # landing is solved on its own
+    drivers = u.failure_drivers()
+    assert drivers["k_CD"] > 0  # failures come with more drag than nominal
+    tab = u.percentiles().set_index("output")
+    if f > 0.05:
+        assert math.isinf(tab.loc["takeoff_field_ft", "p95"])
+
+
+pytest.importorskip("dash")
+
+
+def test_uncertainty_page_end_to_end():
+    from app import main
+
+    from .test_app_builder import call
+
+    app = main.create_app()
+    client = app.server.test_client()
+    vals = {
+        ("un-run", "n_clicks"): 1, ("un-aircraft", "value"): "b747_100",
+        ("un-cl", "value"): 4, ("un-cd", "value"): 8, ("un-t", "value"): 3,
+        ("un-landing", "value"): ["on"], ("un-n", "value"): 30, ("un-weight", "value"): None,
+        ("un-temp", "value"): None, ("un-elev", "value"): None, ("un-wind", "value"): None,
+        ("un-cond", "value"): "", ("un-method", "value"): "lhs", ("un-seed", "value"): 2,
+        ("un-trunc", "value"): 3, ("current", "data"): None,
+    }  # fmt: skip
+    out = call(client, app, "un-result.data", vals, ["un-run.n_clicks"])
+    d = out["un-result"]["data"]
+    assert out["un-status"]["children"] == "" and len(d["errors"]) == 30
+    page = json.dumps(call(client, app, "un-results.children", {("un-result", "data"): d},
+                           ["un-result.data"]))  # fmt: skip
+    assert "is enough with 95 % confidence" in page
+    figs = call(client, app, "un-fig-margin.figure", {("un-results", "children"): [],
+                ("un-result", "data"): d}, ["un-results.children"])  # fmt: skip
+    assert "95 % confidence" in json.dumps(figs["un-fig-margin"]["figure"]["layout"]["title"])
+    assert "Which data matters" in json.dumps(figs["un-fig-sens"]["figure"]["layout"]["title"])
+    ov = {("un-other-btn", "n_clicks"): 1, ("un-result", "data"): d}
+    other = call(client, app, "un-other.data", ov, ["un-other-btn.n_clicks"])["un-other"]["data"]
+    assert other["settings"]["method"] == "mc"
+    preset = call(client, app, "..un-cl.value...un-cd.value...un-t.value..",
+                  {("un-preset", "value"): "early"}, ["un-preset.value"])  # fmt: skip
+    assert preset["un-cd"]["value"] == pytest.approx(15)

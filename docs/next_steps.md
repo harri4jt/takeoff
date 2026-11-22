@@ -468,3 +468,19 @@ credit, wet runway option, flare model detail (constant-g vs Raymer's flare radi
       the OU with L_w = h has L. Matching it means L_w = h/2 in the OU. Tested (moderate, 400 runs,
       same gusts): 747 P95 +376 → +380 ft (no change), SR-71 +1,093 → +985 ft (−10 %). Not yet
       changed in the code (waiting for the user).
+
+---
+
+## Round 10 (2026-11-22): data-uncertainty page
+
+- [x] `bfl.uncertainty`: k_CL, k_CD, k_T ~ normal(1, σ) cut at ±3σ; Monte Carlo or Latin
+      hypercube (hand-written); full solve per draw (takeoff + landing, solved independently);
+      draws with no solution counted as +∞ (never dropped); order-statistic CIs; variance
+      shares (sum to R²); failure drivers.
+- [x] **Data uncertainty page** (☰ › Data uncertainty): confidence presets (judgement values,
+      editable), 1σ % per table, answer cards with 90/95/99 % confidence, extra-runway vs
+      confidence chart, "which data matters" bars, per-table scatter, histogram, sampling
+      reliability with the drawn distributions and a Monte Carlo / LHS comparison.
+- Findings: 747 typical (4/8/3 %): +1,020 ft (+10.7 %) for 95 %, lift 56 %, thrust 34 %,
+  drag 9 %. SR-71 at 140 klb: ~21 % of draws cannot lift off on one engine → no runway gives
+  95 % confidence. LHS: mean 20× steadier than MC, P95 no better (tail set by rare combinations).

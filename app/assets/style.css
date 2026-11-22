@@ -463,3 +463,5 @@ details.adv[open] > summary::before { content: "▾ "; }
 .gu-card .m-value { font-size: 28px; font-weight: 700; margin: 4px 0 2px; }
 .gu-delta { font-weight: 600; font-size: 13.5px; margin-bottom: 4px; }
 .gu-empty { padding: 30px 8px; text-align: center; }
+.un-sig { width: 140px; }
+.un-sig .num-input { width: 100%; }

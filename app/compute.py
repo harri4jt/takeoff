@@ -304,3 +304,42 @@ def gust_convergence(cfg_json: str, settings_json: str) -> dict[str, Any]:
     df = convergence_study(cfg, s, dts=(0.04, 0.02, 0.01, 0.005), ref_dt=0.00125, n_paths=8,
                            outputs=outs, executor=_pool())  # fmt: skip
     return df.to_dict(orient="list")
+
+
+# ------------------------------------------------------------------------------------
+# data uncertainty (its own page; never part of the main run or the trade study)
+# ------------------------------------------------------------------------------------
+@lru_cache(maxsize=8)
+def uncertainty(cfg_json: str, settings_json: str) -> dict[str, Any]:
+    """bfl.uncertainty.uncertainty_study, reshaped for the page (JSON-friendly)."""
+    import numpy as np
+
+    from bfl.uncertainty import UncertaintySettings, uncertainty_study
+
+    cfg = RunConfig.model_validate_json(cfg_json)
+    s = UncertaintySettings(**json.loads(settings_json))
+    try:
+        res = uncertainty_study(cfg, s, executor=_pool())
+    except Exception:  # noqa: BLE001 - e.g. no multiprocessing: let it run serially
+        res = uncertainty_study(cfg, s)
+    main_out = "runway_required_ft" if s.landing else "takeoff_field_ft"
+    sens = res.sensitivity(main_out)
+    values = {c: [None if not np.isfinite(v) else float(v) for v in res.values(c)]
+              for c in ("runway_required_ft", "takeoff_field_ft", "landing_runway_ft",
+                        "bfl_ft", "aeo_ft") if c in res.samples}  # fmt: skip
+    return {
+        "ok": True,
+        "aircraft": res.aircraft_name,
+        "settings": json.loads(settings_json),
+        "factors": res.samples[["k_CL", "k_CD", "k_T"]].to_dict(orient="list"),
+        "values": values,  # None = no solution (needs more runway than any length)
+        "errors": res.samples["error"].tolist(),
+        "nominal": res.nominal,
+        "percentiles": res.percentiles().to_dict(orient="records"),
+        "sensitivity": sens.to_dict(orient="records"),
+        "main_output": main_out,
+        "failure_rate": res.failure_rate("takeoff_field_ft"),
+        "failure_drivers": res.failure_drivers(),
+        "summary": res.summary(),
+        "time_s": res.time_s,
+    }  # fmt: skip

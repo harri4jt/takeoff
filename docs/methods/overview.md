@@ -68,7 +68,8 @@ is what RK4's fourth-order accuracy assumes.
 | Linear / natural cubic spline / bilinear | `tables.py` | CL(α), CD(α), thrust(V, T) | [Interpolation](interpolation.md) |
 | Brent's method (golden section + parabolic steps) | `optimize.py` | the field-length-minimizing VR | [Rotation speed](../rotation_speed.md) |
 | Euler–Maruyama, stochastic Heun | `sde.py` | gusty takeoffs and landings | [Stochastic methods](sde.md) |
-| Monte Carlo percentiles, order-statistic intervals | `gusts.py` | the gust analysis's answers | [Stochastic methods](sde.md) |
+| Monte Carlo percentiles, order-statistic intervals | `gusts.py`, `uncertainty.py` | the gust and data-uncertainty answers | [Stochastic methods](sde.md) |
+| Latin hypercube sampling, variance shares | `uncertainty.py` | the data-uncertainty page | [Sampling](sampling.md) |
 
 ## Why the animation's stopping aircraft stops short of the red line
 
