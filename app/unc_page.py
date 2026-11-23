@@ -3,7 +3,7 @@ are only known to within some percentage (bfl.uncertainty).
 
 A side analysis like the gust page: nothing here feeds the simulator or the trade study.
 Written for a conceptual designer's end-of-pass runway check: the runway to plan for at
-90/95/99 % confidence, the chance a given runway is enough, which table matters for an
+90/95/99 % confidence, the chance a given runway is enough, which tables matter for an
 equal error (exact one-at-a-time solves), how far the design is from a no-takeoff cliff,
 and sliders over a response surface fitted to the draws. Method checks sit collapsed.
 """
@@ -74,8 +74,8 @@ def layout() -> html.Div:
                     dcc.Markdown(
                         "Lift, drag and thrust data are estimates. Say how far off each might be "
                         "(1σ, %); each draw scales the tables at random and runs a full solve. "
-                        "Out come the runway to plan for, the odds for the runways you could use, and whether the "
-                        "design is near a cliff.",
+                        "Out come the runway to plan for, the odds for the runways you could "
+                        "use, and whether the design is near a cliff.",
                         className="hint",
                     ),
                     html.Div(id="un-base", className="trade-base"),
