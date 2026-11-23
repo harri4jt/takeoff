@@ -114,6 +114,9 @@
   table.res td:first-child, table.res th:first-child { text-align: left; }
   table.res td.b { font-weight: 700; }
   .lim li { margin: 6px 0; }
+  .flow.sum .box { font-size: 17px; padding: 16px 16px; min-height: 130px; }
+  .flow.sum .box h4 { font-size: 19px; }
+  .flow.sum .box:not(:last-child)::after { right: -23px; }
 </style>
 </head>
 <body>
@@ -390,7 +393,7 @@
 <!-- 12 -->
 <section class="slide">
   <h2>Summary and limits</h2>
-  <div class="flow" style="grid-template-columns: repeat(5, 1fr); margin: 24px 0 28px;">
+  <div class="flow sum" style="grid-template-columns: repeat(5, 1fr); gap: 30px; margin: 44px 0 48px;">
     <div class="box"><h4>Dryden</h4>W<sub>20</sub>, h → strength σ, length L</div>
     <div class="box"><h4>Frozen air</h4>T = L / V: the gust's memory</div>
     <div class="box"><h4>SDE</h4>dg = −(g/T) dt + σ√(2/T) dW</div>
@@ -398,11 +401,11 @@
     <div class="box"><h4>Many runs</h4>P95 with an order-statistics interval</div>
   </div>
   <div class="two" style="grid-template-columns: 1fr 1fr; gap: 26px;">
-    <div class="key" style="font-size: 19px; padding: 16px 20px;"><b>Answer:</b> in moderate turbulence, <b>+394 ft ± 45</b>
+    <div class="key" style="font-size: 21px; padding: 20px 24px;"><b>Answer:</b> in moderate turbulence, <b>+394 ft ± 45</b>
       covers 95 % of 747-100 takeoffs (4 % over calm). The SR-71 needs +1,044 ft (9 %).</div>
     <div class="box" style="padding: 14px 20px;">
       <div class="colhead">Limits</div>
-      <ul class="tight lim" style="font-size: 16.5px;">
+      <ul class="tight lim" style="font-size: 17.5px;">
         <li>Vertical gusts: Dryden's vertical spectrum isn't exactly exponential; we use the same equation with
           L<sub>w</sub> = h</li>
         <li>Near the ground the Dryden formulas are extrapolated</li>
