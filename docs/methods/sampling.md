@@ -40,6 +40,25 @@ fail. The confidence interval is the distribution-free order-statistic interval 
 [Stochastic methods](sde.md) (the number of draws below the true quantile is Binomial(N, p)),
 kept with the infinities.
 
+## The profiler: a response surface
+
+The draws are scattered (not on a grid), so to show the runway at any combination of table
+errors the page fits a **quadratic response surface** through them,
+
+$$ y \approx c_0 + \sum_j c_j x_j + \sum_{i \le j} c_{ij} x_i x_j, \qquad x_j = k_j - 1, $$
+
+ten coefficients by linear least squares. Its accuracy is checked on draws it did not see by
+**leave-one-out cross-validation**, without refitting: the left-out residual of draw $i$ is
+$e_i / (1 - h_{ii})$, with $h_{ii}$ the diagonal of the hat matrix $A(A^TA)^{-1}A^T$ (computed from a
+QR factorization). For the 747 it is about ±9 ft over ±3σ of every table; a fresh full solve
+at $(0.95, 1.05, 0.97)$ agrees with it to 10 ft.
+
+Where some draws have no solution, a **logistic regression** $P(\text{no solution}) =
+1/(1 + e^{-(b_0 + b \cdot x)})$ is fitted by Newton's method (iteratively reweighted least
+squares). The physics is deterministic, so the boundary is sharp and the data separable; a tiny
+ridge term and a clipped exponent keep the coefficients finite. The profiler shades where
+$P > 0.5$.
+
 ## Which table matters: variance shares
 
 Over the draws that solved, fit $y \approx b_0 + \sum_j b_j z_j$ with the standardized factors

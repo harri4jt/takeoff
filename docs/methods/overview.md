@@ -70,6 +70,7 @@ is what RK4's fourth-order accuracy assumes.
 | Euler–Maruyama, stochastic Heun | `sde.py` | gusty takeoffs and landings | [Stochastic methods](sde.md) |
 | Monte Carlo percentiles, order-statistic intervals | `gusts.py`, `uncertainty.py` | the gust and data-uncertainty answers | [Stochastic methods](sde.md) |
 | Latin hypercube sampling, variance shares | `uncertainty.py` | the data-uncertainty page | [Sampling](sampling.md) |
+| Response surface (least squares, leave-one-out), logistic regression (Newton) | `uncertainty.py` | the data-uncertainty profiler | [Sampling](sampling.md) |
 
 ## Why the animation's stopping aircraft stops short of the red line
 

@@ -484,3 +484,7 @@ credit, wet runway option, flare model detail (constant-g vs Raymer's flare radi
 - Findings: 747 typical (4/8/3 %): +1,020 ft (+10.7 %) for 95 %, lift 56 %, thrust 34 %,
   drag 9 %. SR-71 at 140 klb: ~21 % of draws cannot lift off on one engine → no runway gives
   95 % confidence. LHS: mean 20× steadier than MC, P95 no better (tail set by rare combinations).
+- [x] Round 10b: presets removed (±5 % default each), ± on the inputs, a live plot of the three
+      distributions, pie of variance shares (+ "not a straight-line effect"), profiler with
+      sliders (quadratic response surface, LOO accuracy; logistic no-takeoff region),
+      explained scatter.

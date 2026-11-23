@@ -465,3 +465,15 @@ details.adv[open] > summary::before { content: "▾ "; }
 .gu-empty { padding: 30px 8px; text-align: center; }
 .un-sig { width: 140px; }
 .un-sig .num-input { width: 100%; }
+.un-setup-top { display: grid; grid-template-columns: 1fr 420px; gap: 14px; align-items: start; }
+@media (max-width: 1000px) { .un-setup-top { grid-template-columns: 1fr; } }
+.un-pm { display: flex; align-items: center; gap: 4px; font-weight: 600; }
+.un-pm .num-input { width: 70px; }
+.un-sig { width: 120px; }
+.un-sliders { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 10px 0 4px; }
+.un-slider label { font-weight: 600; font-size: 13px; }
+.un-shares { display: grid; grid-template-columns: 1.1fr 1fr; gap: 18px; align-items: center; }
+@media (max-width: 1000px) { .un-shares { grid-template-columns: 1fr; } }
+.un-shares .dtab { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 8px; }
+.un-shares .dtab th, .un-shares .dtab td { padding: 4px 8px; text-align: right; border-bottom: 1px solid var(--line); }
+.un-shares .dtab th:first-child, .un-shares .dtab td:first-child { text-align: left; }

@@ -64,24 +64,13 @@ OUTPUTS = {  # column: (label, unit)
     "bfl_ft": ("Balanced field length", "ft"),
     "aeo_ft": ("All-engines distance", "ft"),
 }
-# Starting points for the 1-sigma uncertainty of each table. JUDGEMENT VALUES, not
-# from a standard: tables matched to test data are tighter than raw CFD / cycle-deck
-# output, which is tighter than early estimates. Edit them to your own confidence.
-PRESETS = {
-    "validated": {"label": "Validated against test", "sigma_CL": 0.02, "sigma_CD": 0.04,
-                  "sigma_T": 0.015},
-    "typical": {"label": "Typical CFD / NPSS", "sigma_CL": 0.04, "sigma_CD": 0.08,
-                "sigma_T": 0.03},
-    "early": {"label": "Early concept estimate", "sigma_CL": 0.08, "sigma_CD": 0.15,
-              "sigma_T": 0.05},
-}  # fmt: skip
 
 
 @dataclass
 class UncertaintySettings:
-    sigma_CL: float = 0.04  # 1-sigma relative uncertainty of the CL table
-    sigma_CD: float = 0.08
-    sigma_T: float = 0.03
+    sigma_CL: float = 0.05  # 1-sigma relative uncertainty of the CL table
+    sigma_CD: float = 0.05
+    sigma_T: float = 0.05
     n: int = 500
     method: Literal["lhs", "mc"] = "lhs"
     seed: int = 1
@@ -140,6 +129,32 @@ def quantile_ci_inf(x: np.ndarray, p: float, level: float = 0.95) -> tuple[float
 
 TAKEOFF_COLS = ("takeoff_field_ft", "bfl_ft", "aeo_ft")
 LANDING_COLS = ("landing_runway_ft",)
+
+
+def _quad_terms(x: np.ndarray) -> np.ndarray:
+    """[1, x1, x2, x3, x1^2, x1 x2, x1 x3, x2^2, x2 x3, x3^2] per row."""
+    cols = [np.ones(len(x))] + [x[:, j] for j in range(3)]
+    cols += [x[:, i] * x[:, j] for i in range(3) for j in range(i, 3)]
+    return np.column_stack(cols)
+
+
+def predict_surface(surface: dict, k_cl, k_cd, k_t) -> np.ndarray:
+    """Evaluate a response_surface() at multipliers (arrays broadcast)."""
+    k = np.broadcast_arrays(np.asarray(k_cl, float), np.asarray(k_cd, float),
+                            np.asarray(k_t, float))  # fmt: skip
+    x = np.column_stack([v.ravel() - 1.0 for v in k])
+    return (_quad_terms(x) @ np.asarray(surface["coef"])).reshape(k[0].shape)
+
+
+def predict_failure(model: dict, k_cl, k_cd, k_t) -> np.ndarray:
+    """P(no solution) from failure_model() at multipliers (arrays broadcast)."""
+    if not model:
+        return np.zeros(np.broadcast(np.asarray(k_cl), np.asarray(k_cd), np.asarray(k_t)).shape)
+    b = np.asarray(model["coef"])
+    k = np.broadcast_arrays(np.asarray(k_cl, float), np.asarray(k_cd, float),
+                            np.asarray(k_t, float))  # fmt: skip
+    eta = b[0] + sum(b[j + 1] * (k[j] - 1.0) for j in range(3))
+    return 1.0 / (1.0 + np.exp(-np.clip(eta, -50.0, 50.0)))
 
 
 def _solve_cases(args: tuple) -> list[dict]:
@@ -274,6 +289,56 @@ class UncertaintyResult:
                 out[k] = float(((bad[k] - 1.0) / sig).mean())
         return out
 
+    def response_surface(self, output: str = "runway_required_ft") -> dict[str, Any]:
+        """Quadratic response surface fitted to the draws that solved (for a profiler).
+
+        y ~ c0 + sum_j c_j x_j + sum_{i<=j} c_ij x_i x_j,  x_j = k_j - 1 (relative error),
+        10 coefficients by linear least squares. Accuracy is checked on draws the fit did
+        not see, by leave-one-out cross-validation without refitting: the left-out residual
+        is e_i / (1 - h_ii), h_ii the diagonal of the hat matrix A (A'A)^-1 A'.
+        """
+        df = self.samples[self.solved(output)] if output in self.samples else self.samples
+        x = df[["k_CL", "k_CD", "k_T"]].to_numpy(float) - 1.0
+        y = df[output].to_numpy(float) if output in df else np.array([])
+        if len(y) < 15:
+            return {}
+        a = _quad_terms(x)
+        coef, *_ = np.linalg.lstsq(a, y, rcond=None)
+        res = y - a @ coef
+        q, _ = np.linalg.qr(a)  # hat matrix diagonal without forming A (A'A)^-1 A'
+        h = np.sum(q * q, axis=1)
+        loo = res / np.clip(1.0 - h, 1e-9, None)
+        var_y = float(np.var(y))
+        return {"output": output, "coef": coef.tolist(),
+                "r2": 1.0 - float(np.var(res)) / var_y if var_y > 0 else float("nan"),
+                "rms_ft": float(np.sqrt(np.mean(res**2))),
+                "loo_rms_ft": float(np.sqrt(np.mean(loo**2))), "n": len(y)}  # fmt: skip
+
+    def failure_model(self, output: str = "takeoff_field_ft") -> dict[str, Any]:
+        """Logistic regression P(no solution) = 1 / (1 + exp(-(b0 + b.x))), x = k - 1,
+        fitted by Newton's method (iteratively reweighted least squares). Empty when
+        there are too few failures (or successes) to fit. The physics is deterministic, so
+        the boundary is usually sharp (the data are separable): the tiny ridge term and
+        the clipped exponent keep the fit finite, giving a near-step P."""
+        ok = self.solved(output)
+        n_fail = int((~ok).sum())
+        if n_fail < 3 or int(ok.sum()) < 3:
+            return {}
+        x = self.samples[["k_CL", "k_CD", "k_T"]].to_numpy(float) - 1.0
+        a = np.column_stack([np.ones(len(x)), x])
+        t = (~ok).astype(float)
+        b = np.zeros(a.shape[1])
+        for _ in range(50):
+            p = 1.0 / (1.0 + np.exp(-np.clip(a @ b, -50.0, 50.0)))
+            w = np.clip(p * (1.0 - p), 1e-9, None)
+            grad = a.T @ (t - p)
+            hess = (a * w[:, None]).T @ a + 1e-6 * np.eye(len(b))  # tiny ridge: separable data
+            step = np.linalg.solve(hess, grad)
+            b += step
+            if np.max(np.abs(step)) < 1e-8:
+                break
+        return {"coef": b.tolist(), "n_fail": n_fail}
+
     def summary(self) -> str:
         s = self.settings
         lines = [
@@ -341,5 +406,5 @@ def uncertainty_study(
 
 
 __all__ = ["UncertaintySettings", "UncertaintyResult", "uncertainty_study", "sample_factors",
-           "quantile_ci_inf",
-           "PARAMS", "PRESETS", "OUTPUTS"]  # fmt: skip
+           "quantile_ci_inf", "predict_surface", "predict_failure",
+           "PARAMS", "OUTPUTS"]  # fmt: skip

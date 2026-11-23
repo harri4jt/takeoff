@@ -340,6 +340,8 @@ def uncertainty(cfg_json: str, settings_json: str) -> dict[str, Any]:
         "main_output": main_out,
         "failure_rate": res.failure_rate("takeoff_field_ft"),
         "failure_drivers": res.failure_drivers(),
+        "surface": res.response_surface(main_out),
+        "failure_model": res.failure_model(),
         "summary": res.summary(),
         "time_s": res.time_s,
     }  # fmt: skip

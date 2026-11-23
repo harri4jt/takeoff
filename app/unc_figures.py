@@ -10,7 +10,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from bfl.uncertainty import quantile_ci_inf
+from bfl.uncertainty import predict_failure, predict_surface, quantile_ci_inf
 
 from .figures import BFL_C, C1, C2, C3, INK, MUTED, empty
 from .gust_figures import COLORS, COVER_TICKS, _layout, _rgba
@@ -100,39 +100,10 @@ def margin_curve(d: dict) -> go.Figure:
     return _layout(fig, title, _subtitle(d) + " · shaded: 95 % confidence of the estimate", 460)
 
 
-def sensitivity(d: dict) -> go.Figure:
-    """Each table's share of the runway spread (variance decomposition)."""
-    sens = d.get("sensitivity") or []
-    if not sens:
-        return empty("No spread to split (all uncertainties zero?)")
-    sens = sorted(sens, key=lambda r: r["variance_share"])
-    fig = go.Figure()
-    fig.add_bar(
-        y=[FACTOR_LABEL[r["factor"]] for r in sens],
-        x=[100 * r["variance_share"] for r in sens],
-        orientation="h",
-        marker={"color": [FACTOR_C[r["factor"]] for r in sens]},
-        text=[
-            f"{100 * r['variance_share']:.0f} %   ({r['per_sigma_ft']:+,.0f} ft per +1σ)"
-            for r in sens
-        ],  # fmt: skip
-        textposition="outside",
-        cliponaxis=False,
-        hovertemplate="%{y}: %{x:.0f} % of the spread<extra></extra>",
-        showlegend=False,
-    )
-    top = sens[-1]
-    fig.update_xaxes(title="share of the runway spread [%]", range=[0, 128], ticksuffix=" %")
-    sub = (f"{OUT_LABEL[d['main_output']]} · a straight-line fit explains "
-           f"{100 * sens[0]['r2']:.0f} % of the spread")  # fmt: skip
-    if d["failure_rate"] > 0:
-        drv = ", ".join(f"{FACTOR_LABEL[k]} {v:+.1f}σ" for k, v in d["failure_drivers"].items())
-        share = 100 * d["failure_rate"]
-        sub += f"<br>draws with no takeoff solution ({share:.0f} %) average: {drv}"
-    fig = _layout(fig, f"Which data matters: {FACTOR_LABEL[top['factor']]} drives "
-                  f"{100 * top['variance_share']:.0f} % of the spread", sub, 300)  # fmt: skip
-    fig.update_layout(margin={"l": 110, "t": 90 if d["failure_rate"] > 0 else 74, "b": 50})
-    return fig
+_SCATTER_SUB = (
+    "each dot is one draw · dashed: straight-line trend · tight band = that table "
+    "controls the runway; vertical scatter = the other tables' errors"
+)
 
 
 def scatter(d: dict) -> go.Figure:
@@ -143,8 +114,14 @@ def scatter(d: dict) -> go.Figure:
     s = d["settings"]
     sig = {"k_CL": s["sigma_CL"], "k_CD": s["sigma_CD"], "k_T": s["sigma_T"]}
     per = {r["factor"]: r["per_sigma_ft"] for r in d.get("sensitivity") or []}
+    titles = []
+    for k in FACTOR_C:
+        if k in per and sig[k] > 0:
+            titles.append(f"{FACTOR_LABEL[k]}: {per[k] / (100 * sig[k]):+,.0f} ft per +1 %")
+        else:
+            titles.append(FACTOR_LABEL[k])
     fig = make_subplots(1, 3, shared_yaxes=True, horizontal_spacing=0.04,
-                        subplot_titles=[FACTOR_LABEL[k] for k in FACTOR_C])  # fmt: skip
+                        subplot_titles=titles)  # fmt: skip
     top = float(np.max(y[fin])) * 1.08 if fin.any() else 1.0
     for j, k in enumerate(FACTOR_C, 1):
         xk = 100 * (np.asarray(d["factors"][k]) - 1.0)
@@ -162,11 +139,12 @@ def scatter(d: dict) -> go.Figure:
             fig.add_scatter(x=xs, y=per[k] * xs / (100 * sig[k]), mode="lines", row=1, col=j,
                             line={"color": INK, "width": 1.5, "dash": "dash"}, showlegend=False,
                             hoverinfo="skip")  # fmt: skip
-        fig.update_xaxes(title="change in the table [%]", ticksuffix=" %", row=1, col=j)
+        fig.update_xaxes(title="how wrong that table was in this draw [%]", ticksuffix=" %",
+                         tickformat="+", row=1, col=j)  # fmt: skip
     fig.update_yaxes(title=f"{OUT_LABEL[key].lower()} − nominal [ft]", tickformat="+,", col=1)
     fig.update_annotations(font={"size": 12, "color": MUTED})
-    fig = _layout(fig, "Each draw against each table's error", _subtitle(d)
-                  + " · dashed: straight-line trend", 380)  # fmt: skip
+    fig = _layout(fig, "Every draw, three times: once against each table's error",
+                  _SCATTER_SUB, 380)  # fmt: skip
     fig.update_layout(margin={"t": 96}, legend={"y": -0.24})
     return fig
 
@@ -269,5 +247,132 @@ def inputs(d: dict) -> go.Figure:
     return fig
 
 
-__all__ = ["margin_curve", "sensitivity", "scatter", "distribution", "convergence", "inputs",
-           "values", "OUT_LABEL"]  # fmt: skip
+# ------------------------------------------------------------------------------------
+# setup: the three distributions being sampled
+# ------------------------------------------------------------------------------------
+def sigma_curves(s_cl: float, s_cd: float, s_t: float) -> go.Figure:
+    """Normal(1, sigma) for each table on one axis: what the draws will look like."""
+    sig = {"k_CL": s_cl / 100, "k_CD": s_cd / 100, "k_T": s_t / 100}
+    span = max([3 * v for v in sig.values() if v > 0] + [0.05]) * 1.08
+    xs = np.linspace(1 - span, 1 + span, 400)
+    fig = go.Figure()
+    for k, v in sig.items():
+        name = f"{FACTOR_LABEL[k]} ±{100 * v:g} %"
+        if v <= 0:
+            fig.add_scatter(x=[1, 1], y=[0, 1], mode="lines", name=name + " (exact)",
+                            line={"color": FACTOR_C[k], "width": 2.5, "dash": "dot"})  # fmt: skip
+            continue
+        pdf = np.exp(-0.5 * ((xs - 1) / v) ** 2) / (v * math.sqrt(2 * math.pi))
+        pdf = np.where(np.abs(xs - 1) <= 3 * v, pdf, np.nan)  # draws are cut at ±3σ
+        fig.add_scatter(x=xs, y=pdf / np.nanmax(pdf), mode="lines", name=name,
+                        line={"color": FACTOR_C[k], "width": 2.5}, fill="tozeroy",
+                        fillcolor=_rgba(FACTOR_C[k], 0.08),
+                        hovertemplate=FACTOR_LABEL[k] + "<br>multiplier %{x:.3f}"
+                        + "<extra></extra>")  # fmt: skip
+    fig.add_vline(x=1, line={"color": MUTED, "width": 1, "dash": "dot"})
+    fig.update_xaxes(title="multiplier on the table (1 = the table as it is)", tickformat=".2f")
+    fig.update_yaxes(title="relative likelihood", showticklabels=False, rangemode="tozero")
+    fig = _layout(fig, "What will be drawn", "normal around 1, cut at ±3σ", 250)
+    fig.update_layout(margin={"t": 58, "b": 44, "l": 40, "r": 12},
+                      legend={"orientation": "v", "y": 1, "x": 1.0, "xanchor": "right",
+                              "bgcolor": "rgba(255,255,255,0.8)"})  # fmt: skip
+    return fig
+
+
+# ------------------------------------------------------------------------------------
+# the profiler: runway against each multiplier, the others held at the slider values
+# ------------------------------------------------------------------------------------
+def profiler(d: dict, sel: dict[str, float]) -> go.Figure:
+    surf, fail = d.get("surface") or {}, d.get("failure_model") or {}
+    if not surf:
+        return empty("Too few draws solved to fit a response surface")
+    s = d["settings"]
+    sig = {"k_CL": s["sigma_CL"], "k_CD": s["sigma_CD"], "k_T": s["sigma_T"]}
+    key = d["main_output"]
+    nom = d["nominal"][key]
+    order = list(FACTOR_C)
+    fig = make_subplots(1, 3, shared_yaxes=True, horizontal_spacing=0.035,
+                        subplot_titles=[f"runway vs {FACTOR_LABEL[k]}" for k in order])  # fmt: skip
+    here = float(predict_surface(surf, sel["k_CL"], sel["k_CD"], sel["k_T"]))
+    p_here = float(predict_failure(fail, sel["k_CL"], sel["k_CD"], sel["k_T"]))
+    ys = []
+    for j, k in enumerate(order, 1):
+        v = sig[k] if sig[k] > 0 else 0.0
+        xs = np.linspace(1 - 3 * v, 1 + 3 * v, 121) if v > 0 else np.array([0.999, 1.001])
+        args = {kk: (xs if kk == k else np.full_like(xs, sel[kk])) for kk in order}
+        y = predict_surface(surf, args["k_CL"], args["k_CD"], args["k_T"])
+        pf = predict_failure(fail, args["k_CL"], args["k_CD"], args["k_T"])
+        good = pf < 0.5
+        ys.append(y[good])
+        fig.add_scatter(x=xs, y=np.where(good, y, np.nan), mode="lines", row=1, col=j,
+                        line={"color": FACTOR_C[k], "width": 3}, showlegend=False,
+                        hovertemplate=FACTOR_LABEL[k] + " × %{x:.3f}: %{y:,.0f} ft"
+                        + "<extra></extra>")  # fmt: skip
+        if (~good).any():  # predicted: no engine-out takeoff
+            xb = xs[~good]
+            fig.add_vrect(x0=float(xb.min()), x1=float(xb.max()), fillcolor=_rgba(BFL_C, 0.12),
+                          line_width=0, row=1, col=j,
+                          annotation_text="no takeoff", annotation_position="top left",
+                          annotation_font={"color": BFL_C, "size": 11})  # fmt: skip
+        fig.add_vline(x=sel[k], line={"color": INK, "width": 1.5, "dash": "dash"}, row=1, col=j)
+        if p_here < 0.5:
+            fig.add_scatter(x=[sel[k]], y=[here], mode="markers", row=1, col=j,
+                            marker={"size": 11, "color": "white",
+                                    "line": {"color": INK, "width": 2.5}},
+                            showlegend=False, hoverinfo="skip")  # fmt: skip
+        fig.update_xaxes(title=f"{FACTOR_LABEL[k]} multiplier", tickformat=".2f", row=1, col=j)
+    allv = np.concatenate([v for v in ys if len(v)] + [[nom]])
+    pad = 0.06 * (allv.max() - allv.min() + 1)
+    fig.update_yaxes(range=[allv.min() - pad, allv.max() + pad], title=OUT_LABEL[key] + " [ft]",
+                     tickformat=",", col=1)  # fmt: skip
+    fig.add_hline(y=nom, line={"color": MUTED, "width": 1, "dash": "dot"})
+    fig.update_annotations(font={"size": 12, "color": MUTED})
+    point = ", ".join(f"{FACTOR_LABEL[k]} ×{sel[k]:.3f}" for k in order)
+    if p_here >= 0.5:
+        title = "At this point the aircraft is not expected to make an engine-out takeoff"
+    else:
+        title = f"{OUT_LABEL[key]} at the selected point: {here:,.0f} ft ({here - nom:+,.0f} ft)"
+    sub = (f"{point} · from a response surface fitted to the {surf['n']} draws "
+           f"(accurate to about ±{surf['loo_rms_ft']:.0f} ft on draws it did not see)")  # fmt: skip
+    fig = _layout(fig, title, sub, 360)
+    fig.update_layout(margin={"t": 100}, hovermode="closest")
+    return fig
+
+
+# ------------------------------------------------------------------------------------
+# where the uncertainty comes from: shares as a pie
+# ------------------------------------------------------------------------------------
+def shares_pie(d: dict) -> go.Figure:
+    sens = d.get("sensitivity") or []
+    if not sens:
+        return empty("No spread to split (all uncertainties zero?)")
+    sens = sorted(sens, key=lambda r: -r["variance_share"])
+    labels = [FACTOR_LABEL[r["factor"]] for r in sens]
+    vals = [max(r["variance_share"], 0.0) for r in sens]
+    colors = [FACTOR_C[r["factor"]] for r in sens]
+    rest = max(0.0, 1.0 - sum(vals))
+    if rest > 0.005:
+        labels.append("not a straight-line effect")
+        vals.append(rest)
+        colors.append("#c7cfd8")
+    fig = go.Figure(go.Pie(labels=labels, values=vals, hole=0.45, sort=False, direction="clockwise",
+                           marker={"colors": colors, "line": {"color": "white", "width": 2}},
+                           texttemplate=[f"<b>{100 * v / sum(vals):.0f} %</b>" if v / sum(vals)
+                                         > 0.04 else "" for v in vals],
+                           textposition="inside", insidetextorientation="horizontal",
+                           textfont={"size": 15, "color": "white"},
+                           hovertemplate="%{label}: %{percent}<extra></extra>"))  # fmt: skip
+    top = sens[0]
+    fig = _layout(fig, f"Where the runway uncertainty comes from: mostly {labels[0]}",
+                  OUT_LABEL[d["main_output"]], 340)  # fmt: skip
+    fig.update_layout(showlegend=True, margin={"t": 80, "b": 20, "l": 20, "r": 20},
+                      legend={"orientation": "v", "x": 1.0, "y": 0.5, "xanchor": "left",
+                              "font": {"size": 13}})  # fmt: skip
+    del top
+    return fig
+
+
+__all__ = [
+    "sigma_curves", "profiler", "shares_pie", "margin_curve", "scatter",
+    "distribution", "convergence", "inputs", "values", "OUT_LABEL",
+]  # fmt: skip

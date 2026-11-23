@@ -19,26 +19,19 @@ and runs a full solve (balanced field length with the rotation-speed optimizer, 
 field length, landing). Over hundreds of draws this gives the spread of the answer that
 the data uncertainty causes:
 
-> **P95 = 10,543 ft** means: with this confidence in the tables, 10,543 ft of runway is
-> enough with 95 % confidence (747-100, "Typical CFD / NPSS": +1,020 ft, +10.7 % over the
+> **P95 = 11,043 ft** means: with this confidence in the tables, 11,043 ft of runway is
+> enough with 95 % confidence (747-100, ±5 % on all three tables: +1,520 ft, +16 % over the
 > nominal 9,523 ft).
 
 The factors multiply whatever the base case already has (e.g. the simulator's k_CL
 slider), so the *nominal* is the base case itself.
 
-## The confidence presets
+## Setting the uncertainty
 
-There is no standard for the uncertainty of CFD or cycle-deck tables, so the presets are
-**starting points (judgement)** to be edited:
-
-| preset | lift 1σ | drag 1σ | thrust 1σ |
-|---|---:|---:|---:|
-| Validated against test | 2 % | 4 % | 1.5 % |
-| Typical CFD / NPSS | 4 % | 8 % | 3 % |
-| Early concept estimate | 8 % | 15 % | 5 % |
-
-Drag is usually the least certain (it depends on details CFD struggles with); thrust from
-a cycle deck is usually the most certain.
+Each table gets a **±1σ percentage**, ±5 % by default. There is no standard for the
+uncertainty of CFD or cycle-deck tables, so these are judgement: drag is usually the least
+certain (it depends on details CFD struggles with), thrust from a cycle deck usually the
+most. The plot beside the inputs shows the three distributions that will be drawn.
 
 ## Reading the page
 
@@ -46,8 +39,9 @@ a cycle deck is usually the most certain.
 |---|---|
 | **Answer** | the runway that is enough with 90 / 95 / 99 % confidence, for the takeoff field length, the landing runway and (when they trade places) the larger, with the margin over nominal and the estimate's own 95 % range |
 | **Extra runway vs confidence** | the whole answer in one chart (probability-scaled x axis, shaded sampling uncertainty) |
-| **Which data matters** | each table's share of the runway spread, and the runway change for a +1σ error in that table. Improve the data that dominates first |
-| **Each draw against each table's error** | the draws behind the shares, with the straight-line trend |
+| **Explore (profiler)** | three plots, runway against each multiplier, with sliders setting the other two: "what if drag is 10 % high and thrust 3 % low?". The curves come from a quadratic response surface fitted through the draws (its accuracy, checked on draws it did not see, is in the subtitle); regions where the aircraft is predicted not to take off at all are shaded |
+| **Where the uncertainty comes from** | a pie: each table's share of the runway spread (its variance). If a table were known exactly, the spread would shrink by its share. Grey: the part a straight-line model cannot explain. The table beside it gives the runway change per 1 % and per 1σ error |
+| **Every draw, three times** | each draw plotted against each table's error: a tight band means that table alone sets the runway, vertical scatter is the other tables' errors; the panel titles give the slope (ft per 1 %) |
 | **The spread of the answer** | the histogram, nominal and 95 % point |
 | **How reliable** | the 95 % point settling as draws accumulate; the drawn factors against the intended normal curves; a one-click comparison with the other sampling method |
 
@@ -57,8 +51,8 @@ Some draws have **no takeoff solution**: with less lift and thrust or more drag 
 cannot lift off on one engine at all. These are not dropped (that would hide the worst
 cases): they count as needing more runway than any length. If more than 5 % of draws fail,
 **no runway gives 95 % confidence**, and the page says so, with the average error of the
-failing draws ("drag +1.1σ, lift −0.6σ, …"). Example: the 140,000 lb SR-71 at "Typical",
-where about 21 % of draws cannot lift off on one engine.
+failing draws ("drag +1.1σ, lift −0.6σ, …"). Example: the 140,000 lb SR-71 at ±5 %, where
+about 22 % of draws cannot lift off on one engine; the profiler shades where that happens.
 
 ## Limits
 

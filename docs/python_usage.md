@@ -99,10 +99,11 @@ method and time step, the seed, the pilot lag and the approach speed additive. S
 from bfl.uncertainty import UncertaintySettings, uncertainty_study
 
 u = uncertainty_study(load_config("b747_100"),
-                      UncertaintySettings(sigma_CL=0.04, sigma_CD=0.08, sigma_T=0.03, n=500))
+                      UncertaintySettings(sigma_CL=0.05, sigma_CD=0.05, sigma_T=0.05, n=500))
 print(u.summary())
 u.percentiles()       # nominal, P50/P90/P95/P99 with confidence intervals
 u.sensitivity()       # each table's share of the runway spread
+u.response_surface()  # the profiler's quadratic model (bfl.uncertainty.predict_surface)
 u.samples             # one row per draw: k_CL, k_CD, k_T and every output
 ```
 

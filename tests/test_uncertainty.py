@@ -71,6 +71,24 @@ def test_sensitivity_finds_the_uncertain_table():
     assert "Data uncertainty" in both.summary()
 
 
+def test_response_surface_predicts_unseen_cases():
+    """The profiler's quadratic surface reproduces fresh full solves within tens of feet,
+    and the failure model marks where the SR-71 cannot take off."""
+    from bfl import compute_bfl
+    from bfl.uncertainty import predict_failure, predict_surface
+
+    cfg = load_config("b747_100")
+    u = uncertainty_study(cfg, UncertaintySettings(n=120, landing=False))
+    rs = u.response_surface("takeoff_field_ft")
+    assert rs["r2"] > 0.99 and rs["loo_rms_ft"] < 40
+    k = (0.95, 1.05, 0.97)
+    true = compute_bfl(cfg.with_updates({"k_CL": k[0], "k_CD": k[1], "k_T": k[2]})).field_length_ft
+    assert float(predict_surface(rs, *k)) == pytest.approx(true, abs=60)
+    sr = uncertainty_study(load_config("sr71"), UncertaintySettings(n=120, landing=False))
+    fm = sr.failure_model()
+    assert fm and predict_failure(fm, 0.92, 1.0, 1.0) > 0.5 > predict_failure(fm, 1.05, 1.0, 1.0)
+
+
 def test_draws_without_a_solution_count_as_infinite_runway():
     """The 140,000 lb SR-71 is so marginal on one engine that a few % less lift or thrust
     means no lift-off at all; those draws must not be dropped."""
@@ -114,10 +132,14 @@ def test_uncertainty_page_end_to_end():
     figs = call(client, app, "un-fig-margin.figure", {("un-results", "children"): [],
                 ("un-result", "data"): d}, ["un-results.children"])  # fmt: skip
     assert "95 % confidence" in json.dumps(figs["un-fig-margin"]["figure"]["layout"]["title"])
-    assert "Which data matters" in json.dumps(figs["un-fig-sens"]["figure"]["layout"]["title"])
+    assert "comes from" in json.dumps(figs["un-fig-pie"]["figure"]["layout"]["title"])
+    prof = call(client, app, "un-fig-prof.figure", {("un-sl-cl", "value"): 1.0,
+                ("un-sl-cd", "value"): 0.9, ("un-sl-t", "value"): 1.0, ("un-result", "data"): d},
+                ["un-sl-cd.value"])["un-fig-prof"]["figure"]  # fmt: skip
+    assert "drag (CD) ×0.900" in json.dumps(prof["layout"]["title"], ensure_ascii=False)
+    sig = call(client, app, "un-fig-sigmas.figure", {("un-cl", "value"): 2, ("un-cd", "value"): 8,
+               ("un-t", "value"): 0}, ["un-cl.value"])["un-fig-sigmas"]["figure"]  # fmt: skip
+    assert len(sig["data"]) == 3
     ov = {("un-other-btn", "n_clicks"): 1, ("un-result", "data"): d}
     other = call(client, app, "un-other.data", ov, ["un-other-btn.n_clicks"])["un-other"]["data"]
     assert other["settings"]["method"] == "mc"
-    preset = call(client, app, "..un-cl.value...un-cd.value...un-t.value..",
-                  {("un-preset", "value"): "early"}, ["un-preset.value"])  # fmt: skip
-    assert preset["un-cd"]["value"] == pytest.approx(15)
