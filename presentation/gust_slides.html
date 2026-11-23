@@ -149,27 +149,77 @@
   <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>2</span></div>
 </section>
 
-<!-- ============================================================ 3: HOW A GUST CURVE IS MADE -->
+<!-- ============================================================ 3: DRYDEN -->
+<section class="slide">
+  <h2>The Dryden turbulence model: what the gusts are built on</h2>
+  <div class="three" style="margin-top: 0; grid-template-columns: 1fr 1fr; gap: 12px;">
+    <div class="box" style="font-size: 13px; padding: 8px 14px;"><h4>Where it comes from</h4>A statistical description of real atmospheric turbulence, fitted to
+      measurements and named after Hugh Dryden (NACA). Standardized for flight simulation by the military
+      flying-qualities spec <b>MIL-F-8785C</b> (1980), carried on in <b>MIL-HDBK-1797</b>. We use the <b>low-altitude</b>
+      form (below 1,000 ft). Chosen over von Kármán because its gusts can be made by filtering random numbers: what our update rule does.</div>
+    <div class="box" style="font-size: 13px; padding: 8px 14px;"><h4>What it prescribes (and what it does not)</h4>Only the <b>statistics</b> of the gusts, not a
+      particular gust history. For each direction (along the runway <i>u</i>, vertical <i>w</i>):
+      <b>σ</b>, how strong a typical gust is; <b>L</b>, how long a typical gust is in space; and the <b>spectrum</b>,
+      how the gust energy is spread over wavelengths. The air is treated as frozen and the aircraft flies through it,
+      so its speed V turns a length into a time, <span class="m">T = L / V</span>.</div>
+  </div>
+  <div class="two" style="grid-template-columns: 470px 1fr; gap: 20px; margin-top: 10px;">
+    <div>
+      <div style="font-size: 15px; margin-bottom: 5px;"><b>Inputs: W<sub>20</sub> and h.</b>
+        <span class="note">W<sub>20</sub>: wind speed at 20 ft; h: aircraft height in ft (held at ≥ 10 ft on the runway).</span></div>
+      <div class="fbox" style="font-size: 15.5px; line-height: 1.6; padding: 5px 14px;">
+        σ<sub>w</sub> = 0.1 · W<sub>20</sub> <span class="c">vertical strength</span><br>
+        σ<sub>u</sub> = σ<sub>w</sub> / (0.177 + 0.000823 h)<sup>0.4</sup> <span class="c">along-runway strength</span><br>
+        L<sub>w</sub> = h <span class="c">vertical length</span><br>
+        L<sub>u</sub> = h / (0.177 + 0.000823 h)<sup>1.2</sup> <span class="c">along-runway length</span>
+      </div>
+      <div class="key" style="margin-top: 6px; font-size: 13.5px; padding: 6px 12px; line-height: 1.4;"><b>Note: W<sub>20</sub> in our model.</b>
+        The user picks a turbulence level and MIL-F-8785C gives W<sub>20</sub>:
+        <b>light 15 kt · moderate 30 kt · severe 45 kt</b>. W<sub>20</sub> sets the strengths only; the lengths depend
+        on h alone. It is not the steady headwind, which is a separate input.</div>
+      <table class="dtab" style="margin-top: 6px; font-size: 13px;">
+        <tr><th>moderate (W<sub>20</sub> = 30 kt)</th><th>σ<sub>u</sub></th><th>σ<sub>w</sub></th><th>L<sub>u</sub></th><th>L<sub>w</sub></th></tr>
+        <tr><td>h = 10 ft (on the runway)</td><td>5.9 kt</td><td>3.0 kt</td><td>76 ft</td><td>10 ft</td></tr>
+        <tr><td>h = 20 ft</td><td>5.8 kt</td><td>3.0 kt</td><td>144 ft</td><td>20 ft</td></tr>
+        <tr><td>h = 50 ft (screen height)</td><td>5.5 kt</td><td>3.0 kt</td><td>311 ft</td><td>50 ft</td></tr>
+      </table>
+      <div class="note" style="margin-top: 6px;"><b>Not from Dryden</b> (our additions): averaging over the wingspan,
+        gusts moving past at ≥ 10 kt when the aircraft is slow, the pilot lag.</div>
+    </div>
+    <div>
+      <img class="fig" src="fig_gu_dryden.svg" alt="Dryden sigma and L against height, and spectra" style="height: 290px; width: auto; margin: 0 auto;">
+      <div class="box" style="font-size: 12.6px; line-height: 1.36; margin-top: 4px;">
+        <b>③ The spectrum.</b> Along the runway,
+        <span class="m">Φ<sub>u</sub>(Ω) = σ<sub>u</sub>² (2L<sub>u</sub>/π) / (1 + (L<sub>u</sub>Ω)²)</span>: exactly what
+        our update rule produces with T = L<sub>u</sub>/V. Vertically, <span class="m">Φ<sub>w</sub>(Ω) = σ<sub>w</sub>²
+        (L<sub>w</sub>/π)(1 + 3(L<sub>w</sub>Ω)²) / (1 + (L<sub>w</sub>Ω)²)²</span> has a different shape: ours has the
+        right strength σ<sub>w</sub> but twice the slow content (as if L<sub>w</sub> were 2h).
+        <b>Known approximation:</b> with L<sub>w</sub> = h/2, which matches Dryden's slow content, the moderate P95 is
+        unchanged for the 747 (+380 vs +376 ft, 400 runs) and about 10 % lower for the SR-71 (+985 vs +1,093 ft).
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>3</span></div>
+</section>
+
+<!-- ============================================================ 4: HOW A GUST CURVE IS MADE -->
 <section class="slide">
   <h2>How a gust curve is made</h2>
   <div class="two" style="grid-template-columns: 560px 1fr;">
     <div class="steps">
-      <div class="st"><div class="n">1</div><div><b>Turbulence level → wind speed at 20 ft, W<sub>20</sub>:</b>
-        light 15, moderate 30, severe 45 kt (Dryden model, MIL-F-8785C). It sets the gusts' strength only;
-        the steady headwind is a separate input.</div></div>
-      <div class="st"><div class="n">2</div><div><b>Two numbers per gust direction.</b> Typical size
-        <span class="m">σ</span>: vertical 0.1·W<sub>20</sub> = 3 kt, horizontal ≈ 2× that (moderate).
-        Typical length in space <span class="m">L</span>: horizontal ~75–300 ft, vertical ≈ the height above ground.</div></div>
-      <div class="st"><div class="n">3</div><div><b>Memory T = L / airspeed</b>: the time to fly through one gust.
+      <div class="st"><div class="n">1</div><div><b>From Dryden (previous slide), at the current height:</b>
+        a strength <span class="m">σ</span> and a length <span class="m">L</span> for each gust direction.
+        Moderate: σ<sub>w</sub> 3 kt, σ<sub>u</sub> ≈ 6 kt; L<sub>u</sub> ~75–300 ft, L<sub>w</sub> = h.</div></div>
+      <div class="st"><div class="n">2</div><div><b>Memory T = L / airspeed</b>: the time to fly through one gust.
         A 140-ft gust lasts 2 s at 40 kt, 0.5 s at 150 kt.</div></div>
-      <div class="st"><div class="n">4</div><div><b>Every 0.01 s step:</b>
+      <div class="st"><div class="n">3</div><div><b>Every 0.01 s step:</b>
         <div class="eq">g<sub>new</sub> = g<sub>old</sub> <span class="tag-pull">− (g<sub>old</sub> / T)·Δt</span>
           <span class="tag-kick">+ σ √(2/T) · √Δt · Z</span></div>
         <span class="tag-pull">pull back toward 0</span> (the memory) +
         <span class="tag-kick">a random kick</span>, Z a standard normal random number.
         Result: a curve that wanders around 0 with typical size σ and changes over about T seconds
-        (an Ornstein–Uhlenbeck process; the kicks add up to Brownian motion). The formulas: next slide; the rule piece by piece: the one after.</div></div>
-      <div class="st"><div class="n">5</div><div><b>Drawn up front, built as you go:</b> the Z's for a run come from a
+        (an Ornstein–Uhlenbeck process; the kicks add up to Brownian motion). The rule piece by piece: next slide.</div></div>
+      <div class="st"><div class="n">4</div><div><b>Drawn up front, built as you go:</b> the Z's for a run come from a
         random seed before it starts (same seed → same run); the curve is built step by step because σ, L and T
         depend on the aircraft's current height and speed.</div></div>
     </div>
@@ -178,48 +228,6 @@
       <div class="note" style="margin-top: 6px;">Same random numbers, two memories: a fast aircraft (short T) sees a
         jumpier gust. Why <b>√Δt</b> in the kick: random kicks add like a random walk, so this scaling keeps the gusts
         the same whatever the time step.</div>
-    </div>
-  </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>3</span></div>
-</section>
-
-
-
-<!-- ============================================================ 4: DRYDEN -->
-<section class="slide">
-  <h2>What the Dryden turbulence model gives us</h2>
-  <div class="two" style="grid-template-columns: 450px 1fr; gap: 20px;">
-    <div>
-      <div class="note" style="margin-bottom: 6px;">Dryden low-altitude model (MIL-F-8785C; MIL-HDBK-1797), for heights below
-        1,000 ft. Inputs: <b>W<sub>20</sub></b>, the wind speed at 20 ft (light 15, moderate 30, severe 45 kt, also from
-        the spec), and the aircraft's height <b>h</b> in ft (held at ≥ 10 ft on the runway).</div>
-      <div class="fbox">
-        σ<sub>w</sub> = 0.1 · W<sub>20</sub> <span class="c">vertical spread</span><br>
-        σ<sub>u</sub> = σ<sub>w</sub> / (0.177 + 0.000823 h)<sup>0.4</sup> <span class="c">along the runway</span><br>
-        L<sub>w</sub> = h <span class="c">vertical length</span><br>
-        L<sub>u</sub> = h / (0.177 + 0.000823 h)<sup>1.2</sup> <span class="c">along the runway</span>
-      </div>
-      <table class="dtab" style="margin-top: 8px;">
-        <tr><th>moderate (W<sub>20</sub> = 30 kt)</th><th>σ<sub>u</sub></th><th>σ<sub>w</sub></th><th>L<sub>u</sub></th><th>L<sub>w</sub></th></tr>
-        <tr><td>h = 10 ft (on the runway)</td><td>5.9 kt</td><td>3.0 kt</td><td>76 ft</td><td>10 ft</td></tr>
-        <tr><td>h = 20 ft</td><td>5.8 kt</td><td>3.0 kt</td><td>144 ft</td><td>20 ft</td></tr>
-        <tr><td>h = 50 ft (screen height)</td><td>5.5 kt</td><td>3.0 kt</td><td>311 ft</td><td>50 ft</td></tr>
-      </table>
-      <div class="note" style="margin-top: 8px;">Light and severe scale every σ by ½ and 1½; the lengths do not change.
-        <b>Not from Dryden</b> (our additions): averaging over the wingspan, gusts moving past at ≥ 10 kt when the
-        aircraft is slow, the pilot lag.</div>
-    </div>
-    <div>
-      <img class="fig" src="fig_gu_dryden.svg" alt="Dryden sigma and L against height, and spectra" style="height: 400px; width: auto; margin: 0 auto;">
-      <div class="box" style="font-size: 12.8px; line-height: 1.38; margin-top: 4px;">
-        <b>③ The spectrum</b> (also from Dryden) says how gust energy is spread over wavelengths. Along the runway,
-        <span class="m">Φ<sub>u</sub>(Ω) = σ<sub>u</sub>² (2L<sub>u</sub>/π) / (1 + (L<sub>u</sub>Ω)²)</span>: exactly what
-        our update rule produces with T = L<sub>u</sub>/V. Vertically, <span class="m">Φ<sub>w</sub>(Ω) = σ<sub>w</sub>²
-        (L<sub>w</sub>/π)(1 + 3(L<sub>w</sub>Ω)²) / (1 + (L<sub>w</sub>Ω)²)²</span> has a different shape: ours has the
-        right size σ<sub>w</sub> but twice the slow content (as if L<sub>w</sub> were 2h).
-        <b>Known approximation:</b> with L<sub>w</sub> = h/2, which matches Dryden's slow content, the moderate P95 is
-        unchanged for the 747 (+380 vs +376 ft, 400 runs) and about 10 % lower for the SR-71 (+985 vs +1,093 ft).
-      </div>
     </div>
   </div>
   <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>4</span></div>
