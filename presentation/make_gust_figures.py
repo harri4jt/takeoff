@@ -342,7 +342,7 @@ def fig_sampling(data: dict) -> None:
     calm = data["pool"]["calm"]["takeoff_field_ft"]
     x500 = np.sort(pool[:500] - calm)
     est, lo, hi = quantile_ci(x500, 0.95)
-    fig, (a, b) = plt.subplots(1, 2, figsize=(11.6, 4.3), constrained_layout=True,
+    fig, (a, b) = plt.subplots(1, 2, figsize=(11.6, 3.6), constrained_layout=True,
                                gridspec_kw={"width_ratios": [1.15, 1]})  # fmt: skip
     a.hist(x500, bins=40, color=BLUE, alpha=0.75)
     a.axvspan(lo, hi, color=ORANGE, alpha=0.18, lw=0)
@@ -466,11 +466,11 @@ def fig_build() -> None:
     t = np.arange(len(z) + 1) * dt
     cases = (
         ("drift only", r"$dg = -\frac{g}{T}\,dt$", _ou(z, sigma, tc, dt, 14.0, kick=False),
-         "deterministic decay\n" + r"$g = g_0\,e^{-t/T}$" + " → 0: the gust dies out"),
+         "*one 14 kt gust, no kicks after it:\n" + r"$g = g_0\,e^{-t/T}$" + " → 0"),
         ("diffusion only", r"$dg = c\,dW$", _ou(z, sigma, tc, dt, 0.0, pull=False),
          "Brownian motion\nvariance $= c^2 t$: no steady state"),
         ("drift + diffusion", r"$dg = -\frac{g}{T}\,dt + c\,dW$", _ou(z, sigma, tc, dt, 0.0),
-         "same kicks, each one decaying:\nnot the sum of the other two;\nvariance → σ²"),
+         "stationary:\nvariance → σ²"),
     )  # fmt: skip
     fig, axs = plt.subplots(1, 3, figsize=(12.2, 4.3), sharey=True, constrained_layout=True)
     for ax, (name, eq, g, note), c in zip(axs, cases, (BLUE, MUTED, GREEN), strict=True):
@@ -614,6 +614,28 @@ def fig_sketch(data: dict) -> None:
     plt.close(fig)
 
 
+def fig_dtconv() -> None:
+    """Whole run, Heun: strong error against the time step (the slide's table, plotted)."""
+    path = OUT / "_gust_conv.pkl"
+    if not path.exists():
+        return
+    df = pickle.loads(path.read_bytes())
+    fig, ax = plt.subplots(figsize=(6.2, 2.9), constrained_layout=True)
+    for o, c, lab in (("go_ft", BLUE, "go"), ("stop_ft", ORANGE, "stop"),
+                      ("aeo_ft", GREEN, "all engines")):  # fmt: skip
+        d = df[(df["output"] == o) & (df["method"] == "heun")].sort_values("dt")
+        ax.loglog(d["dt"], d["error_ft"], "o-", color=c, lw=2, ms=6, label=lab)
+    dts = np.array([0.005, 0.04])
+    ax.loglog(dts, 6.0 * dts / 0.04, color=MUTED, lw=1.5, ls="--", label="slope 1")
+    ax.set_xticks([0.005, 0.01, 0.02, 0.04], ["0.005", "0.01", "0.02", "0.04"])
+    ax.set_yticks([0.5, 1, 2, 5, 10, 20], ["0.5", "1", "2", "5", "10", "20"])
+    ax.minorticks_off()
+    ax.set(xlabel="time step Δt [s]", ylabel="e(Δt) [ft]")
+    ax.legend(fontsize=10, loc="upper left", ncol=2)
+    fig.savefig(OUT / "fig_gu_dtconv.svg")
+    plt.close(fig)
+
+
 def fig_budget(data: dict) -> dict:
     """Error budget of the moderate-turbulence 747 answer: the effect measured, the sampling
     error at 500 runs, and the time-step error at dt = 0.01 s (cached convergence study)."""
@@ -676,6 +698,7 @@ def main() -> None:
     fig_history()
     fig_sketch(data)
     fig_budget(data)
+    fig_dtconv()
     print(f"figures in {OUT}")
 
 
