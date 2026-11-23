@@ -47,7 +47,7 @@ def _sigma_input(id_: str, label: str, value: float) -> html.Div:
                         min=0,
                         step=0.5,
                         debounce=True,
-                        className="num-input",
+                        className="num-input spin",  # +/- step buttons (0.5 %)
                     ),  # fmt: skip
                     html.Span("%"),
                 ],
