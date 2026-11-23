@@ -142,10 +142,6 @@ def test_uncertainty_page_end_to_end():
               ("un-result", "data"): d}, ["un-results.children"])  # fmt: skip
     assert "95 % confidence" in json.dumps(st["un-fig-margin"]["figure"]["layout"]["title"])
     assert "Sampling error" in json.dumps(st["un-fig-conv"]["figure"]["layout"]["title"])
-    tv = {("un-step", "value"): 0.05, ("un-result", "data"): d}
-    tor = call(client, app, "un-fig-tornado.figure", tv, ["un-step.value"])
-    tor = tor["un-fig-tornado"]["figure"]
-    assert "5 % error" in json.dumps(tor["layout"]["title"]) and len(tor["data"]) == 2
     plan = call(client, app, "un-plan.children", {("un-cover", "value"): 0.99,
                 ("un-result", "data"): d}, ["un-cover.value"])  # fmt: skip
     assert "Plan for 99 %" in json.dumps(plan)

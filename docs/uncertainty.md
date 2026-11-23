@@ -36,15 +36,14 @@ most. The plot beside the inputs shows the three distributions that will be draw
 ## Reading the page
 
 Written for the end of a design pass: *is the runway fine, how sure, and am I on a
-knife's edge?*
+knife's edge?* Every panel folds away (click its title); the method checks start folded.
 
 | Part | What it tells you |
 |---|---|
 | **Runway required** | nominal; the runway to plan for at 90 / 95 / 99 % confidence (with its sampling range); and **runways you could use**: up to three real lengths (they start at the nominal rounded up to 1,000 ft, +1,000, +2,000), each with the chance it is enough and that chance's sampling range. The chart beside them is the whole story: chance of fitting against runway length, your runways marked on it (747-100 at ±5 %: 10,000 ft 70 %, 11,000 ft 95 %, 12,000 ft 99 %). If some draws cannot take off, the curve stops climbing at a ceiling no runway can beat. The verdict line says whether the design is near a cliff, and which operation sets the runway |
 | **Extra runway vs confidence** | the same answer read the other way (extra runway for a chosen confidence), takeoff and landing separately, sampling uncertainty shaded |
-| **Which table matters** | a tornado: each table alone off by the **same** ±5 % or ±10 %, the others exact, from exact solves (not a fit). It does not depend on the σ you typed, so it answers "for the same error, which table moves the runway most?" (747: lift and thrust about 5× drag). Pessimistic = less lift or thrust, more drag; a hatched bar is "no takeoff" |
 | **What if the tables are off by…** | sliders for each multiplier and three plots of runway against each one, the others held at their slider values; your runways are drawn across. The curves come from a quadratic response surface fitted through the draws (accuracy on draws it did not see in the subtitle), anchored to the exact nominal |
-| **Cliff map** | runway contours over the two tables that matter most (the third exact), with the ellipses holding 50 % and 95 % of the draws, your runways as bold contours and the no-takeoff region shaded. The title gives how far the cliff is from nominal, in σ |
+| **Cliff map** | runway contours over the two tables that matter most for an equal error (from exact one-table-at-a-time solves at ±5 %; the third held exact), with the ellipses holding 50 % and 95 % of the draws, your runways as bold contours and the no-takeoff region shaded. The title gives how far the cliff is from nominal, in σ |
 | **Method checks** (collapsed) | the drawn factors against the target normals, and the 95 % answer settling as draws accumulate (its sampling error) |
 
 ## When no runway is enough

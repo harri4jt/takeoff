@@ -91,10 +91,9 @@ case. Details: [Gust analysis](gusts.md).
 
 The **Data uncertainty** page (☰ menu): state how far off each table might be (1σ, %), and
 it runs hundreds of full solves with randomly perturbed tables. Out come the runway to
-plan for at 90, 95 or 99 % confidence, the share of cases a given runway covers, which
-table matters most for an equal error, and whether the design sits near a no-takeoff
-cliff. For the 747-100 with ±5 % on each table, 95 % confidence costs about +1,500 ft
-(+16 %), and lift and thrust matter about 5× more than drag. For single what-ifs (k_CL
+plan for at 90, 95 or 99 % confidence, the chance each of a few candidate runways is
+enough, and whether the design sits near a no-takeoff cliff. For the 747-100 with ±5 % on each table, 95 % confidence costs about +1,500 ft
+(+16 %). For single what-ifs (k_CL
 0.95 exactly), use the multiplier sliders or the trade study instead. Details:
 [Data uncertainty](uncertainty.md).
 

@@ -27,7 +27,6 @@ OUT_LABEL = {
     "takeoff_field_ft": "Takeoff",
     "landing_runway_ft": "Landing",
 }
-PESS_C, OPT_C = BFL_C, C1  # tornado: pessimistic data (longer runway) / optimistic
 NO_GO = "rgba(215,38,61,0.16)"  # the no-takeoff region
 _ND = NormalDist()
 
@@ -227,7 +226,7 @@ def margin_curve(d: dict) -> go.Figure:
 
 
 # ------------------------------------------------------------------------------------
-# 2. equal error, unequal effect: the tornado (exact one-at-a-time solves)
+# 2. one table at a time (exact solves): used for the verdict and to pick the map's axes
 # ------------------------------------------------------------------------------------
 def _oat(d: dict, step: float) -> dict[str, tuple[float, float]]:
     """factor -> (runway change with that table `step` worse, `step` better); inf = no takeoff."""
@@ -243,71 +242,6 @@ def _oat(d: dict, step: float) -> dict[str, tuple[float, float]]:
 
 def _swing(w: float, b: float) -> float:
     return math.inf if math.isinf(w) or math.isinf(b) else (abs(w) + abs(b)) / 2
-
-
-def tornado_title(d: dict, step: float) -> str:
-    oat = _oat(d, step)
-    if not oat:
-        return ""
-    pct = f"{100 * step:g} %"
-    dead = [FACTOR_LABEL[k] for k, (w, b) in oat.items() if math.isinf(w) or math.isinf(b)]
-    if dead:
-        who = dead[0] if len(dead) == 1 else ", ".join(dead[:-1]) + " or " + dead[-1]
-        return f"{pct} worse {who} alone: no takeoff"
-    sw = sorted(((_swing(*v), k) for k, v in oat.items()), reverse=True)
-    (s1, k1), (s3, k3) = sw[0], sw[-1]
-    if s3 <= 0:
-        return f"Same {pct} error: {FACTOR_LABEL[k1]} matters most"
-    ratio = s1 / s3
-    if len(sw) == 3 and sw[1][0] > 0.75 * s1:
-        lead = f"{FACTOR_LABEL[k1]} and {FACTOR_LABEL[sw[1][1]]} matter"
-        ratio = (s1 + sw[1][0]) / 2 / s3
-    else:
-        lead = f"{FACTOR_LABEL[k1]} matters"
-    return f"Same {pct} error: {lead} {ratio:.0f}× more than {FACTOR_LABEL[k3]}"
-
-
-def tornado(d: dict, step: float = 0.05) -> go.Figure:
-    oat = _oat(d, step)
-    if not oat:
-        return empty("No one-at-a-time solves in this result")
-    pct = f"{100 * step:g} %"
-    order = sorted(oat, key=lambda k: (_swing(*oat[k]), abs(oat[k][1])))  # biggest on top
-    fin = [abs(v) for k in order for v in oat[k] if math.isfinite(v)]
-    edge = 1.25 * max(fin + [1.0])
-    fig = go.Figure()
-    for slot, name, c in ((0, f"{pct} pessimistic", PESS_C), (1, f"{pct} optimistic", OPT_C)):
-        xs, txt, pat, hov = [], [], [], []
-        for k in order:
-            v = oat[k][slot]
-            sign = WORSE[k] if slot == 0 else -WORSE[k]
-            ch = f"{FACTOR_LABEL[k]} {'+' if sign > 0 else '−'}{pct}"
-            if math.isinf(v):
-                xs.append(edge if v > 0 else -edge)
-                txt.append("<b>no takeoff</b>")
-                pat.append("/")
-                hov.append(f"{ch}: no engine-out takeoff")
-            else:
-                xs.append(v)
-                txt.append(f"{v:+,.0f} ft".replace("-", "−"))
-                pat.append("")
-                hov.append(f"{ch}: {v:+,.0f} ft")
-        fig.add_bar(y=[FACTOR_LABEL[k] for k in order], x=xs, orientation="h", name=name,
-                    marker={"color": c, "pattern": {"shape": pat, "fgcolor": "white",
-                                                    "solidity": 0.3},
-                            "line": {"width": 0}, "cornerradius": 4},
-                    text=txt, textposition="outside", cliponaxis=False,
-                    textfont={"color": INK, "size": 13}, hovertext=hov,
-                    hovertemplate="%{hovertext}<extra></extra>")  # fmt: skip
-    fig.add_vline(x=0, line={"color": INK, "width": 1.2})
-    fig.update_layout(barmode="overlay", bargap=0.38)
-    fig.update_xaxes(title="runway change [ft]", tickformat="+,", range=[-edge * 1.3, edge * 1.3])
-    fig.update_yaxes(tickfont={"size": 14}, gridcolor="rgba(0,0,0,0)")
-    sub = (f"{d['aircraft']} · one table off by ±{pct}, the others exact · "
-           "pessimistic = less lift or thrust, more drag")  # fmt: skip
-    fig = _layout(fig, tornado_title(d, step), sub, 300)
-    fig.update_layout(legend={"y": -0.28})
-    return fig
 
 
 # ------------------------------------------------------------------------------------
@@ -586,7 +520,7 @@ def sigma_curves(s_cl: float, s_cd: float, s_t: float) -> go.Figure:
 
 
 __all__ = [
-    "odds_curve", "wilson", "fmt_p", "sigma_curves", "profiler", "tornado", "tornado_title",
+    "odds_curve", "wilson", "fmt_p", "sigma_curves", "profiler",
     "cliff_map", "margin_curve",
     "convergence", "inputs", "values", "probability_ok", "curve_keys", "map_factors",
     "OUT_LABEL", "FACTOR_LABEL",

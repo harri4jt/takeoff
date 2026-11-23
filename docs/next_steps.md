@@ -501,3 +501,6 @@ credit, wet runway option, flare model detail (constant-g vs Raymer's flare radi
       the chance each is enough (Wilson sampling range) beside an **odds chart** (chance of
       fitting vs runway length, candidates marked, ceiling when some draws cannot take off).
       The candidates are drawn on the profiler and as contours on the cliff map.
+- [x] Round 10e: "Which table matters" (tornado) removed (not a graphic people re-use; the
+      equal-error solves still drive the verdict and the cliff map's axes); every results
+      panel folds away (open by default, method checks folded).

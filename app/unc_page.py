@@ -74,7 +74,7 @@ def layout() -> html.Div:
                     dcc.Markdown(
                         "Lift, drag and thrust data are estimates. Say how far off each might be "
                         "(1σ, %); each draw scales the tables at random and runs a full solve. "
-                        "Out come the runway to plan for, which table matters, and whether the "
+                        "Out come the runway to plan for, the odds for the runways you could use, and whether the "
                         "design is near a cliff.",
                         className="hint",
                     ),
@@ -212,7 +212,6 @@ def layout() -> html.Div:
 # ------------------------------------------------------------------------------------
 # results
 # ------------------------------------------------------------------------------------
-STEPS = ((0.05, "±5 %"), (0.10, "±10 %"))
 
 
 RUNWAY_IDS = ("un-rw-1", "un-rw-2", "un-rw-3")
@@ -300,7 +299,6 @@ def answer(d: dict, p: float) -> list:
         html.Div(
             className="gu-answer-head",
             children=[
-                html.H3(unc_figures.OUT_LABEL[key]),
                 html.Div(className="spacer"),
                 html.Span("Confidence", className="ctl-name"),
                 _seg("un-cover", p, [(c, f"{round(100 * c)} %") for c in COVERAGE]),
@@ -373,31 +371,22 @@ def answer(d: dict, p: float) -> list:
     ]
 
 
+def _panel(title: str, body: list, cls: str = "", open_: bool = True, id_=None) -> html.Details:
+    """A results card that folds away (open by default)."""
+    kw = {"id": id_} if id_ else {}
+    return html.Details(open=open_, className=f"card un-panel {cls}".strip(),
+                        children=[html.Summary(title), *body], **kw)  # fmt: skip
+
+
 def results(d: dict, p: float) -> list:
     return [
-        html.Div(id="un-answer", className="card", children=answer(d, p)),
-        html.Div(className="card", children=[_graph("un-fig-margin", "confidence")]),
-        html.Div(
-            className="card",
-            children=[
-                html.Div(
-                    className="gu-answer-head",
-                    children=[
-                        html.H3("Which table matters"),
-                        html.Div(className="spacer"),
-                        html.Span("Error in one table", className="ctl-name"),
-                        _seg("un-step", 0.05, list(STEPS)),
-                    ],
-                ),
-                _graph("un-fig-tornado", "tornado"),
-            ],
-        ),
-        _profiler_card(d),
-        html.Div(className="card", children=[_graph("un-fig-map", "map")]),
-        html.Details(
-            className="card un-checks",
-            children=[
-                html.Summary("Method checks"),
+        _panel(unc_figures.OUT_LABEL[d["main_output"]], answer(d, p), id_="un-answer"),
+        _panel("Extra runway vs confidence", [_graph("un-fig-margin", "confidence")]),
+        _panel("What if the tables are off by…", _profiler_body(d)),
+        _panel("Cliff map", [_graph("un-fig-map", "map")]),
+        _panel(
+            "Method checks",
+            [
                 html.Div(
                     "The draws follow the stated distributions, and the 95 % answer has settled "
                     "(its sampling error shrinks like 1/√N; more draws if it matters).",
@@ -408,6 +397,7 @@ def results(d: dict, p: float) -> list:
                     children=[_graph("un-fig-conv", "sampling"), _graph("un-fig-inputs", "inputs")],
                 ),
             ],
+            open_=False,
         ),
     ]
 
@@ -416,7 +406,7 @@ FACTORS = (("k_CL", "un-sl-cl", "lift"), ("k_CD", "un-sl-cd", "drag"),
            ("k_T", "un-sl-t", "thrust"))  # fmt: skip
 
 
-def _profiler_card(d: dict) -> html.Div:
+def _profiler_body(d: dict) -> list:
     s = d["settings"]
     sig = {"k_CL": s["sigma_CL"], "k_CD": s["sigma_CD"], "k_T": s["sigma_T"]}
     sliders = []
@@ -433,21 +423,17 @@ def _profiler_card(d: dict) -> html.Div:
                            tooltip={"placement": "top", "always_visible": False}),
             ],
         ))  # fmt: skip
-    return html.Div(
-        className="card",
-        children=[
-            html.Div(
-                className="gu-answer-head",
-                children=[
-                    html.H3("What if the tables are off by…"),
-                    html.Div(className="spacer"),
-                    html.Button("Reset to 1", id="un-sl-reset", n_clicks=0, className="btn"),
-                ],
-            ),
-            html.Div(sliders, className="un-sliders"),
-            _graph("un-fig-prof", "profiler"),
-        ],
-    )
+    return [
+        html.Div(
+            className="gu-answer-head",
+            children=[
+                html.Div(className="spacer"),
+                html.Button("Reset to 1", id="un-sl-reset", n_clicks=0, className="btn"),
+            ],
+        ),
+        html.Div(sliders, className="un-sliders"),
+        _graph("un-fig-prof", "profiler"),
+    ]
 
 
 def _settings(sig_cl, sig_cd, sig_t, landing, n, method, seed, trunc) -> UncertaintySettings:
@@ -576,14 +562,6 @@ def register(app, aircraft_options) -> None:
         rws = runway_list([r1, r2, r3])
         return (*[runway_odds(d, r) for r in (r1, r2, r3)], unc_figures.odds_curve(d, rws),
                 unc_figures.cliff_map(d, rws))  # fmt: skip
-
-    @app.callback(
-        Output("un-fig-tornado", "figure"),
-        Input("un-step", "value"),
-        State("un-result", "data"),
-    )
-    def on_step(step, d):
-        return unc_figures.tornado(d, float(step or 0.05)) if d else no_update
 
     @app.callback(
         Output("un-fig-prof", "figure"),
