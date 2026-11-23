@@ -614,6 +614,68 @@ def fig_sketch(data: dict) -> None:
     plt.close(fig)
 
 
+def fig_errors(data: dict) -> None:
+    """Both errors on the answer's own curve: sampling bands for 125 / 500 / 2,000 runs
+    (how far the curve moves if the study is redone: 400 resampled studies from a 4,000-run
+    pool, 95 % range) and the time-step band (Heun, dt = 0.01 s), plus a zoom at 95 %."""
+    pool = _ok(data["pool"]["samples"])["takeoff_field_ft"].to_numpy()
+    calm = data["pool"]["calm"]["takeoff_field_ft"]
+    conv = pickle.loads((OUT / "_gust_conv.pkl").read_bytes())
+    heun = conv[(conv["method"] == "heun") & (conv["output"] != "landing_distance_ft")]
+    e_dt = float(heun[heun["dt"] == 0.01]["error_ft"].max())
+    ps = np.linspace(0.5, 0.99, 120)
+    z = np.array([ND.inv_cdf(p) for p in ps])
+    curve = np.quantile(pool, ps) - calm
+    rng = np.random.default_rng(0)
+    bands = {}
+    for n in (125, 500, 2000):
+        q = np.quantile(rng.choice(pool, (400, n)), ps, axis=1) - calm  # (ps, studies)
+        bands[n] = np.percentile(q, [2.5, 97.5], axis=1)
+    shades = {125: "#cfe0f5", 500: "#8fbbe8", 2000: "#2a78d6"}
+    fig, ax = plt.subplots(figsize=(8.2, 5.2), constrained_layout=True)
+    for n in (125, 500, 2000):
+        ax.fill_between(z, bands[n][0], bands[n][1], color=shades[n], lw=0,
+                        label=f"sampling error, {n:,} runs")  # fmt: skip
+    ax.fill_between(z, curve - e_dt, curve + e_dt, color=ORANGE, lw=0,
+                    label=f"time-step error (±{e_dt:.0f} ft)")  # fmt: skip
+    ax.plot(z, curve, color=INK, lw=1.2)
+    ticks = (0.5, 0.8, 0.9, 0.95, 0.99)
+    ax.set_xticks([ND.inv_cdf(p) for p in ticks], [f"{100 * p:g} %" for p in ticks])
+    ax.set(xlabel="share of gusty-day takeoffs covered", ylabel="extra runway over calm [ft]",
+           xlim=(z[0], z[-1]), ylim=(0, 900))  # fmt: skip
+    ax.legend(loc="lower right", fontsize=11, frameon=True, framealpha=0.95, edgecolor="none")
+    # zoom at 95 %
+    z95 = ND.inv_cdf(0.95)
+    c95 = float(np.quantile(pool, 0.95) - calm)
+    ins = ax.inset_axes([0.07, 0.50, 0.40, 0.45])
+    w = 0.09
+    sel = np.abs(z - z95) < w
+    for n in (125, 500, 2000):
+        ins.fill_between(z[sel], bands[n][0][sel], bands[n][1][sel], color=shades[n], lw=0)
+    ins.fill_between(z[sel], curve[sel] - e_dt, curve[sel] + e_dt, color=ORANGE, lw=0)
+    ins.plot(z[sel], curve[sel], color=INK, lw=1)
+    ins.set_xlim(z95 - w, z95 + w)
+    ins.set_ylim(c95 - 110, c95 + 110)
+    ins.set_xticks([z95], ["95 %"])
+    ins.tick_params(labelsize=10)
+    ins.set_facecolor("white")
+    i95 = int(np.argmin(np.abs(z - z95)))
+    for n in (125, 500, 2000):
+        half = (bands[n][1][i95] - bands[n][0][i95]) / 2
+        ins.text(z95 + w * 0.97, bands[n][1][i95] if n != 2000 else bands[n][1][i95],
+                 f"±{half:.0f} ft", ha="right", va="bottom", fontsize=10, color=INK)  # fmt: skip
+    ins.annotate(f"±{e_dt:.0f} ft", (z95 - w * 0.5, c95), (z95 - w * 0.95, c95 - 85),
+                 fontsize=10, color=ORANGE, fontweight="bold",
+                 arrowprops={"arrowstyle": "->", "color": ORANGE})  # fmt: skip
+    ins.set_title("zoom at 95 %", fontsize=11, loc="left")
+    ax.indicate_inset_zoom(ins, edgecolor=MUTED)
+    fig.savefig(OUT / "fig_gu_errors.svg")
+    plt.close(fig)
+    for n in (125, 500, 2000):
+        print(f"  {n} runs: P95 band ±{(bands[n][1][i95] - bands[n][0][i95]) / 2:.0f} ft")
+    print(f"  time step ±{e_dt:.1f} ft; P95 {c95:+.0f}")
+
+
 def fig_dtconv() -> None:
     """Whole run, Heun: strong error against the time step (the slide's table, plotted)."""
     path = OUT / "_gust_conv.pkl"
@@ -699,6 +761,7 @@ def main() -> None:
     fig_sketch(data)
     fig_budget(data)
     fig_dtconv()
+    fig_errors(data)
     print(f"figures in {OUT}")
 
 

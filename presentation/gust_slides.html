@@ -318,52 +318,34 @@
 </section>
 <!-- 8 -->
 <section class="slide">
-  <h2>Error 1, sampling: how sure is the P95 of 500 runs?</h2>
-  <img class="fig" src="fig_gu_sampling.svg" alt="one study's P95 and its spread over repeated studies">
-  <div class="three" style="margin-top: 12px; grid-template-columns: 1fr 1.25fr 1fr;">
-    <div class="box"><h4>① Estimate</h4>Sort the 500 runs. P95 is the 475th: <b>+365 ft</b> over calm.</div>
-    <div class="box"><h4>② Interval from order statistics</h4>The number of runs below the true P95 is
-      Binomial(500, 0.95): mean 475, standard deviation √(500 · 0.95 · 0.05) = 4.9. So with 95 % confidence the true
-      P95 lies between runs 475 ± 1.96 · 4.9, the <b>465th and 485th</b>: +337 to +418 ft.</div>
-    <div class="box"><h4>③ Check by repetition</h4>Redo the 500-run study 400 times: the P95 moves by <b>±47 ft</b>.
-      4× the runs halves it (1/√N): ±86, ±47, ±21 ft.</div>
+  <h2>Two kinds of error: sampling dominates, the time step is negligible</h2>
+  <div class="two" style="grid-template-columns: 700px 1fr; gap: 24px;">
+    <div>
+      <img class="fig" src="fig_gu_errors.svg" alt="sampling error bands for 125, 500 and 2,000 runs and the time-step error band">
+      <div class="cap">The slide-7 curve (747-100, moderate). Blue: how far it moves if the study is redone with 125,
+        500 or 2,000 runs. Orange: the time-step error.</div>
+    </div>
+    <div>
+      <div class="box" style="padding: 12px 16px; font-size: 15px; line-height: 1.45;">
+        <div class="colhead" style="color: #1f5fae;">① Sampling error: finite runs</div>
+        P95 of N runs is the (0.95 N)-th sorted run. The count of runs below the true P95 is Binomial(N, 0.95), which
+        gives its interval with no assumed shape. Redoing the study confirms it:
+        <b>±87 / ±48 / ±18 ft</b> for 125 / 500 / 2,000 runs, shrinking like 1/√N.
+      </div>
+      <div class="box" style="padding: 12px 16px; font-size: 15px; line-height: 1.45; margin-top: 12px;">
+        <div class="colhead" style="color: #b4501d;">② Time-step error: finite Δt</div>
+        Solve the same gusts at Δt = 0.04 … 0.005 s against Δt = 0.00125 s (coarse Brownian steps are sums of fine
+        ones), 16 gust paths: e(Δt) = mean |d(Δt) − d(Δt<sub>ref</sub>)|. At Δt = 0.01 s: <b>±4 ft</b>, roughly first
+        order.
+      </div>
+      <div class="key" style="margin-top: 12px; font-size: 17px;">At 500 runs the sampling error is 10× the time-step
+        error: more runs help, a smaller step doesn't.</div>
+    </div>
   </div>
   <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>8</span></div>
 </section>
 
-<section class="slide">
-  <h2>Error 2, time step: same gusts, smaller steps</h2>
-  <div class="two" style="grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 6px;">
-    <div class="box" style="padding: 14px 18px;">
-      <div class="colhead">How it is measured (strong error)</div>
-      <ol class="tight" style="font-size: 16.5px; padding-left: 22px;">
-        <li>Draw one Brownian path on a fine grid, Δt<sub>ref</sub> = 0.00125 s.</li>
-        <li>Coarser steps reuse it: the increment over 2 fine steps is the <b>sum</b> of the two,
-          ΔW<sub>2Δt</sub> = ΔW<sub>1</sub> + ΔW<sub>2</sub>. Every Δt sees the <b>same gusts</b>.</li>
-        <li>Solve the takeoff at Δt = 0.04, 0.02, 0.01, 0.005 s and at Δt<sub>ref</sub>.</li>
-        <li>Repeat for 16 gust paths and average:</li>
-      </ol>
-      <div class="eqs" style="text-align: center; font-size: 18px; margin-top: 6px;">e(Δt) = (1/16) Σ<sub>i</sub> | d<sub>i</sub>(Δt) − d<sub>i</sub>(Δt<sub>ref</sub>) |</div>
-      <div class="cap">d<sub>i</sub>: a distance (go, stop, all engines) on gust path i.</div>
-      <img class="fig" src="fig_gu_dtconv.svg" alt="error against time step, log-log" style="margin-top: 10px;">
-    </div>
-    <div>
-      <table class="res" style="margin: 4px 0 12px;">
-        <tr><th>e(Δt) [ft], Heun</th><th>0.04 s</th><th>0.02 s</th><th>0.01 s</th><th>0.005 s</th></tr>
-        <tr><td>go</td><td>3.8</td><td>1.5</td><td class="b">0.8</td><td>0.5</td></tr>
-        <tr><td>stop</td><td>17.6</td><td>2.7</td><td class="b">4.3</td><td>0.4</td></tr>
-        <tr><td>all engines</td><td>5.8</td><td>2.4</td><td class="b">0.9</td><td>0.3</td></tr>
-      </table>
-      <div class="t15" style="font-size: 16px;"><p>Roughly halves with Δt (first order overall): events such as rotation and
-        braking fall between steps and are located by linear interpolation.</p></div>
-      <div class="key" style="font-size: 17px;"><b>Compare at Δt = 0.01 s:</b> time step ≤ 4 ft, sampling ±47 ft, effect
-        +394 ft. The sampling error dominates: more runs help, a smaller step doesn't.</div>
-    </div>
-  </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>9</span></div>
-</section>
-
-<!-- 10 -->
+<!-- 9 -->
 <section class="slide">
   <h2>Summary and limits</h2>
   <div class="two" style="grid-template-columns: 1.15fr 1fr; gap: 28px; margin-top: 8px;">
@@ -379,7 +361,7 @@
     </div>
     <div>
       <div class="key" style="font-size: 21px; padding: 20px 24px;"><b>Answer:</b> in moderate turbulence, <b>+394 ft</b> covers
-        95 % of 747-100 takeoffs (4 % over calm), ±47 ft sampling, ≈ 4 ft time step. The SR-71 needs +1,044 ft (9 %).</div>
+        95 % of 747-100 takeoffs (4 % over calm), ±48 ft sampling, ±4 ft time step. The SR-71 needs +1,044 ft (9 %).</div>
       <div class="box" style="padding: 14px 20px; margin-top: 16px;">
         <div class="colhead">Limits</div>
         <ul class="tight lim" style="font-size: 18px;">
@@ -390,7 +372,7 @@
       </div>
     </div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>10</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>9</span></div>
 </section>
 
 </body>
