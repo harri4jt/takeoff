@@ -465,23 +465,21 @@ def fig_build() -> None:
     z = np.random.default_rng(13).standard_normal(int(t_end / dt))  # a typical-looking path
     t = np.arange(len(z) + 1) * dt
     cases = (
-        ("pull only", r"$g_{n+1} = g_n - \frac{g_n}{T}\,\Delta t$",
-         _ou(z, sigma, tc, dt, 14.0, kick=False),
-         "fades like $e^{-t/T}$,\nthen nothing"),
-        ("kicks only", r"$g_{n+1} = g_n + c\,\sqrt{\Delta t}\,Z_n$",
-         _ou(z, sigma, tc, dt, 0.0, pull=False),
-         "wanders off:\nnever settles"),
-        ("both", r"$g_{n+1} = g_n - \frac{g_n}{T}\Delta t + c\sqrt{\Delta t}\,Z_n$",
-         _ou(z, sigma, tc, dt, 0.0), "stays about $\\pm\\sigma$,\nchanges over ~T"),
+        ("drift only", r"$dg = -\frac{g}{T}\,dt$", _ou(z, sigma, tc, dt, 14.0, kick=False),
+         "deterministic decay\n" + r"$g = g_0\,e^{-t/T}$" + " → 0: the gust dies out"),
+        ("diffusion only", r"$dg = c\,dW$", _ou(z, sigma, tc, dt, 0.0, pull=False),
+         "Brownian motion\nvariance $= c^2 t$: no steady state"),
+        ("drift + diffusion", r"$dg = -\frac{g}{T}\,dt + c\,dW$", _ou(z, sigma, tc, dt, 0.0),
+         "same kicks, each one decaying:\nnot the sum of the other two;\nvariance → σ²"),
     )  # fmt: skip
     fig, axs = plt.subplots(1, 3, figsize=(12.2, 4.3), sharey=True, constrained_layout=True)
     for ax, (name, eq, g, note), c in zip(axs, cases, (BLUE, MUTED, GREEN), strict=True):
         ax.axhspan(-sigma, sigma, color=GRID, alpha=0.9, lw=0)
-        ax.plot(t, g, color=c if name != "kicks only" else INK, lw=1.6)
+        ax.plot(t, g, color=c if name != "diffusion only" else INK, lw=1.6)
         ax.set_title(name, loc="left", fontsize=14)
         ax.text(0.03, 0.97, eq, transform=ax.transAxes, va="top", fontsize=12.5,
                 bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9})  # fmt: skip
-        ax.text(0.97, 0.05, note, transform=ax.transAxes, ha="right", va="bottom", fontsize=12,
+        ax.text(0.97, 0.04, note, transform=ax.transAxes, ha="right", va="bottom", fontsize=11.5,
                 color=INK,
                 bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9})  # fmt: skip
         ax.set_xlabel("time [s]")
