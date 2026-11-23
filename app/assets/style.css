@@ -477,3 +477,6 @@ details.adv[open] > summary::before { content: "▾ "; }
 .un-shares .dtab { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 8px; }
 .un-shares .dtab th, .un-shares .dtab td { padding: 4px 8px; text-align: right; border-bottom: 1px solid var(--line); }
 .un-shares .dtab th:first-child, .un-shares .dtab td:first-child { text-align: left; }
+/* slider value tooltips above everything else in the card (e.g. the profiler graph) */
+.un-slider { position: relative; z-index: 5; }
+.un-slider [class*="tooltip"] { z-index: 30 !important; }

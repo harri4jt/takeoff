@@ -367,7 +367,7 @@ def _profiler_card(d: dict) -> html.Div:
                 html.Label(f"{lab} multiplier"),
                 dcc.Slider(id=sid, min=lo, max=hi, step=0.005, value=1.0, marks=marks,
                            updatemode="drag", disabled=v <= 0,
-                           tooltip={"placement": "bottom", "always_visible": False}),
+                           tooltip={"placement": "top", "always_visible": False}),
             ],
         ))  # fmt: skip
     return html.Div(

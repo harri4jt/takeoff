@@ -251,28 +251,34 @@ def inputs(d: dict) -> go.Figure:
 # setup: the three distributions being sampled
 # ------------------------------------------------------------------------------------
 def sigma_curves(s_cl: float, s_cd: float, s_t: float) -> go.Figure:
-    """Normal(1, sigma) for each table on one axis: what the draws will look like."""
+    """Normal(1, sigma) for each table on one axis: what the draws will look like.
+
+    True probability densities (area 1): the draws are cut at ±3σ, so the normal density
+    is divided by the 99.73 % it keeps. A tighter table is a taller, narrower curve."""
     sig = {"k_CL": s_cl / 100, "k_CD": s_cd / 100, "k_T": s_t / 100}
     span = max([3 * v for v in sig.values() if v > 0] + [0.05]) * 1.08
     xs = np.linspace(1 - span, 1 + span, 400)
+    kept = _ND.cdf(3.0) - _ND.cdf(-3.0)  # 0.9973: share of a normal within ±3σ
+    peak = max([1 / (v * math.sqrt(2 * math.pi) * kept) for v in sig.values() if v > 0] + [1.0])
     fig = go.Figure()
     for k, v in sig.items():
         name = f"{FACTOR_LABEL[k]} ±{100 * v:g} %"
-        if v <= 0:
-            fig.add_scatter(x=[1, 1], y=[0, 1], mode="lines", name=name + " (exact)",
+        if v <= 0:  # no uncertainty: all the probability at 1
+            fig.add_scatter(x=[1, 1], y=[0, peak], mode="lines", name=name + " (exact)",
                             line={"color": FACTOR_C[k], "width": 2.5, "dash": "dot"})  # fmt: skip
             continue
-        pdf = np.exp(-0.5 * ((xs - 1) / v) ** 2) / (v * math.sqrt(2 * math.pi))
+        pdf = np.exp(-0.5 * ((xs - 1) / v) ** 2) / (v * math.sqrt(2 * math.pi) * kept)
         pdf = np.where(np.abs(xs - 1) <= 3 * v, pdf, np.nan)  # draws are cut at ±3σ
-        fig.add_scatter(x=xs, y=pdf / np.nanmax(pdf), mode="lines", name=name,
+        fig.add_scatter(x=xs, y=pdf, mode="lines", name=name,
                         line={"color": FACTOR_C[k], "width": 2.5}, fill="tozeroy",
                         fillcolor=_rgba(FACTOR_C[k], 0.08),
                         hovertemplate=FACTOR_LABEL[k] + "<br>multiplier %{x:.3f}"
                         + "<extra></extra>")  # fmt: skip
     fig.add_vline(x=1, line={"color": MUTED, "width": 1, "dash": "dot"})
     fig.update_xaxes(title="multiplier on the table (1 = the table as it is)", tickformat=".2f")
-    fig.update_yaxes(title="relative likelihood", showticklabels=False, rangemode="tozero")
-    fig = _layout(fig, "What will be drawn", "normal around 1, cut at ±3σ", 250)
+    fig.update_yaxes(title="probability density", rangemode="tozero")
+    fig = _layout(fig, "What will be drawn", "normal around 1, cut at ±3σ; area under each = 1",
+                  250)  # fmt: skip
     fig.update_layout(margin={"t": 58, "b": 44, "l": 40, "r": 12},
                       legend={"orientation": "v", "y": 1, "x": 1.0, "xanchor": "right",
                               "bgcolor": "rgba(255,255,255,0.8)"})  # fmt: skip
