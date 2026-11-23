@@ -504,3 +504,21 @@ credit, wet runway option, flare model detail (constant-g vs Raymer's flare radi
 - [x] Round 10e: "Which table matters" (tornado) removed (not a graphic people re-use; the
       equal-error solves still drive the verdict and the cliff map's axes); every results
       panel folds away (open by default, method checks folded).
+
+---
+
+## Round 11 (2026-11-22): gust page as the final presentation, 11/25 decks
+
+- [x] `bfl.gusts.gust_signal`: gust histories at a fixed height and airspeed, made with the
+      run's own Dryden scales and SDE step (tested: strength σ, correlation e^(−τ/T)).
+- [x] Gust page rebuilt like the uncertainty page: answer tiles + runways you could use +
+      odds chart (shared `odds_chart`); **How the gusts are made** (interactive generator:
+      Dryden → T = L/V → update rule, one history, strength/memory check); one gusty run;
+      the margin curve; **Checks** (gusts off vs main solver, gust-variance error vs Δt/T with
+      the exact EM/Heun formulas and simulated points, sampling error, whole-run Δt study).
+      The spread histograms were removed. Every panel folds.
+- [x] Finding: the stepped OU variance is exact in closed form, EM σ²/(1 − Δt/2T) (first
+      order), Heun (1 − r + r²/4)/(1 − r + r²/2 − r³/8), r = Δt/T (second order).
+- [x] Decks: 261125a_update.pdf (2 slides: what will be implemented), 261125_update.pdf
+      (12 slides: the gust math from Dryden to the SDE, its checks, results, error budget),
+      261125_notes.md (speaker notes). Old detail deck removed.

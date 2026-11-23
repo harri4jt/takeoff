@@ -17,7 +17,7 @@ from plotly.subplots import make_subplots
 from bfl.uncertainty import predict_failure, predict_surface, quantile_ci_inf
 
 from .figures import BFL_C, C1, C2, C3, INK, MUTED, empty
-from .gust_figures import COLORS, COVER_TICKS, _layout, _rgba
+from .gust_figures import COLORS, COVER_TICKS, _layout, _rgba, fmt_p, odds_chart, wilson
 
 FACTOR_C = {"k_CL": C1, "k_CD": C2, "k_T": C3}
 FACTOR_LABEL = {"k_CL": "lift", "k_CD": "drag", "k_T": "thrust"}
@@ -67,25 +67,6 @@ def probability_ok(d: dict, runway_ft: float) -> float:
     return float(np.mean(x <= runway_ft)) if len(x) else math.nan
 
 
-def wilson(p, n: int, z: float = 1.96):
-    """95 % Wilson interval for a share p of n draws (works on arrays)."""
-    p = np.asarray(p, float)
-    den = 1 + z * z / n
-    mid = (p + z * z / (2 * n)) / den
-    half = z * np.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den
-    return np.clip(mid - half, 0, 1), np.clip(mid + half, 0, 1)
-
-
-def fmt_p(p: float) -> str:
-    """A share as a percentage; never '100 %' or '0 %' from a finite number of draws."""
-    p = float(p)
-    if p >= 0.995:
-        return ">99 %"
-    if p <= 0.005:
-        return "<1 %"
-    return f"{100 * p:.0f} %"
-
-
 def _curve_color(d: dict) -> str:
     if d["main_output"] == "takeoff_field_ft" or "runway_required_ft" not in curve_keys(d):
         lead = "takeoff_field_ft" if "takeoff_field_ft" in d["values"] else d["main_output"]
@@ -110,57 +91,8 @@ def curve_keys(d: dict) -> list[str]:
 # ------------------------------------------------------------------------------------
 def odds_curve(d: dict, runways: list[float]) -> go.Figure:
     key = d["main_output"]
-    x = values(d, key)
-    n = len(x)
-    nom = d["nominal"][key]
-    fin = np.sort(x[np.isfinite(x)])
-    f = 1 - len(fin) / n if n else 0.0
-    lo_x = min(float(fin[0]) if len(fin) else nom, nom)
-    hi_x = max([float(fin[-1]) if len(fin) else nom] + list(runways))
-    span = max(hi_x - lo_x, 500.0)
-    xs = np.linspace(lo_x - 0.04 * span, hi_x + 0.16 * span, 500)  # room for labels
-    p = np.searchsorted(fin, xs, side="right") / n
-    lo, hi = wilson(p, n)
-    c = _curve_color(d)
-    fig = go.Figure()
-    fig.add_scatter(x=list(xs) + list(xs[::-1]), y=list(100 * hi) + list(100 * lo[::-1]),
-                    fill="toself", fillcolor=_rgba(c, 0.14), line={"width": 0},
-                    hoverinfo="skip", name="sampling 95 % CI")  # fmt: skip
-    fig.add_scatter(x=xs, y=100 * p, mode="lines", line={"color": c, "width": 3},
-                    name=OUT_LABEL[key], showlegend=False,
-                    hovertemplate="%{x:,.0f} ft: enough in %{y:.0f} % of draws"
-                    "<extra></extra>")  # fmt: skip
-    fig.add_vline(x=nom, line={"color": MUTED, "width": 1, "dash": "dot"})
-    fig.add_annotation(x=nom, y=1, yref="paper", text=f"nominal {nom:,.0f}", showarrow=False,
-                       xanchor="right", yanchor="top", xshift=-4,
-                       font={"size": 11, "color": MUTED})  # fmt: skip
-    if f > 0:
-        fig.add_hline(y=100 * (1 - f), line={"color": BFL_C, "width": 1.5, "dash": "dash"})
-        fig.add_annotation(x=0, xref="paper", y=100 * (1 - f), yanchor="bottom", xanchor="left",
-                           xshift=4,
-                           showarrow=False, font={"color": BFL_C, "size": 12},
-                           text=f"<b>never above {fmt_p(1 - f)}</b>: {100 * f:.0f} % of draws "
-                           "cannot take off")  # fmt: skip
-    for r in runways:
-        pr = float(np.mean(x <= r))
-        fig.add_shape(type="line", x0=r, x1=r, y0=0, y1=100 * pr,
-                      line={"color": INK, "width": 1.5, "dash": "dot"})  # fmt: skip
-        fig.add_scatter(x=[r], y=[100 * pr], mode="markers+text", showlegend=False,
-                        marker={"size": 13, "color": INK, "line": {"color": "white", "width": 2}},
-                        text=[f"<b>{fmt_p(pr)}</b>  {r:,.0f} ft"],
-                        textposition="bottom right",
-                        textfont={"size": 14, "color": INK}, cliponaxis=False,
-                        hovertemplate=f"{r:,.0f} ft: enough in {100 * pr:.1f} % of draws"
-                        "<extra></extra>")  # fmt: skip
-    fig.update_xaxes(title="runway length [ft]", tickformat=",")
-    fig.update_yaxes(title="chance it is enough", ticksuffix=" %", range=[0, 104], dtick=20)
-    if runways:
-        title = " · ".join(f"{r:,.0f} ft: {fmt_p(np.mean(x <= r))}" for r in runways)
-    else:
-        title = "Chance a runway is enough"
-    fig = _layout(fig, title, _subtitle(d), 380)
-    fig.update_layout(legend={"y": -0.2, "x": 1, "xanchor": "right"}, hovermode="closest")
-    return fig
+    return odds_chart(values(d, key), d["nominal"][key], runways, _curve_color(d), _subtitle(d),
+                      "nominal", "draws", "cannot take off")  # fmt: skip
 
 
 # ------------------------------------------------------------------------------------

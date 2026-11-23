@@ -1,10 +1,11 @@
-"""Figures for the 11/25/26 update (gust_slides.html: the plan) and the detailed gust deck
-(gust_slides_detail.html, material for the final presentation): presentation/fig_gu_*.svg.
+"""Figures for the 11/25/26 gust decks: gust_slides.html (261125_update.pdf, the full
+story) and gust_plan_slides.html (261125a_update.pdf, two slides): presentation/fig_gu_*.svg.
 
     python presentation/make_gust_figures.py
 
-Uses the existing bfl gust analysis (no code changes). The gust studies take a few
-minutes; their results are cached in presentation/_gust_cache.pkl (delete it to re-run).
+Uses the bfl gust analysis. The gust studies take a few minutes; their results are cached
+in presentation/_gust_cache.pkl, the time-step study (presentation/_make_conv.py) in
+_gust_conv.pkl (delete to re-run).
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from bfl import load_config
-from bfl.gusts import GustSettings, dryden, gust_study, quantile_ci, span_average
+from bfl.gusts import GustSettings, dryden, gust_signal, gust_study, quantile_ci, span_average
 
 OUT = Path(__file__).resolve().parent
 CACHE = OUT / "_gust_cache.pkl"
@@ -63,7 +64,7 @@ def _ok(s):
 # slide 2: the answer
 # ------------------------------------------------------------------------------------
 def fig_margin(data: dict) -> None:
-    fig, ax = plt.subplots(figsize=(7.4, 4.6), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(7.4, 5.2), constrained_layout=True)
     ps = np.linspace(0.5, 0.995, 80)
     z = [ND.inv_cdf(p) for p in ps]
     for inten, c in RAMP.items():
@@ -186,7 +187,7 @@ def fig_dryden_simple() -> None:
     base = 0.177 + 0.000823 * h
     sw = 3.0 * np.ones_like(h)
     su, lu = sw / base**0.4, h / base**1.2
-    fig, (a, b) = plt.subplots(1, 2, figsize=(7.0, 4.3), sharey=True, constrained_layout=True)
+    fig, (a, b) = plt.subplots(1, 2, figsize=(7.0, 4.9), sharey=True, constrained_layout=True)
     a.plot(su, h, color=BLUE, lw=2.6, label="along the runway, σ$_u$")
     a.plot(sw, h, color=ORANGE, lw=2.6, label="vertical, σ$_w$")
     a.set(xlabel="strength σ [kt]", ylabel="height above ground h [ft]", xlim=(0, 7.5))
@@ -266,7 +267,7 @@ def fig_run(data: dict) -> None:
     tr = data[("b747_100", "moderate")]["traces"][0]["go"]
     t, va, vi = tr["t_s"].to_numpy(), tr["V_air_kts"].to_numpy(), tr["V_ind_kts"].to_numpy()
     sel = (t > 28) & (t < 52)
-    fig, ax = plt.subplots(figsize=(7.6, 4.2), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(7.6, 5.0), constrained_layout=True)
     ax.plot(t[sel], va[sel], color="#a9b3be", lw=1.1, label="true airspeed (every gust)")
     ax.plot(t[sel], vi[sel], color=INK, lw=2.4, label="what the crew acts on (gust part lagged 1 s)")
     for v, lab, c in ((r.v_ef_kts, "engine fails (V_EF)", ORANGE), (r.vr_kts, "rotate (VR)", BLUE)):
@@ -375,6 +376,286 @@ def fig_sampling(data: dict) -> None:
                                                   zip(sizes, spreads, strict=True)))  # fmt: skip
 
 
+# ------------------------------------------------------------------------------------
+# 11/25 decks (gust_slides.html, gust_plan_slides.html): one reference case throughout
+#   moderate turbulence (W20 = 30 kt), h = 20 ft, horizontal gust:
+#   sigma = 5.8 kt, L = 144 ft;  T = L / V = 0.57 s at 150 kt, 2.1 s at 40 kt
+# ------------------------------------------------------------------------------------
+H_REF, W20_REF = 20.0, 30.0
+
+
+def _ref() -> tuple[float, float]:
+    su, _, lu, _ = dryden(H_REF, W20_REF)
+    return su / KT, lu  # kt, ft
+
+
+def _ou(z: np.ndarray, sigma: float, tc: float, dt: float, g0: float = 0.0, pull: bool = True,
+        kick: bool = True) -> np.ndarray:  # fmt: skip
+    """The Euler-Maruyama update rule, term by term (as on the slides)."""
+    g = np.empty(len(z) + 1)
+    g[0] = g0
+    for k in range(len(z)):
+        g[k + 1] = (g[k] - (g[k] / tc * dt if pull else 0.0)
+                    + (sigma * math.sqrt(2 / tc) * math.sqrt(dt) * z[k] if kick else 0.0)
+                    )  # fmt: skip
+    return g
+
+
+def fig_days(data: dict) -> None:
+    """Three gusty takeoffs: the along-runway gust each one flew through."""
+    tr = data[("b747_100", "moderate")]["traces"]
+    fig, axs = plt.subplots(3, 1, figsize=(7.2, 5.6), sharex=True, sharey=True,
+                            constrained_layout=True)  # fmt: skip
+    for i, ax in enumerate(axs):
+        df = tr[i]["go"]
+        ax.plot(df["t_s"], df["u_g_kts"], color=BLUE, lw=1.0)
+        ax.axhline(0, color=MUTED, lw=0.8)
+        ax.text(0.01, 0.92, f"takeoff {i + 1}", transform=ax.transAxes, fontsize=12,
+                fontweight="bold", va="top")  # fmt: skip
+        ax.set_ylim(-16, 16)
+        ax.set_yticks([-10, 0, 10])
+    axs[1].set_ylabel("gust along the runway [kt]")
+    axs[-1].set_xlabel("time since brake release [s]")
+    fig.savefig(OUT / "fig_gu_days.svg")
+    plt.close(fig)
+
+
+def fig_frozen() -> None:
+    """Flying through a frozen gust pattern: the same pattern, two speeds, two memories."""
+    sigma, L = _ref()
+    rng = np.random.default_rng(12)
+    x = np.linspace(0, 1100, 4401)
+    g = _field(rng, L, x, sigma)
+    t_win = 4.0
+    fig, axs = plt.subplots(3, 1, figsize=(7.6, 5.6), constrained_layout=True,
+                            gridspec_kw={"height_ratios": [1.2, 1, 1]})  # fmt: skip
+    a = axs[0]
+    a.plot(x, g, color=INK, lw=1.2)
+    a.set(xlabel="distance along the runway [ft]", ylabel="gust [kt]", xlim=(0, 1100))
+    a.set_ylim(-4.2 * sigma, 3.4 * sigma)
+    a.annotate("", (300 + L, 2.6 * sigma), (300, 2.6 * sigma),
+               arrowprops={"arrowstyle": "<->", "color": INK, "lw": 1.5})  # fmt: skip
+    a.text(300 + L / 2, 2.75 * sigma, f"L = {L:.0f} ft", ha="center", va="bottom", fontsize=11.5)
+    a.set_title("① the air: a gust pattern frozen in space", loc="left", fontsize=12.5)
+    for i, (kts, c) in enumerate(((150.0, ORANGE), (40.0, BLUE))):
+        v = kts * KT
+        a.hlines(-3.0 * sigma - 0.75 * sigma * i, 0, v * t_win, color=c, lw=5)
+        a.text(v * t_win + 15, -3.0 * sigma - 0.75 * sigma * i, f"{kts:.0f} kt covers this in "
+               f"{t_win:.0f} s", color=c, va="center", fontsize=11)  # fmt: skip
+        ax = axs[1 + i]
+        t = np.linspace(0, t_win, 1600)
+        ax.plot(t, np.interp(v * t, x, g), color=c, lw=1.6)
+        ax.set(ylabel="gust felt [kt]", xlim=(0, t_win))
+        ax.set_ylim(-3.2 * sigma, 3.2 * sigma)
+        ax.annotate("", (0.4 + L / v, 2.3 * sigma), (0.4, 2.3 * sigma),
+                    arrowprops={"arrowstyle": "<->", "color": c, "lw": 1.5})  # fmt: skip
+        ax.text(0.4 + L / v + 0.06, 2.3 * sigma, f"T = L / V = {L / v:.2f} s", color=c,
+                va="center", fontsize=11.5, fontweight="bold")  # fmt: skip
+        ax.set_title(f"{'②' if i == 0 else '③'} felt at {kts:.0f} kt", loc="left", fontsize=12.5)
+    axs[2].set_xlabel("time [s]")
+    fig.savefig(OUT / "fig_gu_frozen.svg")
+    plt.close(fig)
+
+
+def fig_build() -> None:
+    """Why the equation has both terms: pull only, kicks only, both."""
+    sigma, L = _ref()
+    tc = L / (40 * KT)  # the slow case: 2.1 s
+    dt, t_end = 0.01, 30.0
+    z = np.random.default_rng(13).standard_normal(int(t_end / dt))  # a typical-looking path
+    t = np.arange(len(z) + 1) * dt
+    cases = (
+        ("pull only", r"$g_{n+1} = g_n - \frac{g_n}{T}\,\Delta t$",
+         _ou(z, sigma, tc, dt, 14.0, kick=False),
+         "fades like $e^{-t/T}$,\nthen nothing"),
+        ("kicks only", r"$g_{n+1} = g_n + c\,\sqrt{\Delta t}\,Z_n$",
+         _ou(z, sigma, tc, dt, 0.0, pull=False),
+         "wanders off:\nnever settles"),
+        ("both", r"$g_{n+1} = g_n - \frac{g_n}{T}\Delta t + c\sqrt{\Delta t}\,Z_n$",
+         _ou(z, sigma, tc, dt, 0.0), "stays about $\\pm\\sigma$,\nchanges over ~T"),
+    )  # fmt: skip
+    fig, axs = plt.subplots(1, 3, figsize=(12.2, 4.3), sharey=True, constrained_layout=True)
+    for ax, (name, eq, g, note), c in zip(axs, cases, (BLUE, MUTED, GREEN), strict=True):
+        ax.axhspan(-sigma, sigma, color=GRID, alpha=0.9, lw=0)
+        ax.plot(t, g, color=c if name != "kicks only" else INK, lw=1.6)
+        ax.set_title(name, loc="left", fontsize=14)
+        ax.text(0.03, 0.97, eq, transform=ax.transAxes, va="top", fontsize=12.5,
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9})  # fmt: skip
+        ax.text(0.97, 0.05, note, transform=ax.transAxes, ha="right", va="bottom", fontsize=12,
+                color=INK,
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9})  # fmt: skip
+        ax.set_xlabel("time [s]")
+        ax.set_ylim(-30, 30)
+    axs[0].set_ylabel("gust [kt]")
+    axs[0].text(t_end, sigma + 0.6, "±σ ", ha="right", va="bottom", color=MUTED, fontsize=11)
+    fig.savefig(OUT / "fig_gu_build.svg")
+    plt.close(fig)
+    print(f"  build: sigma {sigma:.2f} kt, T {tc:.2f} s")
+
+
+def fig_sqrt() -> None:
+    """Why the kick scales with sqrt(dt): the spread of the summed kicks over time."""
+    rng = np.random.default_rng(2)
+    fig, axs = plt.subplots(1, 2, figsize=(6.6, 2.7), sharey=True, constrained_layout=True)
+    for ax, power, title in ((axs[0], 1.0, "kick ∝ Δt"), (axs[1], 0.5, "kick ∝ √Δt")):
+        for dt, c in ((0.1, MUTED), (0.01, BLUE), (0.001, ORANGE)):
+            n = int(round(2.0 / dt))
+            paths = np.cumsum(dt**power * rng.standard_normal((n, 2000)), axis=0)
+            t = np.arange(1, n + 1) * dt
+            ax.plot(t, paths.std(axis=1), color=c, lw=2.2, label=f"Δt = {dt:g} s")
+        ax.set_title(title, loc="left", fontsize=13)
+        ax.set_xlabel("time t [s]")
+    axs[0].set_ylabel("spread of the\nsum of kicks")
+    axs[0].legend(fontsize=9.5, loc="upper left")
+    axs[0].text(1.95, 0.62, "shrinks to 0 as Δt → 0", ha="right", fontsize=10.5, color=INK)
+    axs[1].text(1.95, 0.25, "same for every Δt: √t", ha="right", fontsize=10.5, color=INK)
+    fig.savefig(OUT / "fig_gu_sqrt.svg")
+    plt.close(fig)
+
+
+def _var_ratio(r, method: str):
+    r = np.asarray(r, float)
+    if method == "em":
+        return 1.0 / (1.0 - r / 2.0)
+    return (1 - r + r * r / 4) / (1 - r + r * r / 2 - r**3 / 8)
+
+
+def fig_var() -> None:
+    """Gust variance error of the stepped equation: EM first order, Heun second."""
+    r = np.logspace(-3, 0, 200)
+    fig, ax = plt.subplots(figsize=(6.6, 5.0), constrained_layout=True)
+    ax.axvspan(0.01 / 3.0, 0.01 / 0.3, color=BLUE, alpha=0.10, lw=0)
+    ax.text(math.sqrt(0.01 / 3.0 * 0.01 / 0.3), 2.5e2, "our runs\nΔt = 0.01 s,\nT = 0.3–3 s",
+            ha="center", va="top", fontsize=10.5, color=INK)  # fmt: skip
+    for m, lab, c, ls in (("em", "Euler–Maruyama", ORANGE, "--"), ("heun", "Heun", BLUE, "-")):
+        ax.loglog(r, 100 * np.abs(_var_ratio(r, m) - 1), color=c, lw=2.6, ls=ls, label=lab)
+        rs, vs = [], []
+        base = gust_signal(W20_REF, H_REF, 150.0, t_end_s=0.01, dt_s=0.01)
+        for rr in (0.2, 0.4, 0.8):
+            dt = rr * base["T_u"]
+            g = gust_signal(W20_REF, H_REF, 150.0, t_end_s=150 * base["T_u"], dt_s=dt, method=m,
+                            seed=11, n_paths=3000)  # fmt: skip
+            rs.append(rr)
+            vs.append(abs(float(np.mean(g["u"] ** 2)) / g["sigma_u"] ** 2 - 1))
+        ax.loglog(rs, 100 * np.array(vs), "o", ms=8, mfc="white", mec=c, mew=2)
+    ax.text(0.0025, 100 * 0.0025 / 2 * 1.9, "∝ Δt", color=ORANGE, fontsize=13, fontweight="bold",
+            rotation=20)  # fmt: skip
+    ax.text(0.0025, 100 * (0.0025**2 / 4) * 2.2, "∝ Δt²", color=BLUE, fontsize=13,
+            fontweight="bold", rotation=36)  # fmt: skip
+    ax.set(xlabel="time step / memory   Δt / T", ylabel="error in the gust variance [%]",
+           ylim=(1e-5, 4e2), xlim=(1e-3, 1))  # fmt: skip
+    ax.legend(loc="lower right", fontsize=11.5)
+    fig.savefig(OUT / "fig_gu_var.svg")
+    plt.close(fig)
+    for rr in (0.0033, 0.033):
+        print(f"  dt/T {rr}: EM {100 * (_var_ratio(rr, 'em') - 1):+.2f} %, "
+              f"Heun {100 * (_var_ratio(rr, 'heun') - 1):+.4f} %")
+
+
+def fig_check() -> None:
+    """The generated gusts against what Dryden asks for: strength and memory."""
+    g = gust_signal(W20_REF, H_REF, 150.0, t_end_s=40.0, dt_s=0.01, method="heun", seed=3,
+                    n_paths=400)  # fmt: skip
+    x = g["u"]
+    sig, tc = g["sigma_u"], g["T_u"]
+    fig, (a, b) = plt.subplots(1, 2, figsize=(10.8, 4.0), constrained_layout=True)
+    a.hist((x / sig).ravel(), bins=np.linspace(-4, 4, 41), density=True, color=BLUE, alpha=0.55,
+           label="generated (400 runs × 40 s)")  # fmt: skip
+    zz = np.linspace(-4, 4, 200)
+    a.plot(zz, np.exp(-zz * zz / 2) / math.sqrt(2 * math.pi), color=INK, lw=2.2, ls="--",
+           label="normal, std σ")  # fmt: skip
+    a.set(xlabel="gust / σ", ylabel="share of time (density)")
+    a.set_title(f"① strength: measured std = {np.std(x) / sig:.3f} σ", loc="left", fontsize=13)
+    a.legend(loc="upper left", fontsize=10, frameon=True, framealpha=0.9, edgecolor="none")
+    a.set_ylim(0, 0.52)
+    xc = x - x.mean()
+    kmax = int(3 * tc / 0.01)
+    rho = [1.0] + [float(np.mean(xc[:-k] * xc[k:]) / np.mean(xc * xc)) for k in range(1, kmax + 1)]
+    lag = np.arange(kmax + 1) * 0.01
+    b.plot(lag, rho, color=BLUE, lw=3, label="generated")
+    b.plot(lag, np.exp(-lag / tc), color=INK, lw=2.2, ls="--", label=r"$e^{-\tau/T}$")
+    b.axvline(tc, color=MUTED, lw=1, ls=":")
+    b.text(tc, 0.6, f"  τ = T = {tc:.2f} s:\n  37 % remembered", color=MUTED, fontsize=11)
+    b.set(xlabel="time apart τ [s]", ylabel="correlation", ylim=(-0.05, 1.05))
+    b.set_title("② memory: correlation τ seconds apart", loc="left", fontsize=13)
+    b.legend(loc="upper right", fontsize=11)
+    fig.savefig(OUT / "fig_gu_check.svg")
+    plt.close(fig)
+    print(f"  check: std {np.std(x) / sig:.4f} sigma, rho(T) {rho[int(round(tc / 0.01))]:.3f}")
+
+
+def fig_history() -> None:
+    """Plan deck: what the generator produces at the reference case."""
+    g = gust_signal(W20_REF, H_REF, 150.0, t_end_s=10.0, dt_s=0.01, method="heun", seed=21)
+    sig, tc = g["sigma_u"], g["T_u"]
+    fig, ax = plt.subplots(figsize=(11.6, 2.9), constrained_layout=True)
+    ax.axhspan(-sig, sig, color=GRID, alpha=0.9, lw=0)
+    ax.plot(g["t"], g["u"][:, 0], color=BLUE, lw=1.6)
+    ax.text(10.05, sig, f"+σ = {sig:.1f} kt", va="center", color=MUTED, fontsize=11)
+    ax.text(10.05, -sig, "−σ", va="center", color=MUTED, fontsize=11)
+    ax.set(xlabel="time [s]", ylabel="gust [kt]", xlim=(0, 10))
+    ax.set_title(f"output: one gust history, a number every 0.01 s  (moderate, 20 ft, 150 kt: "
+                 f"σ = {sig:.1f} kt, T = {tc:.2f} s)", loc="left", fontsize=12.5)  # fmt: skip
+    fig.savefig(OUT / "fig_gu_history.svg")
+    plt.close(fig)
+
+
+def fig_sketch(data: dict) -> None:
+    """Plan deck: N runs -> a distribution -> the runway that covers 95 %."""
+    x = _ok(data[("b747_100", "moderate")]["samples"])["takeoff_field_ft"].to_numpy()
+    fig, ax = plt.subplots(figsize=(4.6, 3.3), constrained_layout=True)
+    ax.hist(x, bins=30, color=BLUE, alpha=0.7)
+    p95 = np.quantile(x, 0.95)
+    ax.axvline(p95, color=ORANGE, lw=2.4)
+    ax.text(p95, ax.get_ylim()[1] * 0.95, " P95", color=ORANGE, fontweight="bold", va="top")
+    ax.set(xlabel="runway length", ylabel="number of runs")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_title("N runs → a spread of runway lengths", loc="left", fontsize=12)
+    fig.savefig(OUT / "fig_gu_sketch.svg")
+    plt.close(fig)
+
+
+def fig_budget(data: dict) -> dict:
+    """Error budget of the moderate-turbulence 747 answer: the effect measured, the sampling
+    error at 500 runs, and the time-step error at dt = 0.01 s (cached convergence study)."""
+    path = OUT / "_gust_conv.pkl"
+    if not path.exists():
+        print("  (no _gust_conv.pkl yet: run presentation/_make_conv.py)")
+        return {}
+    conv = pickle.loads(path.read_bytes())
+    heun = conv[(conv["method"] == "heun") & (conv["output"] != "landing_distance_ft")]
+    e_dt = float(heun[heun["dt"] == 0.01]["error_ft"].max())
+    pool = _ok(data["pool"]["samples"])["takeoff_field_ft"].to_numpy()
+    calm = data["pool"]["calm"]["takeoff_field_ft"]
+    rng = np.random.default_rng(0)
+    p95 = np.array([np.quantile(rng.choice(pool, 500), 0.95) for _ in range(400)]) - calm
+    e_samp = 1.96 * float(np.std(p95))
+    x = _ok(data[("b747_100", "moderate")]["samples"])["takeoff_field_ft"].to_numpy()
+    calm_mod = data[("b747_100", "moderate")]["calm"]["takeoff_field_ft"]
+    effect = float(np.quantile(x, 0.95)) - calm_mod
+    rows = [("the effect we measure:\nextra runway for 95 %", effect, GREEN),
+            ("sampling error of that\nnumber (500 runs)", e_samp, ORANGE),
+            ("time-step error\n(Heun, Δt = 0.01 s)", e_dt, BLUE)]  # fmt: skip
+    fig, ax = plt.subplots(figsize=(7.0, 4.0), constrained_layout=True)
+    for i, (_lab, v, c) in enumerate(rows):
+        ax.barh(i, v, color=c, height=0.6)
+        sign = "+" if i == 0 else "±"
+        ax.text(v + 6, i, f"{sign}{v:,.0f} ft", va="center", fontsize=14, fontweight="bold",
+                color=INK)  # fmt: skip
+    ax.set_yticks(range(3), [r[0] for r in rows], fontsize=12, color=INK)
+    ax.invert_yaxis()
+    ax.set_xlim(0, effect * 1.25)
+    ax.set_xlabel("feet of runway")
+    ax.grid(axis="y", visible=False)
+    fig.savefig(OUT / "fig_gu_budget.svg")
+    plt.close(fig)
+    tab = conv[conv["method"] == "heun"].pivot_table(index="dt", columns="output",
+                                                     values="error_ft")  # fmt: skip
+    print(f"  budget: effect {effect:+.0f}, sampling ±{e_samp:.0f}, dt ±{e_dt:.1f}")
+    print(tab.round(1))
+    return {"effect": effect, "sampling": e_samp, "dt": e_dt, "table": tab}
+
 def main() -> None:
     data = studies()
     fig_margin(data)
@@ -388,6 +669,15 @@ def main() -> None:
     print("\nwing averaging, moderate:")
     fig_wing()
     fig_sampling(data)
+    fig_days(data)
+    fig_frozen()
+    fig_build()
+    fig_sqrt()
+    fig_var()
+    fig_check()
+    fig_history()
+    fig_sketch(data)
+    fig_budget(data)
     print(f"figures in {OUT}")
 
 

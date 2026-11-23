@@ -137,6 +137,49 @@ def dryden(
     return su, sw, lu, lw
 
 
+def gust_signal(
+    w20_kts: float,
+    h_ft: float,
+    v_kts: float,
+    t_end_s: float = 60.0,
+    dt_s: float = 0.01,
+    method: str = "heun",
+    seed: int = 1,
+    span_ft: float | None = None,
+    n_paths: int = 1,
+) -> dict[str, Any]:
+    """Gust histories at a fixed height and airspeed, made exactly as in a gusty run.
+
+    Dryden gives (sigma, L) for each component at height h (span-averaged if the span is
+    given); the airspeed turns the length into a memory T = L / V; the Ornstein-Uhlenbeck
+    SDE  dg = -g/T dt + sigma sqrt(2/T) dW  is stepped with the same SDE step as the
+    simulation (bfl.sde). Each path starts from the stationary distribution N(0, sigma^2).
+
+    Returns t [s], u and w [kt] with shape (steps + 1, n_paths), and sigma_u, sigma_w [kt],
+    L_u, L_w [ft], T_u, T_w [s]. Used to check the generator against its targets
+    (variance sigma^2, correlation e^(-tau/T)) and for the figures.
+    """
+    su, sw, lu, lw = dryden(h_ft, w20_kts, span_ft)
+    v = max(v_kts * KTS_TO_FTPS, V_FLOOR)
+    tu, tw = lu / v, lw / v
+    step = get_step(method)
+    n = int(round(t_end_s / dt_s))
+    rng = np.random.default_rng(seed)
+    y = [su * rng.standard_normal(n_paths), sw * rng.standard_normal(n_paths)]
+    out = np.empty((n + 1, 2, n_paths))
+    out[0] = y
+    dw = rng.standard_normal((n, 2, n_paths)) * math.sqrt(dt_s)
+    gu, gw = su * math.sqrt(2.0 / tu), sw * math.sqrt(2.0 / tw)
+    drift = lambda _t, yy: [-yy[0] / tu, -yy[1] / tw]  # noqa: E731
+    diff = lambda _t, _yy: [gu, gw]  # noqa: E731
+    for k in range(n):
+        y = step(drift, diff, k * dt_s, y, dt_s, dw[k])
+        out[k + 1] = y
+    return {"t": np.arange(n + 1) * dt_s, "u": out[:, 0, :] * FTPS_TO_KTS,
+            "w": out[:, 1, :] * FTPS_TO_KTS, "sigma_u": su * FTPS_TO_KTS,
+            "sigma_w": sw * FTPS_TO_KTS, "L_u": lu, "L_w": lw, "T_u": tu, "T_w": tw}  # fmt: skip
+
+
 # state indices
 X, H, U, W, UG, WG, GF, FUEL = range(8)
 
@@ -782,5 +825,5 @@ def convergence_study(
     return pd.DataFrame(rows)
 
 
-__all__ = ["GustSettings", "GustResult", "gust_study", "convergence_study", "dryden",
+__all__ = ["GustSettings", "GustResult", "gust_study", "convergence_study", "dryden", "gust_signal",
            "quantile_ci", "OUTPUTS", "INTENSITY_W20_KTS"]  # fmt: skip

@@ -287,9 +287,44 @@ def gusts(cfg_json: str, settings_json: str) -> dict[str, Any]:
         "summary": res.summary(),
         "time_s": res.time_s,
         "dryden": res.dryden_at,
+        "span_ft": cfg.aircraft.geometry.span_ft or cfg.aircraft.ground_effect.span_ft,
         "speeds": {"v_ef_kts": sch_ref.v_ef_kts, "vr_kts": sch_ref.vr_kts,
                    "v_s_kts": vm.tas_to_eas(vm.stall_speed_tas()) * FTPS_TO_KTS},
     }  # fmt: skip
+
+
+@lru_cache(maxsize=32)
+def gust_generator(w20: float, h_ft: float, v_kts: float, dt_s: float, method: str,
+                   span_ft: float | None) -> dict[str, Any]:  # fmt: skip
+    """Gust histories at a fixed height and airspeed (bfl.gusts.gust_signal), for the
+    page's generator panel: 300 paths, 20 s or 60 memories, whichever is longer."""
+    from bfl.gusts import gust_signal
+
+    probe = gust_signal(w20, h_ft, v_kts, t_end_s=dt_s, dt_s=dt_s, span_ft=span_ft)
+    t_end = max(20.0, 60.0 * max(probe["T_u"], probe["T_w"]))
+    t_end = min(t_end, 4000 * dt_s)
+    return gust_signal(w20, h_ft, v_kts, t_end_s=t_end, dt_s=dt_s, method=method, seed=7,
+                       span_ft=span_ft, n_paths=300)  # fmt: skip
+
+
+@lru_cache(maxsize=1)
+def gust_variance_points() -> dict[str, tuple[list[float], list[float]]]:
+    """Simulated long-run gust variance / sigma^2 at a few dt/T, both methods (the dots on
+    the time-step figure; the lines are the exact formula)."""
+    from bfl.gusts import gust_signal
+
+    out: dict[str, tuple[list[float], list[float]]] = {}
+    base = gust_signal(30.0, 20.0, 150.0, t_end_s=0.01, dt_s=0.01)
+    for m in ("em", "heun"):
+        rs, vs = [], []
+        for r in (0.2, 0.4, 0.8):  # where the error stands above the sampling noise (~0.3 %)
+            dt = r * base["T_u"]
+            g = gust_signal(30.0, 20.0, 150.0, t_end_s=150 * base["T_u"], dt_s=dt, method=m,
+                            seed=11, n_paths=3000)  # fmt: skip
+            rs.append(r)
+            vs.append(float(np.mean(g["u"] ** 2)) / g["sigma_u"] ** 2)
+        out[m] = (rs, vs)
+    return out
 
 
 @lru_cache(maxsize=8)

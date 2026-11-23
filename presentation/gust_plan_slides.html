@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BFL – 11/25/26 update: gusts, what we will implement</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  :root {
+    --ink: #0f1d2b; --muted: #4a5868; --line: #d7dee6; --soft: #f3f7fb;
+    --blue: #2a78d6; --orange: #eb6834; --green: #1baf7a; --red: #d7263d; --faa: #1f9d55;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Noto Sans", "DejaVu Sans", sans-serif; color: var(--ink); }
+  .slide { width: 1280px; height: 720px; position: relative; overflow: hidden; background: white;
+           padding: 36px 56px; page-break-after: always; break-after: page; }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+  h2 { margin: 0 0 14px; font-size: 31px; letter-spacing: -0.3px; }
+  .foot { position: absolute; left: 56px; right: 56px; bottom: 14px; font-size: 12px; color: #8a96a3;
+          display: flex; justify-content: space-between; }
+  .m { font-family: "DejaVu Serif", serif; }
+  .box { background: var(--soft); border-radius: 12px; padding: 11px 16px; }
+  .note { font-size: 13px; color: var(--muted); line-height: 1.45; }
+  .key { border-left: 5px solid var(--blue); background: #eaf2fc; border-radius: 8px; padding: 9px 14px;
+         font-size: 15.5px; line-height: 1.45; }
+  ul.tight { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.45; }
+  ul.tight li { margin: 4px 0; }
+  img.fig { display: block; width: 100%; }
+
+  /* title (same as the 11/13 and 11/20 decks) */
+  .title { background: linear-gradient(180deg, #4f8fd1 0%, #8ec1ea 55%, #dceefa 100%); color: white; padding: 0; }
+  .title .cloud { position: absolute; background: rgba(255,255,255,0.8); border-radius: 60px; height: 56px; filter: blur(1px); }
+  .title .cloud::before, .title .cloud::after { content: ""; position: absolute; background: inherit; border-radius: 50%; }
+  .title .cloud::before { width: 90px; height: 84px; left: 34px; top: -42px; }
+  .title .cloud::after  { width: 70px; height: 60px; left: 110px; top: -26px; }
+  .title-text { position: absolute; left: 80px; top: 150px; right: 80px; }
+  .title-text .course { font-size: 18px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+  .title-text h1 { font-size: 58px; line-height: 1.08; margin: 14px 0 16px; text-shadow: 0 2px 12px rgba(16,45,80,0.25); }
+  .title-text .tag { font-size: 23px; max-width: 900px; line-height: 1.35; }
+  .authors { position: absolute; left: 80px; bottom: 160px; font-size: 26px; font-weight: 600; color: #0f2c4c; }
+  .runway { position: absolute; left: 0; right: 0; bottom: 0; height: 96px; background: #a7c98a; }
+  .runway .rw { position: absolute; left: 80px; right: -20px; top: 26px; height: 44px; background: #3b3f46; }
+  .runway .dash { position: absolute; left: 140px; right: 0; top: 47px; border-top: 3px dashed white; }
+  .runway .keys { position: absolute; left: 92px; top: 31px; width: 34px; height: 34px;
+    background: repeating-linear-gradient(180deg, white 0 4px, transparent 4px 7px); }
+
+  /* layout helpers */
+  .two { display: grid; gap: 22px; align-items: start; }
+  .steps { display: flex; flex-direction: column; gap: 8px; }
+  .st { display: grid; grid-template-columns: 28px 1fr; gap: 9px; font-size: 14.6px; line-height: 1.38; }
+  .st .n { width: 26px; height: 26px; border-radius: 50%; background: var(--blue); color: white; font-weight: 700;
+           font-size: 13.5px; text-align: center; line-height: 26px; margin-top: 1px; }
+  .st b { color: var(--ink); }
+  .eq { font-family: "DejaVu Serif", serif; font-size: 15px; background: white; border: 1.5px solid var(--line);
+        border-radius: 8px; padding: 6px 10px; margin: 5px 0 3px; white-space: nowrap; }
+  .tag-pull { color: var(--blue); font-weight: 700; } .tag-kick { color: var(--orange); font-weight: 700; }
+  .nums { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .nums th { text-align: right; font-size: 12px; color: var(--muted); border-bottom: 2px solid var(--line); padding: 3px 6px; font-weight: 600; }
+  .nums th:first-child, .nums td:first-child { text-align: left; }
+  .nums td { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: right; white-space: nowrap; }
+  .nums td.h { font-weight: 700; }
+  .qa { border: 1.5px solid #f1c3a8; background: #fff6f0; border-radius: 10px; padding: 9px 14px; font-size: 13.6px; line-height: 1.42; }
+  .qa b.q { color: #a14a00; }
+  .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 8px; }
+  .three .box h4 { margin: 0 0 4px; font-size: 15px; }
+  .three .box { font-size: 13.6px; line-height: 1.42; }
+  .cap { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .banner { font-family: "DejaVu Serif", serif; font-size: 25px; text-align: center; margin: 0 0 4px; }
+  .banner .lab { display: block; font-family: "Noto Sans", sans-serif; font-size: 13px; font-weight: 700; margin-top: 2px; }
+  .banner span.part { display: inline-block; padding: 2px 10px; border-radius: 8px; vertical-align: top; text-align: center; }
+  .p-old { background: #eef1f4; } .p-pull { background: #e6f0fb; color: #1f5fae; } .p-kick { background: #fdeee4; color: #b4501d; }
+  .fbox { font-family: "DejaVu Serif", serif; font-size: 17px; line-height: 1.75; background: white;
+          border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 16px; }
+  .fbox .c { font-family: "Noto Sans", sans-serif; font-size: 12.5px; color: var(--muted); }
+  .dtab { border-collapse: collapse; font-size: 13.5px; width: 100%; }
+  .dtab th, .dtab td { padding: 3px 8px; text-align: right; border-bottom: 1px solid var(--line); }
+  .dtab th { font-size: 12px; color: var(--muted); border-bottom: 2px solid var(--line); }
+  .dtab td:first-child, .dtab th:first-child { text-align: left; }
+  .four { display: grid; grid-template-columns: 1.05fr 1fr 1fr; gap: 12px; margin-top: 4px; }
+  .four .box { font-size: 13.2px; line-height: 1.4; padding: 9px 13px; }
+  .four .box h4 { margin: 0 0 3px; font-size: 14.5px; }
+</style>
+<style>
+  .big2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 10px; }
+  .big2 .box { font-size: 15px; line-height: 1.4; }
+  .big2 .box b.k { font-family: "DejaVu Serif", serif; font-size: 22px; display: block; margin-bottom: 2px; }
+  .lead { font-size: 16px; color: var(--muted); margin: -6px 0 12px; }
+  .fbig { font-family: "DejaVu Serif", serif; font-size: 19px; line-height: 1.8; background: white;
+          border: 1.5px solid var(--line); border-radius: 10px; padding: 6px 18px; }
+  .fbig .c { font-family: "Noto Sans", sans-serif; font-size: 13px; color: var(--muted); margin-left: 8px; }
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin: 70px 0 56px; }
+  .flow .box { position: relative; font-size: 17px; line-height: 1.42; padding: 12px 14px; }
+  .flow .box h4 { margin: 0 0 8px; font-size: 19px; }
+  .flow .box .n { display: inline-block; width: 26px; height: 26px; border-radius: 50%; background: var(--blue);
+         color: white; font-weight: 700; text-align: center; line-height: 26px; margin-right: 6px; font-size: 14px; }
+  .flow .box:not(:last-child)::after { content: "→"; position: absolute; right: -14px; top: 40%;
+         font-size: 22px; color: var(--muted); }
+</style>
+<style>
+  .cap { font-size: 14.5px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+  .key { font-size: 17.5px; line-height: 1.45; }
+  .eqs { font-family: "DejaVu Serif", serif; font-size: 19px; line-height: 1.9; background: white;
+         border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 16px; }
+  .eqs .c { font-family: "Noto Sans", sans-serif; font-size: 13px; color: var(--muted); margin-left: 6px; }
+  .hl { background: #fdeee4; color: #b4501d; border-radius: 4px; padding: 0 3px; }
+  .hl2 { background: #e6f0fb; color: #1f5fae; border-radius: 4px; padding: 0 3px; }
+  .t15 { font-size: 17.5px; line-height: 1.5; }
+  .t15 p { margin: 0 0 9px; }
+  .deriv { font-family: "DejaVu Serif", serif; font-size: 19px; line-height: 1.9; }
+  .colhead { font-size: 19px; font-weight: 700; margin: 0 0 8px; }
+  table.res { border-collapse: collapse; font-size: 16.5px; width: 100%; }
+  table.res th, table.res td { padding: 5px 10px; border-bottom: 1px solid var(--line); text-align: right; }
+  table.res th { font-size: 13px; color: var(--muted); border-bottom: 2px solid var(--line); }
+  table.res td:first-child, table.res th:first-child { text-align: left; }
+  table.res td.b { font-weight: 700; }
+  .lim li { margin: 6px 0; }
+</style>
+</head>
+<body>
+
+
+<section class="slide">
+  <h2>Gusts: what we will implement</h2>
+  <div class="lead" style="font-size: 17px;">Our solver already flies a takeoff through any wind. New: a realistic random <b>gust history</b>
+    to fly through. Four steps turn a weather report into one:</div>
+  <div class="flow" style="margin: 18px 0 22px;">
+    <div class="box"><h4><span class="n">1</span>Dryden model</h4>Mean wind at 20 ft (W<sub>20</sub>) and height h →
+      gust <b>strength σ</b> and <b>length L</b><div class="m" style="margin-top: 8px; font-size: 16px;">σ<sub>w</sub> = 0.1 W<sub>20</sub>, &nbsp;L<sub>w</sub> = h</div></div>
+    <div class="box"><h4><span class="n">2</span>Fly through it</h4>The air pattern is frozen; at speed V a gust lasts
+      <div class="m" style="margin-top: 8px; font-size: 18px;">T = L / V</div></div>
+    <div class="box"><h4><span class="n">3</span>An SDE</h4>Fades over T, kicked by noise, size σ
+      (Ornstein–Uhlenbeck):<div class="m" style="margin-top: 8px; font-size: 16px;">dg = −(g/T) dt + σ√(2/T) dW</div></div>
+    <div class="box"><h4><span class="n">4</span>Step it</h4>Euler–Maruyama / Heun, Δt = 0.01 s, Z<sub>n</sub> ~ N(0, 1):
+      <div class="m" style="margin-top: 8px; font-size: 15px;">g<sub>n+1</sub> = g<sub>n</sub> − (g<sub>n</sub>/T)Δt + σ√(2Δt/T) Z<sub>n</sub></div></div>
+  </div>
+  <img class="fig" src="fig_gu_history.svg" alt="one generated gust history">
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>1</span></div>
+</section>
+
+<section class="slide">
+  <h2>Then: many gusty takeoffs → a runway with a confidence</h2>
+  <div class="two" style="grid-template-columns: 1fr 1fr 1fr; gap: 22px; margin-top: 18px;">
+    <div class="box" style="padding: 16px 18px;">
+      <div class="colhead">Fly</div>
+      <div class="t15" style="font-size: 16.5px;">
+        <p>The gust enters the airspeed and the angle of attack:</p>
+        <div class="eqs" style="font-size: 16.5px;">V<sub>air</sub> = V + u<sub>g</sub><br>α ≈ α₀ + w<sub>g</sub> / V</div>
+        <p style="margin-top: 10px;">The crew flies the calm-day V1 and VR, reading airspeed with a 1 s lag.</p>
+      </div>
+    </div>
+    <div class="box" style="padding: 16px 18px;">
+      <div class="colhead">Repeat</div>
+      <div class="t15" style="font-size: 16.5px;">
+        <p>500 takeoffs, new random gusts each. Sort the runway lengths: the one that covers 95 % (P95), with a
+          confidence interval from order statistics.</p>
+      </div>
+      <img class="fig" src="fig_gu_sketch.svg" alt="sketch: N runs give a spread; P95 marked">
+    </div>
+    <div class="box" style="padding: 16px 18px;">
+      <div class="colhead">Check</div>
+      <ul class="tight" style="font-size: 16.5px;">
+        <li><b>Generator</b>: gusts have strength σ and memory e<sup>−τ/T</sup></li>
+        <li><b>Time step</b>: expect Euler–Maruyama's gust error ∝ Δt, Heun's ∝ Δt²</li>
+        <li><b>Runs</b>: sampling error ∝ 1/√N</li>
+        <li><b>Gusts off</b>: must match the calm-day solver</li>
+      </ul>
+    </div>
+  </div>
+  <div class="key" style="margin-top: 22px; font-size: 18px;">Final presentation: the extra runway that covers 90 / 95 / 99 % of gusty days,
+    light to severe turbulence, 747-100 and SR-71.</div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>2</span></div>
+</section>
+
+</body>
+</html>

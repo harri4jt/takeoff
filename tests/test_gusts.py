@@ -98,3 +98,18 @@ def test_gust_convergence_errors_fall_with_the_step():
     for (_, _), g in df.groupby(["method", "output"]):
         e = g.sort_values("dt").error_ft.to_numpy()
         assert e[0] < e[1]  # dt 0.01 more accurate than 0.04
+
+
+def test_gust_signal_has_the_dryden_strength_and_memory():
+    """The generator reproduces its targets: variance sigma^2 and correlation e^(-tau/T)."""
+    from bfl.gusts import dryden, gust_signal
+
+    g = gust_signal(30.0, 20.0, 150.0, t_end_s=30.0, dt_s=0.01, method="heun", n_paths=400)
+    su = dryden(20.0, 30.0)[0] / 1.6878098571011957
+    assert g["sigma_u"] == pytest.approx(su, rel=1e-9)
+    assert np.std(g["u"]) == pytest.approx(g["sigma_u"], rel=0.03)
+    for comp, tc in (("u", g["T_u"]), ("w", g["T_w"])):
+        x = g[comp]
+        k = int(round(tc / 0.01))
+        rho = np.mean(x[:-k] * x[k:]) / np.mean(x * x)
+        assert rho == pytest.approx(np.exp(-k * 0.01 / tc), abs=0.04)

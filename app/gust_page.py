@@ -10,13 +10,14 @@ presentation (camera icon: high-resolution PNG).
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict
 
 import numpy as np
 import pandas as pd
 from dash import Input, Output, State, dcc, html, no_update
 
-from bfl.gusts import INTENSITY_W20_KTS, GustSettings, quantile_ci
+from bfl.gusts import INTENSITY_W20_KTS, GustSettings, dryden, quantile_ci
 
 from . import compute, gust_figures, loading
 from .trade import RUNWAY_PRESETS, _base_cfg, _num
@@ -58,12 +59,10 @@ def layout() -> html.Div:
                 children=[
                     html.H2("Gust analysis"),
                     dcc.Markdown(
-                        "How much extra runway to plan for a gusty day. Each run is one "
-                        "takeoff (with the engine failure at the critical moment) and one "
-                        "landing, flown on the **calm-day schedule** (same V1, VR and approach "
-                        "speed) through random gusts. The result is not a worst case: it is "
-                        "how often a given runway is enough. A side analysis: gusts are not "
-                        "used anywhere else in the tool.",
+                        "How much extra runway a gusty day needs. Each run is one takeoff (engine "
+                        "failure at the critical moment) and one landing, flown on the **calm-day "
+                        "schedule** through random gusts made from the Dryden turbulence model. "
+                        "Hundreds of runs give the chance that a runway is enough.",
                         className="hint",
                     ),
                     html.Div(id="gu-base", className="trade-base"),
@@ -219,170 +218,334 @@ def layout() -> html.Div:
 
 
 # ------------------------------------------------------------------------------------
-# results
+# results: the answer, how the gusts are made, one run, the margin curve, the checks
 # ------------------------------------------------------------------------------------
-def _card(d: dict, key: str, p: float) -> html.Div:
+RUNWAY_IDS = ("gu-rw-1", "gu-rw-2", "gu-rw-3")
+GEN_DTS = ((0.005, "0.005 s"), (0.01, "0.01 s"), (0.05, "0.05 s"), (0.2, "0.2 s"))
+
+
+def _panel(title: str, body: list, open_: bool = True, id_=None) -> html.Details:
+    """A results card that folds away (open by default)."""
+    kw = {"id": id_} if id_ else {}
+    return html.Details(open=open_, className="card un-panel",
+                        children=[html.Summary(title), *body], **kw)  # fmt: skip
+
+
+def _main(d: dict) -> str:
+    return gust_figures.headline_metrics(d)[0]
+
+
+def _x(d: dict, key: str) -> np.ndarray:
     ok = np.asarray([e == "" for e in d["samples"]["error"]])
-    x = np.asarray(d["samples"][key], dtype=float)[ok]
+    return np.asarray(d["samples"][key], dtype=float)[ok]
+
+
+def default_runways(d: dict) -> list[int]:
+    """Starting candidates: calm rounded up to 250 ft, then +250 and +500 (gust margins are
+    a few hundred feet)."""
+    base = int(math.ceil(d["calm"][_main(d)] / 250) * 250)
+    return [base, base + 250, base + 500]
+
+
+def runway_list(vals) -> list[float]:
+    return sorted({float(v) for v in vals if v is not None and float(v) > 0})
+
+
+def runway_odds(d: dict, rw) -> list:
+    if rw is None or not d:
+        return []
+    x = _x(d, _main(d))
+    p = float(np.mean(x <= float(rw)))
+    lo, hi = gust_figures.wilson(p, len(x))
+    return [html.Span(gust_figures.fmt_p(p), className="un-rw-p"),
+            html.Span(f"{100 * lo:.0f}–{100 * hi:.0f} %", className="hint")]  # fmt: skip
+
+
+def plan_tile(d: dict, p: float) -> list:
+    key = _main(d)
+    est, lo, hi = quantile_ci(_x(d, key), p)
     calm = d["calm"][key]
-    est, lo, hi = quantile_ci(x, p)
-    exceed = float(np.mean(x > calm + 0.5))
-    pct = round(100 * p)
-    color = gust_figures.COLORS[key]
-    return html.Div(
-        className="gu-card",
-        children=[
-            html.Div(
-                [
-                    html.Span(className="swatch", style={"background": color}),
-                    gust_figures.SHORT[key],
-                ],
-                className="m-label",
-            ),  # fmt: skip
-            html.Div(f"{est:,.0f} ft", className="m-value"),
-            html.Div(
-                f"{est - calm:+,.0f} ft ({100 * (est / calm - 1):+.1f} %) over the calm "
-                f"day's {calm:,.0f} ft",
-                className="gu-delta",
-            ),  # fmt: skip
-            html.Div(
-                f"covers {pct} % of runs · 95 % confidence {lo:,.0f}–{hi:,.0f} ft · "
-                f"{100 * exceed:.0f} % of runs need more than calm",
-                className="hint",
-            ),  # fmt: skip
-        ],
-    )
+    return [
+        html.Div(f"Plan for {round(100 * p)} % of gusty days", className="m-label"),
+        html.Div(f"{est:,.0f} ft", className="m-value"),
+        html.Div(f"{est - calm:+,.0f} ft · {100 * (est / calm - 1):+.1f} %", className="gu-delta"),
+        html.Div(f"sampling range {lo:,.0f}–{hi:,.0f} ft", className="hint"),
+    ]
 
 
-def _card_keys(d: dict, keys: list[str]) -> list[str]:
-    """Drop the combined card when one operation sets the runway in every run (it would
-    repeat that card); the answer sentence says which one."""
-    if "runway_required_ft" not in keys:
-        return keys
-    ok = np.asarray([e == "" for e in d["samples"]["error"]])
-    to = np.asarray(d["samples"]["takeoff_field_ft"], dtype=float)[ok]
-    ld = np.asarray(d["samples"]["landing_runway_ft"], dtype=float)[ok]
-    if np.all(to >= ld) or np.all(ld > to):
-        return [k for k in keys if k != "runway_required_ft"]
-    return keys
+def odds_figure(d: dict, runways: list[float]):
+    key = _main(d)
+    return gust_figures.odds_chart(_x(d, key), d["calm"][key], runways,
+                                   gust_figures.COLORS["takeoff_field_ft"]
+                                   if key != "landing_runway_ft" else gust_figures.LANDING_C,
+                                   gust_figures._subtitle(d), "calm", "runs")  # fmt: skip
+
+
+def _governs(d: dict) -> str:
+    if _main(d) != "runway_required_ft":
+        return "Takeoff only." if _main(d) == "takeoff_field_ft" else "Landing only."
+    to, ld = _x(d, "takeoff_field_ft"), _x(d, "landing_runway_ft")
+    share = float(np.mean(ld > to))
+    if share == 0:
+        return "Takeoff sets the runway in every run."
+    if share == 1:
+        return "Landing sets the runway in every run."
+    return f"Landing sets the runway in {100 * share:.0f} % of runs, takeoff in the rest."
 
 
 def answer(d: dict, p: float) -> list:
-    """The answer card's contents for coverage p (re-drawn alone when p changes)."""
-    keys = gust_figures.headline_metrics(d)
-    first = keys[0]
-    ok = np.asarray([e == "" for e in d["samples"]["error"]])
-    est = quantile_ci(np.asarray(d["samples"][first], dtype=float)[ok], p)[0]
-    calm = d["calm"][first]
-    gov = ""
-    if first == "runway_required_ft":
-        to = np.asarray(d["samples"]["takeoff_field_ft"], dtype=float)[ok]
-        ld = np.asarray(d["samples"]["landing_runway_ft"], dtype=float)[ok]
-        share = float(np.mean(to >= ld))
-        gov = f" Takeoff sets the runway in {100 * share:.0f} % of runs."
-    sentence = (
-        f"To cover {round(100 * p)} % of gusty-day operations, plan {est:,.0f} ft of runway: "
-        f"{est - calm:+,.0f} ft ({100 * (est / calm - 1):+.1f} %) over the calm-day "
-        f"{calm:,.0f} ft.{gov}"
-    )
-    n_ok, n_all = int(ok.sum()), len(ok)
+    key = _main(d)
+    calm = d["calm"][key]
+    x = _x(d, key)
+    n_all = len(d["samples"]["error"])
     errs = [e for e in d["samples"]["error"] if e]
     notes = []
     if errs:
-        notes.append(f"{n_all - n_ok} of {n_all} runs failed and are left out "
-                     f"(first: {errs[0]}).")  # fmt: skip
+        notes.append(f"{len(errs)} of {n_all} runs failed and are left out (first: {errs[0]}).")
     stall = d["samples"].get("stall_steps")
     if stall and sum(1 for v in stall if v and v > 0) > 0.05 * n_all:
         notes.append("Gusts pushed the angle of attack past the aero table at flying speed in "
                      "some runs (held at the table's end, a stall plateau).")  # fmt: skip
+    exceed = float(np.mean(x > calm + 0.5))
     return [
         html.Div(
             className="gu-answer-head",
             children=[
-                html.H3("Answer"),
                 html.Div(className="spacer"),
-                html.Span("Coverage", className="ctl-name"),
+                html.Span("Plan for", className="ctl-name"),
                 _seg("gu-cover", p, [(c, f"{round(100 * c)} %") for c in COVERAGE]),
             ],
         ),
-        html.P(sentence, className="gu-sentence"),
-        html.Div([_card(d, k, p) for k in _card_keys(d, keys)], className="gu-cards"),
+        html.Div(
+            className="un-answer-grid",
+            children=[
+                html.Div(
+                    className="un-tiles",
+                    children=[
+                        html.Div(
+                            className="gu-card",
+                            children=[
+                                html.Div("Calm day", className="m-label"),
+                                html.Div(f"{calm:,.0f} ft", className="m-value"),
+                                html.Div(
+                                    f"gusts need more in {100 * exceed:.0f} % of runs",
+                                    className="gu-delta",
+                                ),
+                            ],
+                        ),
+                        html.Div(
+                            id="gu-plan", className="gu-card un-plan", children=plan_tile(d, p)
+                        ),
+                        html.Div(
+                            className="gu-card un-rw",
+                            children=[
+                                html.Div("Runways you could use", className="m-label"),
+                                *[
+                                    html.Div(
+                                        className="un-rw-row",
+                                        children=[
+                                            dcc.Input(
+                                                id=rid,
+                                                type="number",
+                                                value=v,
+                                                step=50,
+                                                min=0,
+                                                debounce=True,
+                                                className="num-input",
+                                            ),
+                                            html.Span("ft", className="unit"),
+                                            html.Div(
+                                                id=rid + "-p",
+                                                className="un-rw-odds",
+                                                children=runway_odds(d, v),
+                                            ),
+                                        ],
+                                    )
+                                    for rid, v in zip(RUNWAY_IDS, default_runways(d), strict=True)
+                                ],
+                            ],
+                        ),
+                    ],
+                ),
+                _graph("gu-fig-odds", "odds"),
+            ],
+        ),  # fmt: skip
         *[html.Div(n, className="hint") for n in notes],
         html.Div(
             className="dl-row",
             children=[
-                html.Button(
-                    "⤓ Download runs (CSV)", id="gu-dl-csv-btn", n_clicks=0, className="btn"
-                ),  # fmt: skip
-                html.Button(
-                    "⤓ Download summary", id="gu-dl-txt-btn", n_clicks=0, className="btn"
-                ),  # fmt: skip
-                html.Span(
-                    f"{n_ok:,} runs in {d['time_s']:.1f} s · camera icon on a "
-                    "chart: PNG for slides",
-                    className="hint",
-                ),  # fmt: skip
+                html.Span(_governs(d), className="hint un-gov"),
+                html.Button("⤓ Runs (CSV)", id="gu-dl-csv-btn", n_clicks=0, className="btn"),
+                html.Button("⤓ Summary", id="gu-dl-txt-btn", n_clicks=0, className="btn"),
+                html.Span(f"{len(x):,} runs · {d['time_s']:.0f} s", className="hint"),
             ],
         ),
     ]
 
 
+def _gen_controls(d: dict) -> html.Div:
+    vr = int(round(d["speeds"]["vr_kts"]))
+    s = d["settings"]
+    dt0 = s["dt_s"] if s["dt_s"] in [v for v, _ in GEN_DTS] else 0.01
+    return html.Div(
+        className="gu-gen-controls",
+        children=[
+            html.Div(className="un-slider", children=[
+                html.Label("airspeed [kt]"),
+                dcc.Slider(id="gu-gen-v", min=10, max=250, step=5, value=vr,
+                           marks={v: str(v) for v in (10, 50, 100, 150, 200, 250)},
+                           updatemode="mouseup", tooltip={"placement": "top"}),
+            ]),
+            html.Div(className="un-slider", children=[
+                html.Label("height [ft]"),
+                dcc.Slider(id="gu-gen-h", min=10, max=500, step=10, value=10,
+                           marks={v: str(v) for v in (10, 100, 200, 300, 400, 500)},
+                           updatemode="mouseup", tooltip={"placement": "top"}),
+            ]),
+            _field("Method", _seg("gu-gen-m", s["method"],
+                                  [("heun", "Heun"), ("em", "Euler–Maruyama")])),
+            _field("Time step", _seg("gu-gen-dt", dt0, list(GEN_DTS))),
+        ],
+    )  # fmt: skip
+
+
+def gen_table(g: dict, w20: float, h: float, v: float, dt: float, span) -> html.Div:
+    """The chain from the weather to the update rule, with this case's numbers."""
+    rows = [html.Tr([html.Th(""), html.Th("strength σ"), html.Th("length L"),
+                     html.Th("memory T = L / V"), html.Th("Δt / T")])]  # fmt: skip
+    for lab, c in (("along the runway", "u"), ("vertical", "w")):
+        r = dt / g[f"T_{c}"]
+        flag = " warn" if r > 0.1 else ""
+        rows.append(html.Tr([html.Td(lab), html.Td(f"{g[f'sigma_{c}']:.2f} kt"),
+                             html.Td(f"{g[f'L_{c}']:,.0f} ft"),
+                             html.Td(f"{g[f'T_{c}']:.2f} s"),
+                             html.Td(f"{r:.3f}", className="num" + flag)]))  # fmt: skip
+    span_txt = f", averaged over the {span:,.0f} ft wing" if span else ""
+    return html.Div(
+        className="gu-gen-chain",
+        children=[
+            html.Div(
+                [html.B("Dryden"), f" at W20 {w20:g} kt, h {h:g} ft{span_txt}; ",
+                 html.B("T = L / V"), f" at {v:g} kt; then every Δt = {dt:g} s:"],
+                className="hint",
+            ),
+            html.Div(["g", html.Sub("n+1"), " = g", html.Sub("n"), " − (g", html.Sub("n"),
+                      " / T) Δt + σ √(2 / T) √Δt · Z", html.Sub("n")], className="gu-eq"),
+            html.Table(rows, className="dtab gu-gen-tab"),
+        ],
+    )  # fmt: skip
+
+
 def results(d: dict, p: float) -> list:
+    traces = d["traces"]
+    has = {k for v in traces.values() for k in v}
+    op0 = "go" if "go" in has else "landing"
     return [
-        html.Div(id="gu-answer", className="card", children=answer(d, p)),
-        html.Div(className="card", children=[_graph("gu-fig-margin", "margin")]),
-        html.Div(className="card", children=[_graph("gu-fig-spread", "spread")]),
-        html.Div(
-            className="card",
-            children=[
+        _panel(gust_figures.SHORT[_main(d)] + " on a gusty day", answer(d, p), id_="gu-answer"),
+        _panel(
+            "How the gusts are made",
+            [
+                html.Div(
+                    "Pick a height and an airspeed: Dryden gives each gust's strength and length, "
+                    "the airspeed turns the length into a memory, and the update rule makes the "
+                    "gusts. Below: one history, and a check that the gusts have the strength and "
+                    "memory Dryden asks for.",
+                    className="hint",
+                ),
+                _gen_controls(d),
+                html.Div(id="gu-gen-chain"),
+                html.Div(
+                    className="un-checks-row gu-gen-figs",
+                    children=[
+                        _graph("gu-fig-gen", "gust_history"),
+                        _graph("gu-fig-gen-check", "gust_check"),
+                    ],
+                ),  # fmt: skip
+            ],
+        ),
+        _panel(
+            "One gusty run",
+            [
                 html.Div(
                     className="gu-answer-head",
                     children=[
-                        html.H3("What the gusts look like"),
                         html.Div(className="spacer"),
                         _seg(
                             "gu-trace-op",
-                            "go" if "go" in next(iter(d["traces"].values()), {}) else "landing",
+                            op0,
                             [
                                 (k, lab)
                                 for k, lab in (
                                     ("go", "Takeoff (engine out)"),
                                     ("landing", "Landing"),
                                 )
-                                if any(k in v for v in d["traces"].values())
+                                if k in has
                             ],
                         ),
                         _seg(
-                            "gu-trace-run",
-                            "0",
-                            [(k, f"sample {int(k) + 1}") for k in sorted(d["traces"])],
+                            "gu-trace-run", "0", [(k, f"run {int(k) + 1}") for k in sorted(traces)]
                         ),
                     ],
                 ),  # fmt: skip
                 _graph("gu-fig-trace", "sample"),
             ],
         ),
-        html.Div(
-            className="card",
-            children=[
-                html.H3("How reliable are these numbers?"),
-                dcc.Markdown(
-                    "Two kinds of error. **Sampling**: a percentile from N runs is uncertain "
-                    "by about 1/√N (the shaded bands; below, the estimate settling as runs "
-                    "accumulate). **Time step**: each run integrates a stochastic "
-                    "differential equation with a fixed step; *Check the time step* re-solves "
-                    "a few runs with the same gusts at four step sizes. Methods › "
-                    "Stochastic methods explains both.",
-                    className="hint",
-                ),
-                _graph("gu-fig-mc", "sampling"),
-                html.Button(
-                    "Check the time step (~10 s)", id="gu-conv-btn", n_clicks=0, className="btn"
+        _panel("Extra runway vs share of gusty days", [_graph("gu-fig-margin", "margin")]),
+        _panel(
+            "Checks",
+            [
+                html.Div(_calm_check(d), className="hint"),
+                html.Div(
+                    className="un-checks-row",
+                    children=[
+                        _graph("gu-fig-var", "variance_error"),
+                        _graph("gu-fig-mc", "sampling"),
+                    ],
+                ),  # fmt: skip
+                html.Div(
+                    className="gu-answer-head",
+                    children=[
+                        html.Div(
+                            "Whole run: the same gusts at four time steps, against a "
+                            "fine reference.",
+                            className="hint",
+                        ),
+                        html.Div(className="spacer"),
+                        html.Button(
+                            "Check the time step (~10 s)",
+                            id="gu-conv-btn",
+                            n_clicks=0,
+                            className="btn",
+                        ),
+                    ],
                 ),  # fmt: skip
                 loading.loading(_graph("gu-fig-dt", "timestep"), "Re-solving at four time steps…"),
             ],
         ),
     ]
+
+
+def _calm_check(d: dict) -> str:
+    """Gusts off: the stepped simulation against the main (adaptive) solver."""
+    parts = []
+    for k, lab in (("takeoff_field_ft", "takeoff"), ("landing_runway_ft", "landing")):
+        if k in d["calm"] and k in d.get("reference", {}):
+            c, r = d["calm"][k], d["reference"][k]
+            parts.append(f"{lab} {c:,.0f} vs {r:,.0f} ft ({100 * (c / r - 1):+.2f} %)")
+    return ("Gusts switched off, this simulation against the main solver: " + "; ".join(parts)
+            + ".") if parts else ""  # fmt: skip
+
+
+def _r_now(d: dict) -> tuple[float, float]:
+    """Range of dt / T in this run: heights 10–50 ft, airspeeds from half VR to 1.2 VR."""
+    s = d["settings"]
+    rs = []
+    for h in (10.0, 50.0):
+        su, sw, lu, lw = dryden(h, d["w20"], d.get("span_ft"))
+        for v in (0.5, 1.2):
+            vv = v * d["speeds"]["vr_kts"] * 1.6878098571011957
+            rs += [s["dt_s"] * vv / lu, s["dt_s"] * vv / lw]
+    return min(rs), max(rs)
 
 
 def register(app, aircraft_options) -> None:
@@ -483,26 +646,59 @@ def register(app, aircraft_options) -> None:
         return results(d, 0.95)
 
     @app.callback(
-        Output("gu-answer", "children"),
+        Output("gu-plan", "children"),
         Input("gu-cover", "value"),
         State("gu-result", "data"),
         prevent_initial_call=True,
     )
     def on_cover(p, d):
-        return answer(d, float(p)) if d else no_update
+        return plan_tile(d, float(p)) if d else no_update
+
+    @app.callback(
+        *[Output(rid + "-p", "children") for rid in RUNWAY_IDS],
+        Output("gu-fig-odds", "figure"),
+        *[Input(rid, "value") for rid in RUNWAY_IDS],
+        State("gu-result", "data"),
+    )
+    def on_runways(r1, r2, r3, d):
+        if not d:
+            return (no_update,) * 4
+        return (*[runway_odds(d, r) for r in (r1, r2, r3)],
+                odds_figure(d, runway_list([r1, r2, r3])))  # fmt: skip
 
     @app.callback(
         Output("gu-fig-margin", "figure"),
-        Output("gu-fig-spread", "figure"),
         Output("gu-fig-mc", "figure"),
+        Output("gu-fig-var", "figure"),
         Input("gu-results", "children"),
         State("gu-result", "data"),
     )
     def on_figs(_children, d):
         if not d:
             return no_update, no_update, no_update
-        return (gust_figures.margin_curve(d), gust_figures.spread(d),
-                gust_figures.mc_convergence(d))  # fmt: skip
+        return (gust_figures.margin_curve(d), gust_figures.mc_convergence(d),
+                gust_figures.variance_error(compute.gust_variance_points(), _r_now(d)))  # fmt: skip
+
+    @app.callback(
+        Output("gu-gen-chain", "children"),
+        Output("gu-fig-gen", "figure"),
+        Output("gu-fig-gen-check", "figure"),
+        Input("gu-gen-v", "value"),
+        Input("gu-gen-h", "value"),
+        Input("gu-gen-m", "value"),
+        Input("gu-gen-dt", "value"),
+        State("gu-result", "data"),
+    )
+    def on_gen(v, h, m, dt, d):
+        if not d:
+            return no_update, no_update, no_update
+        v, h, dt = float(v or 150), float(h or 10), float(dt or 0.01)
+        span = d.get("span_ft")
+        g = compute.gust_generator(float(d["w20"]), h, v, dt, m or "heun", span)
+        meth = "Heun" if m == "heun" else "Euler–Maruyama"
+        lab = f"h {h:g} ft · {v:g} kt · W20 {d['w20']:g} kt · {meth}, Δt {dt:g} s"
+        return (gen_table(g, d["w20"], h, v, dt, span), gust_figures.gust_history(g, lab),
+                gust_figures.gust_checks(g, dt))  # fmt: skip
 
     @app.callback(
         Output("gu-fig-trace", "figure"),

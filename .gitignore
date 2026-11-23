@@ -5,3 +5,4 @@ __pycache__/
 .ruff_cache/
 app/assets/validation/
 presentation/_gust_cache.pkl
+presentation/_gust_conv.pkl

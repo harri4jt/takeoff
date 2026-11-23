@@ -28,13 +28,15 @@ answers *how often* a given runway is enough:
 
 ## Reading the page
 
-| Part | What it tells you |
+Every panel folds away (click its title).
+
+| Panel | What it tells you |
 |---|---|
-| **Answer** | the runway that covers 90 / 95 / 99 % of runs, for the takeoff field length, the landing runway and (when they trade places) the larger of the two, with the margin over calm and a 95 % confidence interval |
-| **Extra runway vs share covered** | the whole answer in one chart: pick the share you want to cover, read the margin. The x axis is a probability scale so 99 % gets room. Shaded: the sampling uncertainty |
-| **Where the spread comes from** | the change in each takeoff branch (go, stop, all engines) and in the landing. The widest one is what gusts hurt most |
-| **What the gusts look like** | one sampled takeoff or landing: the gusts the wing feels, the true airspeed, and the airspeed the crew acts on |
-| **How reliable** | the P95 estimate settling as runs accumulate (sampling error ~ 1/√N), and on demand, the error from the integration time step |
+| **Runway on a gusty day** | the calm-day runway, the runway that covers 90 / 95 / 99 % of gusty days (with its sampling range), and up to three **runways you could use**, each with the chance it is enough. The chart: chance of fitting against runway length, your runways marked |
+| **How the gusts are made** | the gust generator on its own, at a height and airspeed you pick: Dryden's strength σ and length L, the memory T = L/V, the update rule, one gust history, and a check that the gusts have the strength σ and the correlation e^(−τ/T) Dryden asks for. Make the time step long (0.2 s) and watch Euler–Maruyama's strength go wrong while Heun's barely moves |
+| **One gusty run** | one takeoff or landing: the gusts the wing feels, the airspeed it feels, and the (lagged) airspeed the crew flies by |
+| **Extra runway vs share of gusty days** | the whole answer as a curve, takeoff and landing, sampling uncertainty shaded |
+| **Checks** | gusts off against the main solver; the gust-variance error against Δt/T (Euler–Maruyama first order, Heun second, exact formula and simulation); the P95 settling as runs accumulate (sampling error ~ 1/√N); on demand, the whole run at four time steps |
 
 Every chart has a camera icon that saves a high-resolution PNG, titled with its result,
 for slides. The runs download as CSV (one row per run) and the summary as text.
@@ -56,16 +58,26 @@ for slides. The runs download as CSV (one row per run) and the summary as text.
 ## The gust model, in short
 
 * Two gust components, along the runway (u_g, + headwind) and vertical (w_g, + up), on top
-  of the run's steady wind. Each is an **Ornstein–Uhlenbeck process**: a random wander
-  pulled back toward zero, with a spread σ and a length scale L from the **Dryden
-  low-altitude model** (σ_w = 0.1 W20, σ_u ≈ 1.9 σ_w at 20 ft, L_w = height,
-  L_u ≈ 140 ft at 20 ft).
+  of the run's steady wind.
+* **Dryden low-altitude model** (MIL-F-8785C): from the mean wind at 20 ft (W20) and the
+  height h, a strength σ and a length L for each: σ_w = 0.1 W20, σ_u = σ_w/(0.177 +
+  0.000823 h)^0.4, L_w = h, L_u = h/(0.177 + 0.000823 h)^1.2.
+* **Frozen turbulence**: the aircraft flies through the pattern, so a gust lasts T = L/V.
+* **Ornstein–Uhlenbeck SDE**: dg = −(g/T) dt + σ√(2/T) dW. The pull −g/T gives the memory
+  (correlation e^(−|τ|/T), which is Dryden's along-runway spectrum); the kick size σ√(2/T)
+  keeps the variance at σ² (the variance lost to the pull each step is refilled by the kick).
+* Stepped with **stochastic Heun** (default) or Euler–Maruyama together with the aircraft
+  equations, Δt = 0.01 s. For this equation the stepped variance is known exactly:
+  Euler–Maruyama σ²/(1 − Δt/2T) (first order), Heun 1 − ~(Δt/T)²/4 (second order); at
+  Δt = 0.01 s that is +1.7 % vs −0.03 % at worst.
 * The wing feels gusts **averaged over its span**: near the ground the vertical length
   scale is only ~10 ft, far shorter than a wing. The variance falls by
   f(r) = 2(r − 1 + e^(−r))/r², r = span/L, and the length scale grows to L/f.
 * The aircraft equations are written relative to the ground, so the wind enters only
   through the airspeed and angle of attack the wing sees. With no gusts the page
   reproduces the main solver to within 0.2 % (takeoff) and 1 % (landing).
+* From Python: `bfl.gusts.gust_signal(w20, h, v)` makes gust histories exactly as a run
+  does (for checks and figures).
 
 ## Limits
 

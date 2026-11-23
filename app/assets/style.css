@@ -502,3 +502,17 @@ details.adv[open] > summary::before { content: "▾ "; }
 .un-setup-top:has(.un-sig-box:not([open])) { grid-template-columns: 1fr 200px; }
 .un-slider { position: relative; z-index: 5; }
 .un-slider [class*="tooltip"] { z-index: 30 !important; }
+
+/* gust page: the generator panel */
+.gu-gen-controls { display: grid; grid-template-columns: 1.2fr 1.2fr auto auto; gap: 18px; align-items: end; margin: 10px 0 6px; }
+@media (max-width: 1100px) { .gu-gen-controls { grid-template-columns: 1fr 1fr; } }
+.gu-gen-controls .un-slider label { font-weight: 600; font-size: 13px; }
+.gu-gen-chain { display: grid; grid-template-columns: 1fr; gap: 6px; margin: 8px 0 4px; }
+.gu-eq { font-family: "DejaVu Serif", Georgia, serif; font-size: 18px; padding: 6px 14px; background: white;
+  border: 1px solid var(--line); border-radius: 8px; width: fit-content; }
+.gu-gen-tab { border-collapse: collapse; font-size: 13.5px; width: fit-content; min-width: 560px; }
+.gu-gen-tab th, .gu-gen-tab td { padding: 4px 12px; text-align: right; border-bottom: 1px solid var(--line); }
+.gu-gen-tab th:first-child, .gu-gen-tab td:first-child { text-align: left; }
+.gu-gen-tab th { font-size: 12px; color: var(--muted); font-weight: 600; }
+.gu-gen-tab td.warn { color: #b4501d; font-weight: 700; }
+.gu-gen-figs { grid-template-columns: 1fr 1fr; }

@@ -37,16 +37,26 @@ def test_gust_page_run_figures_and_downloads(page):
     assert d["calm"]["takeoff_field_ft"] == pytest.approx(9523, rel=3e-3)
 
     page_html = json.dumps(call(client, app, "gu-results.children", {("gu-result", "data"): d},
-                                ["gu-result.data"]))  # fmt: skip
-    assert "To cover 95 % of gusty-day operations" in page_html
+                                ["gu-result.data"]), ensure_ascii=False)  # fmt: skip
+    assert "Plan for 95 % of gusty days" in page_html and "How the gusts are made" in page_html
+    assert "main solver" in page_html  # gusts-off check against the main solver
     figs = call(client, app, "gu-fig-margin.figure", {("gu-results", "children"): [],
                 ("gu-result", "data"): d}, ["gu-results.children"])  # fmt: skip
     assert "covers 95 %" in json.dumps(figs["gu-fig-margin"]["figure"]["layout"]["title"])
-    assert figs["gu-fig-spread"]["figure"]["data"] and figs["gu-fig-mc"]["figure"]["data"]
-
-    ans = call(client, app, "gu-answer.children", {("gu-cover", "value"): 0.99,
-               ("gu-result", "data"): d}, ["gu-cover.value"])  # fmt: skip
-    assert "99 %" in json.dumps(ans)
+    assert figs["gu-fig-mc"]["figure"]["data"] and figs["gu-fig-var"]["figure"]["data"]
+    rw = {("gu-rw-1", "value"): 9750, ("gu-rw-2", "value"): None, ("gu-rw-3", "value"): 10250,
+          ("gu-result", "data"): d}  # fmt: skip
+    o = call(client, app, "gu-fig-odds.figure", rw, ["gu-rw-1.value"])
+    assert "9,750 ft" in json.dumps(o["gu-fig-odds"]["figure"]["layout"]["title"])
+    assert o["gu-rw-2-p"]["children"] == []
+    gen = {("gu-gen-v", "value"): 150, ("gu-gen-h", "value"): 10, ("gu-gen-m", "value"): "heun",
+           ("gu-gen-dt", "value"): 0.01, ("gu-result", "data"): d}  # fmt: skip
+    g = call(client, app, "gu-gen-chain.children", gen, ["gu-gen-v.value"])
+    assert "checks out" in json.dumps(g["gu-fig-gen-check"]["figure"]["layout"]["title"])
+    assert "memory T = L / V" in json.dumps(g["gu-gen-chain"]["children"], ensure_ascii=False)
+    plan = call(client, app, "gu-plan.children", {("gu-cover", "value"): 0.99,
+                ("gu-result", "data"): d}, ["gu-cover.value"])  # fmt: skip
+    assert "99 %" in json.dumps(plan)
     tr = call(client, app, "gu-fig-trace.figure", {("gu-trace-run", "value"): "1",
               ("gu-trace-op", "value"): "landing", ("gu-result", "data"): d},
               ["gu-trace-op.value"])  # fmt: skip
