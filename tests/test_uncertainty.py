@@ -126,20 +126,45 @@ def test_uncertainty_page_end_to_end():
     out = call(client, app, "un-result.data", vals, ["un-run.n_clicks"])
     d = out["un-result"]["data"]
     assert out["un-status"]["children"] == "" and len(d["errors"]) == 30
+    assert out["un-sig-box"]["open"] is False  # the setup plot folds away once results show
+    assert len(d["oat"]) == 12  # three tables, ±5 % and ±10 %
     page = json.dumps(call(client, app, "un-results.children", {("un-result", "data"): d},
-                           ["un-result.data"]))  # fmt: skip
-    assert "is enough with 95 % confidence" in page
-    figs = call(client, app, "un-fig-margin.figure", {("un-results", "children"): [],
-                ("un-result", "data"): d}, ["un-results.children"])  # fmt: skip
-    assert "95 % confidence" in json.dumps(figs["un-fig-margin"]["figure"]["layout"]["title"])
-    assert "comes from" in json.dumps(figs["un-fig-pie"]["figure"]["layout"]["title"])
+                           ["un-result.data"]), ensure_ascii=False)  # fmt: skip
+    assert "Plan for 95 %" in page and "Method checks" in page
+    av = {("un-avail", "value"): 10_000, ("un-result", "data"): d}
+    o = call(client, app, "un-avail-out.children", av, ["un-avail.value"])
+    assert "of draws fit" in json.dumps(o["un-avail-out"]["children"])
+    assert "95 % confidence" in json.dumps(o["un-fig-margin"]["figure"]["layout"]["title"])
+    assert "cliff" in json.dumps(o["un-fig-map"]["figure"]["layout"]["title"])
+    tv = {("un-step", "value"): 0.05, ("un-result", "data"): d}
+    tor = call(client, app, "un-fig-tornado.figure", tv, ["un-step.value"])
+    tor = tor["un-fig-tornado"]["figure"]
+    assert "5 % error" in json.dumps(tor["layout"]["title"]) and len(tor["data"]) == 2
+    plan = call(client, app, "un-plan.children", {("un-cover", "value"): 0.99,
+                ("un-result", "data"): d}, ["un-cover.value"])  # fmt: skip
+    assert "Plan for 99 %" in json.dumps(plan)
     prof = call(client, app, "un-fig-prof.figure", {("un-sl-cl", "value"): 1.0,
-                ("un-sl-cd", "value"): 0.9, ("un-sl-t", "value"): 1.0, ("un-result", "data"): d},
-                ["un-sl-cd.value"])["un-fig-prof"]["figure"]  # fmt: skip
-    assert "drag (CD) ×0.900" in json.dumps(prof["layout"]["title"], ensure_ascii=False)
+                ("un-sl-cd", "value"): 0.9, ("un-sl-t", "value"): 1.0, ("un-avail", "value"): None,
+                ("un-result", "data"): d}, ["un-sl-cd.value"])["un-fig-prof"]["figure"]  # fmt: skip
+    assert "drag ×0.900" in json.dumps(prof["layout"]["title"], ensure_ascii=False)
+    checks = call(client, app, "un-fig-conv.figure", {("un-results", "children"): [],
+                  ("un-result", "data"): d}, ["un-results.children"])  # fmt: skip
+    assert "Sampling error" in json.dumps(checks["un-fig-conv"]["figure"]["layout"]["title"])
     sig = call(client, app, "un-fig-sigmas.figure", {("un-cl", "value"): 2, ("un-cd", "value"): 8,
-               ("un-t", "value"): 0}, ["un-cl.value"])["un-fig-sigmas"]["figure"]  # fmt: skip
-    assert len(sig["data"]) == 3
-    ov = {("un-other-btn", "n_clicks"): 1, ("un-result", "data"): d}
-    other = call(client, app, "un-other.data", ov, ["un-other-btn.n_clicks"])["un-other"]["data"]
-    assert other["settings"]["method"] == "mc"
+               ("un-t", "value"): 0}, ["un-cl.value"])  # fmt: skip
+    assert len(sig["un-fig-sigmas"]["figure"]["data"]) == 3 and sig["un-sig-box"]["open"] is True
+
+
+def test_one_at_a_time_is_exact_and_equal_percent():
+    from bfl import load_config
+    from bfl.uncertainty import UncertaintySettings, uncertainty_study
+
+    u = uncertainty_study(load_config("b747_100"), UncertaintySettings(n=8, landing=False))
+    oat = u.one_at_a_time("takeoff_field_ft")
+    assert sorted(set(np.round(np.abs(oat["change"]), 6))) == [0.05, 0.10]
+    row = oat[(oat["factor"] == "k_CL") & np.isclose(oat["change"], -0.05)]
+    from bfl import compute_bfl
+
+    cfg = load_config("b747_100", overrides={"k_CL": 0.95})
+    assert abs(float(row["value"].iloc[0]) - compute_bfl(cfg).field_length_ft) < 1.0
+    assert (oat[oat["change"] < 0].set_index("factor").loc["k_CL", "delta"] > 0).all()

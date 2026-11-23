@@ -488,3 +488,11 @@ credit, wet runway option, flare model detail (constant-g vs Raymer's flare radi
       distributions, pie of variance shares (+ "not a straight-line effect"), profiler with
       sliders (quadratic response surface, LOO accuracy; logistic no-takeoff region),
       explained scatter.
+- [x] Round 10c (overhaul for the conceptual designer's end-of-pass check): answer tiles
+      (nominal · plan for X % · **your runway → % of draws covered**), knife-edge verdict,
+      tornado of exact one-at-a-time solves at an equal ±5 / ±10 % (independent of the
+      guessed σ), profiler with your runway drawn across, **cliff map** (runway contours over
+      the two tables that matter most, 50/95 % draw ellipses, no-takeoff region, distance to
+      the cliff in σ). Pie, scatter, histogram and the MC comparison removed; input check and
+      sampling error collapsed under "Method checks"; setup plot folds away after Run; terse
+      titles and labels, PNG export named `data_uncertainty_*`.

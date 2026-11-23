@@ -90,11 +90,12 @@ case. Details: [Gust analysis](gusts.md).
 ### How much margin for uncertain lift, drag and thrust data?
 
 The **Data uncertainty** page (☰ menu): state how far off each table might be (1σ, %), and
-it runs hundreds of full solves with randomly perturbed tables. The answer is the runway
-that is enough with 90, 95 or 99 % confidence, and each table's share of the spread. For
-the 747-100 with ±5 % on each table, 95 % confidence costs about +1,500 ft (+16 %), from
-thrust and lift about equally. A profiler with sliders shows the runway for any combination. For single what-ifs (k_CL 0.95
-exactly), use the multiplier sliders or the trade study instead. Details:
+it runs hundreds of full solves with randomly perturbed tables. Out come the runway to
+plan for at 90, 95 or 99 % confidence, the share of cases a given runway covers, which
+table matters most for an equal error, and whether the design sits near a no-takeoff
+cliff. For the 747-100 with ±5 % on each table, 95 % confidence costs about +1,500 ft
+(+16 %), and lift and thrust matter about 5× more than drag. For single what-ifs (k_CL
+0.95 exactly), use the multiplier sliders or the trade study instead. Details:
 [Data uncertainty](uncertainty.md).
 
 <a id="q-warnings"></a>

@@ -66,6 +66,9 @@ OUTPUTS = {  # column: (label, unit)
 }
 
 
+OAT_STEPS = (0.05, 0.10)  # equal-error comparison: each table alone off by ±5 % and ±10 %
+
+
 @dataclass
 class UncertaintySettings:
     sigma_CL: float = 0.05  # 1-sigma relative uncertainty of the CL table
@@ -200,6 +203,7 @@ class UncertaintyResult:
     samples: pd.DataFrame
     nominal: dict[str, float]  # the tables as they are (all factors 1)
     time_s: float = 0.0
+    oat: pd.DataFrame | None = None  # one table at a time off by ±OAT_STEPS (exact solves)
 
     @property
     def ok(self) -> pd.DataFrame:
@@ -278,6 +282,26 @@ class UncertaintyResult:
             rows.append({"factor": k, "label": PARAMS[k][0], "per_sigma_ft": b,
                          "variance_share": share, "r2": r2})  # fmt: skip
         return pd.DataFrame(rows).sort_values("variance_share", ascending=False)
+
+    def one_at_a_time(self, output: str = "runway_required_ft") -> pd.DataFrame:
+        """Exact solves with one table off by the same percentage (OAT_STEPS, both
+        directions) and the others as they are: how much each table matters for an equal
+        error, independent of the stated sigmas. 'value' is +inf where there is no
+        solution; 'delta' is the change from the nominal."""
+        if self.oat is None or not len(self.oat):
+            return pd.DataFrame(columns=["factor", "change", "value", "delta"])
+        d = self.oat
+        if output in LANDING_COLS:
+            ok = d["landing_ok"].to_numpy(bool)
+        else:
+            ok = d["takeoff_ok"].to_numpy(bool)
+            if output not in TAKEOFF_COLS and "landing_ok" in d:
+                ok = ok & d["landing_ok"].to_numpy(bool)
+        x = d[output].to_numpy(float) if output in d else np.full(len(d), np.nan)
+        v = np.where(ok, x, np.inf)
+        nom = self.nominal.get(output, math.nan)
+        return pd.DataFrame({"factor": d["factor"], "change": d["change"], "value": v,
+                             "delta": v - nom})  # fmt: skip
 
     def failure_drivers(self, output: str = "takeoff_field_ft") -> dict[str, float]:
         """Mean standardized factor (in sigmas) among the draws with no solution: which
@@ -363,6 +387,21 @@ class UncertaintyResult:
                               for _, r in sens.iterrows())  # fmt: skip
             r2 = 100 * sens["r2"].iloc[0]
             lines.append(f"  share of the runway spread: {parts} (straight-line fit: {r2:.0f} %)")
+        oat = self.one_at_a_time("runway_required_ft" if s.landing else "takeoff_field_ft")
+        worse = {"k_CL": -1, "k_CD": 1, "k_T": -1}
+        for st in OAT_STEPS:
+            parts = []
+            for k, (lab, _) in PARAMS.items():
+                r = oat[(oat["factor"] == k) & np.isclose(oat["change"], worse[k] * st)]
+                if len(r):
+                    v = float(r["delta"].iloc[0])
+                    parts.append(
+                        f"{lab.split(' ')[0]} {'no takeoff' if math.isinf(v) else f'{v:+,.0f} ft'}"
+                    )
+            if parts:
+                lines.append(
+                    f"  one table {100 * st:g} % worse, the others exact: {', '.join(parts)}"
+                )
         return "\n".join(lines)
 
 
@@ -381,6 +420,13 @@ def uncertainty_study(
     workers = max(1, (os.cpu_count() or 2) - 1)
     chunk = max(1, math.ceil(len(rows) / (4 * workers)))
     jobs = [(cfg_json, rows[i : i + chunk], s.landing) for i in range(0, len(rows), chunk)]
+    oat_rows = []  # one table off at a time, same percentage for each (exact solves)
+    for j in range(len(PARAMS)):
+        for c in (*(-x for x in OAT_STEPS), *OAT_STEPS):
+            f = [1.0, 1.0, 1.0]
+            f[j] = 1.0 + c
+            oat_rows.append((-2 - len(oat_rows), *f))
+    jobs = [(cfg_json, oat_rows[i : i + 2], s.landing) for i in range(0, len(oat_rows), 2)] + jobs
     nominal_job = (cfg_json, [(-1, 1.0, 1.0, 1.0)], s.landing)
     parts = nom = None
     try:
@@ -401,10 +447,16 @@ def uncertainty_study(
     if nom[0]["error"]:
         raise RuntimeError(f"the nominal case failed: {nom[0]['error']}")
     nominal = {k: float(v) for k, v in nom[0].items() if k in OUTPUTS}
-    samples = pd.DataFrame([r for p in parts for r in p])
-    return UncertaintyResult(s, cfg.aircraft.name, samples, nominal, time.perf_counter() - t0)
+    allrows = pd.DataFrame([r for p in parts for r in p])
+    oat = allrows[allrows["run"] < -1].sort_values("run", ascending=False).reset_index(drop=True)
+    names = list(PARAMS)
+    oat["factor"] = [names[int(np.argmax(np.abs(r[["k_CL", "k_CD", "k_T"]].to_numpy(float) - 1)))]
+                     for _, r in oat.iterrows()]  # fmt: skip
+    oat["change"] = [r[r["factor"]] - 1.0 for _, r in oat.iterrows()]
+    samples = allrows[allrows["run"] >= 0].reset_index(drop=True)
+    return UncertaintyResult(s, cfg.aircraft.name, samples, nominal, time.perf_counter() - t0, oat)
 
 
 __all__ = ["UncertaintySettings", "UncertaintyResult", "uncertainty_study", "sample_factors",
            "quantile_ci_inf", "predict_surface", "predict_failure",
-           "PARAMS", "OUTPUTS"]  # fmt: skip
+           "PARAMS", "OUTPUTS", "OAT_STEPS"]  # fmt: skip

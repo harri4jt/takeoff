@@ -339,6 +339,9 @@ def uncertainty(cfg_json: str, settings_json: str) -> dict[str, Any]:
         "sensitivity": sens.to_dict(orient="records"),
         "main_output": main_out,
         "failure_rate": res.failure_rate("takeoff_field_ft"),
+        "oat": [{"factor": r.factor, "change": float(r.change),
+                 "delta": None if not np.isfinite(r.delta) else float(r.delta)}
+                for r in res.one_at_a_time(main_out).itertuples()],  # exact, equal % error
         "failure_drivers": res.failure_drivers(),
         "surface": res.response_surface(main_out),
         "failure_model": res.failure_model(),

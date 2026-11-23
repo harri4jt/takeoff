@@ -35,15 +35,17 @@ most. The plot beside the inputs shows the three distributions that will be draw
 
 ## Reading the page
 
+Written for the end of a design pass: *is the runway fine, how sure, and am I on a
+knife's edge?*
+
 | Part | What it tells you |
 |---|---|
-| **Answer** | the runway that is enough with 90 / 95 / 99 % confidence, for the takeoff field length, the landing runway and (when they trade places) the larger, with the margin over nominal and the estimate's own 95 % range |
-| **Extra runway vs confidence** | the whole answer in one chart (probability-scaled x axis, shaded sampling uncertainty) |
-| **Explore (profiler)** | three plots, runway against each multiplier, with sliders setting the other two: "what if drag is 10 % high and thrust 3 % low?". The curves come from a quadratic response surface fitted through the draws (its accuracy, checked on draws it did not see, is in the subtitle); regions where the aircraft is predicted not to take off at all are shaded |
-| **Where the uncertainty comes from** | a pie: each table's share of the runway spread (its variance). If a table were known exactly, the spread would shrink by its share. Grey: the part a straight-line model cannot explain. The table beside it gives the runway change per 1 % and per 1σ error |
-| **Every draw, three times** | each draw plotted against each table's error: a tight band means that table alone sets the runway, vertical scatter is the other tables' errors; the panel titles give the slope (ft per 1 %) |
-| **The spread of the answer** | the histogram, nominal and 95 % point |
-| **How reliable** | the 95 % point settling as draws accumulate; the drawn factors against the intended normal curves; a one-click comparison with the other sampling method |
+| **Runway required** | nominal; the runway to plan for at 90 / 95 / 99 % confidence (with its sampling range); and **your runway**: type a length, get the share of draws it covers ("10,600 ft: enough 88 % of the time"). The verdict line says whether the design is near a cliff (draws that cannot take off at all, or one table 10 % worse being enough to stop the takeoff), and which operation sets the runway |
+| **Extra runway vs confidence** | the whole answer in one chart, takeoff and landing, with the sampling uncertainty shaded and your runway marked |
+| **Which table matters** | a tornado: each table alone off by the **same** ±5 % or ±10 %, the others exact, from exact solves (not a fit). It does not depend on the σ you typed, so it answers "for the same error, which table moves the runway most?" (747: lift and thrust about 5× drag). Pessimistic = less lift or thrust, more drag; a hatched bar is "no takeoff" |
+| **What if the tables are off by…** | sliders for each multiplier and three plots of runway against each one, the others held at their slider values; your runway is drawn across. The curves come from a quadratic response surface fitted through the draws (accuracy on draws it did not see in the subtitle), anchored to the exact nominal |
+| **Cliff map** | runway contours over the two tables that matter most (the third exact), with the ellipses holding 50 % and 95 % of the draws, your runway as a bold line and the no-takeoff region shaded. The title gives how far the cliff is from nominal, in σ |
+| **Method checks** (collapsed) | the drawn factors against the target normals, and the 95 % answer settling as draws accumulate (its sampling error) |
 
 ## When no runway is enough
 
@@ -52,7 +54,8 @@ cannot lift off on one engine at all. These are not dropped (that would hide the
 cases): they count as needing more runway than any length. If more than 5 % of draws fail,
 **no runway gives 95 % confidence**, and the page says so, with the average error of the
 failing draws ("drag +1.1σ, lift −0.6σ, …"). Example: the 140,000 lb SR-71 at ±5 %, where
-about 22 % of draws cannot lift off on one engine; the profiler shades where that happens.
+about 22 % of draws cannot lift off on one engine, 10 % worse lift, drag or thrust alone
+is enough, and the cliff map puts the cliff 1σ from nominal.
 
 ## Limits
 

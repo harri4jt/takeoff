@@ -472,11 +472,24 @@ details.adv[open] > summary::before { content: "▾ "; }
 .un-sig { width: 154px; }
 .un-sliders { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 10px 0 4px; }
 .un-slider label { font-weight: 600; font-size: 13px; }
-.un-shares { display: grid; grid-template-columns: 1.1fr 1fr; gap: 18px; align-items: center; }
-@media (max-width: 1000px) { .un-shares { grid-template-columns: 1fr; } }
-.un-shares .dtab { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 8px; }
-.un-shares .dtab th, .un-shares .dtab td { padding: 4px 8px; text-align: right; border-bottom: 1px solid var(--line); }
-.un-shares .dtab th:first-child, .un-shares .dtab td:first-child { text-align: left; }
-/* slider value tooltips above everything else in the card (e.g. the profiler graph) */
+.un-tiles { grid-template-columns: repeat(3, 1fr); margin-top: 10px; }
+@media (max-width: 900px) { .un-tiles { grid-template-columns: 1fr; } }
+.un-plan { border-color: var(--accent, #2a78d6); box-shadow: inset 0 0 0 1px var(--accent, #2a78d6); }
+.un-tiles .m-label { justify-content: space-between; }
+.un-avail.num-input, .un-tiles .dash-input-container { width: 116px; font-weight: 600; }
+.un-verdict { display: flex; align-items: center; gap: 10px; margin: 12px 0 8px; padding: 9px 14px;
+  border-radius: 10px; font-size: 15px; font-weight: 600; }
+.un-verdict .icon { width: 24px; height: 24px; border-radius: 50%; display: inline-flex;
+  align-items: center; justify-content: center; color: white; font-size: 14px; flex: none; }
+.un-verdict.ok { background: #e8f6ef; color: #145c3a; } .un-verdict.ok .icon { background: #1f9d55; }
+.un-verdict.warn { background: #fff5e0; color: #7a4d00; } .un-verdict.warn .icon { background: #eda100; }
+.un-verdict.bad { background: #fdecee; color: #8c1526; } .un-verdict.bad .icon { background: #d7263d; }
+.dl-row .un-gov { margin-left: 0; flex: 1; font-size: 13px; }
+.gu-answer-head .spacer { flex: 1; }
+.un-checks > summary, .un-sig-box > summary { cursor: pointer; font-weight: 700; }
+.un-checks-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 14px; }
+@media (max-width: 1000px) { .un-checks-row { grid-template-columns: 1fr; } }
+.un-sig-box > summary { font-size: 14px; margin-bottom: 4px; }
+.un-setup-top:has(.un-sig-box:not([open])) { grid-template-columns: 1fr 200px; }
 .un-slider { position: relative; z-index: 5; }
 .un-slider [class*="tooltip"] { z-index: 30 !important; }

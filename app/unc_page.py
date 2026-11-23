@@ -2,10 +2,10 @@
 are only known to within some percentage (bfl.uncertainty).
 
 A side analysis like the gust page: nothing here feeds the simulator or the trade study.
-The user states a 1-sigma uncertainty for each table (default ±5 %); each draw is a full
-solve; the page answers with the runway that gives 90/95/99 % confidence, shows which
-table's uncertainty matters, and offers a profiler (a response surface fitted to the
-draws) to explore any combination of table errors.
+Written for a conceptual designer's end-of-pass runway check: the runway to plan for at
+90/95/99 % confidence, the chance a given runway is enough, which table matters for an
+equal error (exact one-at-a-time solves), how far the design is from a no-takeoff cliff,
+and sliders over a response surface fitted to the draws. Method checks sit collapsed.
 """
 
 from __future__ import annotations
@@ -21,11 +21,18 @@ from dash import Input, Output, State, dcc, html, no_update
 from bfl.uncertainty import UncertaintySettings, quantile_ci_inf
 
 from . import compute, loading, unc_figures
-from .gust_figures import COLORS
-from .gust_page import _field, _graph, _seg
+from .gust_page import _field, _seg
 from .trade import RUNWAY_PRESETS, _base_cfg, _num
 
 RUN_COUNTS = (200, 500, 1000, 2000)
+
+
+def _graph(id_: str, name: str) -> dcc.Graph:
+    """A figure with a PNG button sized for slides."""
+    return dcc.Graph(id=id_, config={"displaylogo": False, "toImageButtonOptions": {
+        "format": "png", "scale": 3, "filename": f"data_uncertainty_{name}"}})  # fmt: skip
+
+
 COVERAGE = (0.90, 0.95, 0.99)
 TABLES = (("un-cl", "Lift (CL)", "sigma_CL"), ("un-cd", "Drag (CD)", "sigma_CD"),
           ("un-t", "Thrust", "sigma_T"))  # fmt: skip
@@ -65,15 +72,10 @@ def layout() -> html.Div:
                 children=[
                     html.H2("Data uncertainty"),
                     dcc.Markdown(
-                        "How much runway to plan when the **lift, drag and thrust tables are "
-                        "only known to within some percentage** (e.g. CFD and NPSS output "
-                        "without error bars). State how far off each table might be, as a "
-                        "±1σ percentage (default ±5 %): about 68 % of the time within ±1σ, 95 % "
-                        "within ±2σ. "
-                        "Each draw multiplies the tables by random factors with that spread and "
-                        "runs a full solve. The answer: the runway that is enough with 90, 95 "
-                        "or 99 % confidence, and which table's uncertainty drives it. A side "
-                        "analysis: used nowhere else in the tool.",
+                        "Lift, drag and thrust data are estimates. Say how far off each might be "
+                        "(1σ, %); each draw scales the tables at random and runs a full solve. "
+                        "Out come the runway to plan for, which table matters, and whether the "
+                        "design is near a cliff.",
                         className="hint",
                     ),
                     html.Div(id="un-base", className="trade-base"),
@@ -116,10 +118,19 @@ def layout() -> html.Div:
                                     ),  # fmt: skip
                                 ],
                             ),
-                            dcc.Graph(
-                                id="un-fig-sigmas",
-                                className="un-sigmas",
-                                config={"displayModeBar": False},
+                            html.Details(
+                                id="un-sig-box",
+                                open=True,
+                                className="un-sig-box",
+                                children=[
+                                    html.Summary("What will be drawn"),
+                                    dcc.Graph(
+                                        id="un-fig-sigmas",
+                                        className="un-sigmas",
+                                        figure=unc_figures.sigma_curves(5.0, 5.0, 5.0),
+                                        config={"displayModeBar": False},
+                                    ),
+                                ],
                             ),  # fmt: skip
                         ],
                     ),
@@ -192,7 +203,6 @@ def layout() -> html.Div:
                 "Solving the draws…",
                 220,
             ),
-            dcc.Store(id="un-other"),
             dcc.Download(id="un-dl-csv"),
             dcc.Download(id="un-dl-txt"),
         ],
@@ -202,154 +212,185 @@ def layout() -> html.Div:
 # ------------------------------------------------------------------------------------
 # results
 # ------------------------------------------------------------------------------------
-def _card(d: dict, key: str, p: float) -> html.Div:
+STEPS = ((0.05, "±5 %"), (0.10, "±10 %"))
+
+
+def default_runway(d: dict) -> int:
+    """A starting value for 'your runway': nominal + 1,000 ft, rounded up to 100 ft."""
+    return int(math.ceil((d["nominal"][d["main_output"]] + 1000) / 100) * 100)
+
+
+def plan_tile(d: dict, p: float) -> list:
+    key = d["main_output"]
     x = unc_figures.values(d, key)
     nom = d["nominal"][key]
     est, lo, hi = quantile_ci_inf(x, p)
     pct = round(100 * p)
-    if math.isfinite(est):
-        big = f"{est:,.0f} ft"
-        delta = (
-            f"{est - nom:+,.0f} ft ({100 * (est / nom - 1):+.1f} %) over the nominal {nom:,.0f} ft"
+    if not math.isfinite(est):
+        return [html.Div(f"Plan for {pct} %", className="m-label"),
+                html.Div("no runway", className="m-value"),
+                html.Div(f"only {100 * float(np.mean(np.isfinite(x))):.0f} % of draws take off",
+                         className="gu-delta")]  # fmt: skip
+    ci = f"{lo:,.0f}–{hi:,.0f} ft" if math.isfinite(hi) else f"{lo:,.0f} ft – no limit"
+    return [
+        html.Div(f"Plan for {pct} %", className="m-label"),
+        html.Div(f"{est:,.0f} ft", className="m-value"),
+        html.Div(f"{est - nom:+,.0f} ft · {100 * (est / nom - 1):+.0f} %", className="gu-delta"),
+        html.Div(f"sampling range {ci}", className="hint"),
+    ]
+
+
+def avail_out(d: dict, avail) -> list:
+    if avail is None or not d:
+        return [html.Div("—", className="m-value")]
+    p = unc_figures.probability_ok(d, float(avail))
+    nom = d["nominal"][d["main_output"]]
+    return [
+        html.Div(f"{100 * p:.0f} %", className="m-value"),
+        html.Div(
+            f"of draws fit · {float(avail) - nom:+,.0f} ft over nominal", className="gu-delta"
+        ),
+    ]
+
+
+def verdict(d: dict) -> tuple[str, str]:
+    """('ok' | 'warn' | 'bad', one sentence): is the design near a cliff?"""
+    f = d["failure_rate"]
+    oat10 = unc_figures._oat(d, 0.10)
+    dead = [unc_figures.FACTOR_LABEL[k] for k, (w, _) in oat10.items() if math.isinf(w)]
+    who = " or ".join(dead) if dead else ""
+    if f > 0.01:
+        tail = f"; 10 % worse {who} alone is enough." if dead else "."
+        return (
+            "bad",
+            f"Knife-edge: {100 * f:.0f} % of draws cannot make an engine-out takeoff{tail}",
         )
-        ci = (f"{pct} % confident · estimate's 95 % range {lo:,.0f}–"
-              + (f"{hi:,.0f} ft" if math.isfinite(hi) else "no limit"))  # fmt: skip
-    else:
-        big, delta = "no runway", f"too many draws cannot take off (nominal {nom:,.0f} ft)"
-        ci = f"at most {100 * float(np.mean(np.isfinite(x))):.0f} % confidence is possible"
-    return html.Div(
-        className="gu-card",
-        children=[
-            html.Div(
-                [
-                    html.Span(className="swatch", style={"background": COLORS[key]}),
-                    unc_figures.OUT_LABEL[key],
-                ],
-                className="m-label",
-            ),  # fmt: skip
-            html.Div(big, className="m-value"),
-            html.Div(delta, className="gu-delta"),
-            html.Div(ci, className="hint"),
-        ],
-    )
+    if f > 0:
+        extra = f" 10 % worse {who} alone means no takeoff." if dead else ""
+        return "warn", f"Near a cliff: {100 * f:.1f} % of draws cannot take off.{extra}"
+    if dead:
+        return "warn", f"Near a cliff: every draw took off, but 10 % worse {who} alone does not."
+    return "ok", "No cliff: every draw took off, and so does 10 % worse data in any one table."
+
+
+def _governs(d: dict) -> str:
+    if d["main_output"] != "runway_required_ft" or "landing_runway_ft" not in d["values"]:
+        return "Takeoff only (landing not included)."
+    to = unc_figures.values(d, "takeoff_field_ft")
+    ld = unc_figures.values(d, "landing_runway_ft")
+    share = float(np.mean(ld > to))
+    if share == 0:
+        return "Takeoff sets the runway in every draw."
+    if share == 1:
+        return "Landing sets the runway in every draw."
+    return f"Landing sets the runway in {100 * share:.0f} % of draws, takeoff in the rest."
 
 
 def answer(d: dict, p: float) -> list:
     key = d["main_output"]
-    x = unc_figures.values(d, key)
     nom = d["nominal"][key]
-    est = quantile_ci_inf(x, p)[0]
-    f = d["failure_rate"]
-    if math.isfinite(est):
-        rel = 100 * (est / nom - 1)
-        sentence = (f"With this confidence in the data, {est:,.0f} ft of runway is enough with "
-                    f"{round(100 * p)} % confidence: {est - nom:+,.0f} ft ({rel:+.1f} %) over "
-                    f"the nominal {nom:,.0f} ft.")  # fmt: skip
-    else:
-        sentence = (f"No runway gives {round(100 * p)} % confidence: in {100 * f:.0f} % of the "
-                    "draws the aircraft cannot complete an engine-out takeoff at all (the data "
-                    "would have to be this optimistic for it to work).")  # fmt: skip
-    sens = d.get("sensitivity") or []
-    if sens:
-        top = max(sens, key=lambda r: r["variance_share"])
-        sentence += (f" The {unc_figures.FACTOR_LABEL[top['factor']]} table drives "
-                     f"{100 * top['variance_share']:.0f} % of the spread.")  # fmt: skip
-    keys = [k for k in ("runway_required_ft", "takeoff_field_ft", "landing_runway_ft")
-            if k in d["values"]]  # fmt: skip
-    if "runway_required_ft" in keys:
-        to = unc_figures.values(d, "takeoff_field_ft")
-        ld = unc_figures.values(d, "landing_runway_ft")
-        if np.all(to >= ld) or np.all(ld > to):  # one operation always governs
-            keys.remove("runway_required_ft")
-    notes = []
-    if f > 0:
-        drv = ", ".join(f"{unc_figures.FACTOR_LABEL[k]} {v:+.1f}σ"
-                        for k, v in d["failure_drivers"].items())  # fmt: skip
-        notes.append(f"{100 * f:.1f} % of draws have no takeoff solution (counted as needing more "
-                     f"runway than any length); on average they have {drv}.")  # fmt: skip
+    level, text = verdict(d)
+    icon = {"ok": "✓", "warn": "!", "bad": "⚠"}[level]
     return [
         html.Div(
             className="gu-answer-head",
             children=[
-                html.H3("Answer"),
+                html.H3(unc_figures.OUT_LABEL[key]),
                 html.Div(className="spacer"),
                 html.Span("Confidence", className="ctl-name"),
                 _seg("un-cover", p, [(c, f"{round(100 * c)} %") for c in COVERAGE]),
             ],
         ),
-        html.P(sentence, className="gu-sentence"),
-        html.Div([_card(d, k, p) for k in keys], className="gu-cards"),
-        *[html.Div(n, className="hint") for n in notes],
+        html.Div(
+            className="gu-cards un-tiles",
+            children=[
+                html.Div(
+                    className="gu-card",
+                    children=[
+                        html.Div("Nominal", className="m-label"),
+                        html.Div(f"{nom:,.0f} ft", className="m-value"),
+                        html.Div("tables as they are", className="gu-delta"),
+                    ],
+                ),  # fmt: skip
+                html.Div(id="un-plan", className="gu-card un-plan", children=plan_tile(d, p)),
+                html.Div(
+                    className="gu-card",
+                    children=[
+                        html.Div(
+                            [
+                                "Your runway",
+                                dcc.Input(
+                                    id="un-avail",
+                                    type="number",
+                                    value=default_runway(d),
+                                    step=100,
+                                    debounce=True,
+                                    className="num-input un-avail",
+                                ),
+                            ],
+                            className="m-label",
+                        ),
+                        html.Div(id="un-avail-out", children=avail_out(d, default_runway(d))),
+                    ],
+                ),  # fmt: skip
+            ],
+        ),
+        html.Div(
+            className=f"un-verdict {level}",
+            children=[html.Span(icon, className="icon"), html.Span(text)],
+        ),  # fmt: skip
         html.Div(
             className="dl-row",
             children=[
-                html.Button(
-                    "⤓ Download draws (CSV)", id="un-dl-csv-btn", n_clicks=0, className="btn"
-                ),  # fmt: skip
-                html.Button(
-                    "⤓ Download summary", id="un-dl-txt-btn", n_clicks=0, className="btn"
-                ),  # fmt: skip
-                html.Span(
-                    f"{len(d['errors']):,} draws in {d['time_s']:.1f} s · camera icon on a "
-                    "chart: PNG for slides",
-                    className="hint",
-                ),  # fmt: skip
+                html.Span(_governs(d), className="hint un-gov"),
+                html.Button("⤓ Draws (CSV)", id="un-dl-csv-btn", n_clicks=0, className="btn"),
+                html.Button("⤓ Summary", id="un-dl-txt-btn", n_clicks=0, className="btn"),
+                html.Span(f"{len(d['errors']):,} draws · {d['time_s']:.0f} s", className="hint"),
             ],
         ),
     ]
 
 
 def results(d: dict, p: float) -> list:
-    other = "Monte Carlo" if d["settings"]["method"] == "lhs" else "Latin hypercube"
     return [
         html.Div(id="un-answer", className="card", children=answer(d, p)),
         html.Div(className="card", children=[_graph("un-fig-margin", "confidence")]),
-        _profiler_card(d),
-        _shares_card(d),
         html.Div(
             className="card",
             children=[
-                _graph("un-fig-scatter", "draws"),
-                dcc.Markdown(
-                    "**How to read it.** Every draw appears once in each panel. Left: how wrong "
-                    "the lift table was in that draw (x) against how much the runway changed "
-                    "(y). A **tight band** means that table alone largely sets the runway; "
-                    "**vertical scatter** around the trend is the effect of the *other* "
-                    "tables' errors in the same draws. The slope (in the panel title) is the "
-                    "runway change per 1 % error in that table: the steeper, the more that "
-                    "table needs to be right.",
-                    className="hint",
+                html.Div(
+                    className="gu-answer-head",
+                    children=[
+                        html.H3("Which table matters"),
+                        html.Div(className="spacer"),
+                        html.Span("Error in one table", className="ctl-name"),
+                        _seg("un-step", 0.05, list(STEPS)),
+                    ],
                 ),
+                _graph("un-fig-tornado", "tornado"),
             ],
         ),
-        html.Div(className="card", children=[_graph("un-fig-dist", "spread")]),
-        html.Div(
-            className="card",
+        _profiler_card(d),
+        html.Div(className="card", children=[_graph("un-fig-map", "map")]),
+        html.Details(
+            className="card un-checks",
             children=[
-                html.H3("How reliable are these numbers?"),
-                dcc.Markdown(
-                    "The answer is a percentile of N draws, so it carries **sampling error** "
-                    "of about 1/√N (the shaded bands). The draws themselves are shown against "
-                    "the intended distributions. Compare with the other sampling method: Latin "
-                    "hypercube pins down the average, but for the 95 % point the two are about "
-                    "equally uncertain, so more draws is what helps. Methods › Sampling: Monte "
-                    "Carlo and Latin hypercube explains why.",
+                html.Summary("Method checks"),
+                html.Div(
+                    "The draws follow the stated distributions, and the 95 % answer has settled "
+                    "(its sampling error shrinks like 1/√N; more draws if it matters).",
                     className="hint",
                 ),
-                _graph("un-fig-conv", "sampling"),
-                html.Button(
-                    f"Compare with {other} (same draws count)",
-                    id="un-other-btn",
-                    n_clicks=0,
-                    className="btn",
-                ),  # fmt: skip
-                _graph("un-fig-inputs", "inputs"),
+                html.Div(
+                    className="un-checks-row",
+                    children=[_graph("un-fig-conv", "sampling"), _graph("un-fig-inputs", "inputs")],
+                ),
             ],
         ),
     ]
 
 
-FACTORS = (("k_CL", "un-sl-cl", "lift (CL)"), ("k_CD", "un-sl-cd", "drag (CD)"),
+FACTORS = (("k_CL", "un-sl-cl", "lift"), ("k_CD", "un-sl-cd", "drag"),
            ("k_T", "un-sl-t", "thrust"))  # fmt: skip
 
 
@@ -364,7 +405,7 @@ def _profiler_card(d: dict) -> html.Div:
         sliders.append(html.Div(
             className="un-slider",
             children=[
-                html.Label(f"{lab} multiplier"),
+                html.Label(f"{lab} ×"),
                 dcc.Slider(id=sid, min=lo, max=hi, step=0.005, value=1.0, marks=marks,
                            updatemode="drag", disabled=v <= 0,
                            tooltip={"placement": "top", "always_visible": False}),
@@ -376,63 +417,13 @@ def _profiler_card(d: dict) -> html.Div:
             html.Div(
                 className="gu-answer-head",
                 children=[
-                    html.H3("Explore: what if the tables are off by…"),
+                    html.H3("What if the tables are off by…"),
                     html.Div(className="spacer"),
                     html.Button("Reset to 1", id="un-sl-reset", n_clicks=0, className="btn"),
                 ],
             ),
-            html.Div(
-                "Move a slider to say how wrong that table is. Each plot shows the runway against "
-                "one multiplier, with the other two held at their slider values; the dot is the "
-                "selected point. Sliders span ±3σ. The curves come from a smooth model fitted "
-                "through all the draws (a quadratic response surface), so they move instantly.",
-                className="hint",
-            ),
             html.Div(sliders, className="un-sliders"),
             _graph("un-fig-prof", "profiler"),
-        ],
-    )
-
-
-def _shares_card(d: dict) -> html.Div:
-    sens = sorted(d.get("sensitivity") or [], key=lambda r: -r["variance_share"])
-    rows = [html.Tr([html.Th("table"), html.Th("share"), html.Th("+1 % error"),
-                     html.Th("+1σ error")])]  # fmt: skip
-    s = d["settings"]
-    sig = {"k_CL": s["sigma_CL"], "k_CD": s["sigma_CD"], "k_T": s["sigma_T"]}
-    for r in sens:
-        per1 = r["per_sigma_ft"] / (100 * sig[r["factor"]])
-        rows.append(html.Tr([html.Td(unc_figures.FACTOR_LABEL[r["factor"]]),
-                             html.Td(f"{100 * r['variance_share']:.0f} %"),
-                             html.Td(f"{per1:+,.0f} ft"),
-                             html.Td(f"{r['per_sigma_ft']:+,.0f} ft")]))  # fmt: skip
-    top = sens[0] if sens else None
-    expl = ""
-    if top:
-        v = top["variance_share"]
-        expl = (f" For example, {unc_figures.FACTOR_LABEL[top['factor']]} "
-                f"{100 * v:.0f} %: if that table were known exactly, the spread of the runway "
-                f"would shrink by that share of its variance (its ±1σ band by about "
-                f"{100 * (1 - (1 - v) ** 0.5):.0f} %).")  # fmt: skip
-    return html.Div(
-        className="card un-shares",
-        children=[
-            _graph("un-fig-pie", "shares"),
-            html.Div(
-                children=[
-                    dcc.Markdown(
-                        "**What the slices mean.** The runway changes from draw to draw because "
-                        "all three tables are wrong at once. Each slice is how much of that "
-                        "spread (its variance) comes from one table's error."
-                        + expl
-                        + " The grey slice, if any, is the part a straight-line model cannot "
-                        "explain (curvature and interactions). Improve the data in the biggest "
-                        "slice first.",
-                        className="hint",
-                    ),
-                    html.Table(rows, className="dtab"),
-                ],
-            ),
         ],
     )
 
@@ -476,17 +467,20 @@ def register(app, aircraft_options) -> None:
 
     @app.callback(
         Output("un-fig-sigmas", "figure"),
+        Output("un-sig-box", "open", allow_duplicate=True),
         Input("un-cl", "value"),
         Input("un-cd", "value"),
         Input("un-t", "value"),
+        prevent_initial_call=True,
     )
     def on_sigmas(a, b, c):
-        return unc_figures.sigma_curves(float(a or 0), float(b or 0), float(c or 0))
+        fig = unc_figures.sigma_curves(float(a or 0), float(b or 0), float(c or 0))
+        return fig, True  # show what will be drawn again while the inputs change
 
     @app.callback(
         Output("un-result", "data"),
         Output("un-status", "children"),
-        Output("un-other", "data", allow_duplicate=True),
+        Output("un-sig-box", "open", allow_duplicate=True),
         Input("un-run", "n_clicks"),
         State("un-aircraft", "value"),
         State("un-cl", "value"),
@@ -527,53 +521,60 @@ def register(app, aircraft_options) -> None:
             s = _settings(s_cl, s_cd, s_t, landing, n, method, seed, trunc)
             d = compute.uncertainty(cfg.model_dump_json(), json.dumps(asdict(s)))
             d["cfg_json"] = cfg.model_dump_json()
-            return d, "", None
+            return d, "", False
         except Exception as exc:  # noqa: BLE001 - shown on the page
             return no_update, f"Could not run: {type(exc).__name__}: {exc}", no_update
 
     @app.callback(Output("un-results", "children"), Input("un-result", "data"))
     def on_result(d):
         if not d:
-            return html.Div("Set the uncertainty of each table above and press Run. 500 draws "
-                            "take about 10–25 s.", className="hint gu-empty")  # fmt: skip
+            return html.Div("Set how far off each table might be and press Run. 500 draws take "
+                            "about 10–25 s.", className="hint gu-empty")  # fmt: skip
         return results(d, 0.95)
 
     @app.callback(
-        Output("un-answer", "children"),
+        Output("un-plan", "children"),
         Input("un-cover", "value"),
         State("un-result", "data"),
         prevent_initial_call=True,
     )
     def on_cover(p, d):
-        return answer(d, float(p)) if d else no_update
+        return plan_tile(d, float(p)) if d else no_update
 
     @app.callback(
+        Output("un-avail-out", "children"),
         Output("un-fig-margin", "figure"),
-        Output("un-fig-pie", "figure"),
-        Output("un-fig-scatter", "figure"),
-        Output("un-fig-dist", "figure"),
-        Output("un-fig-inputs", "figure"),
-        Input("un-results", "children"),
+        Output("un-fig-map", "figure"),
+        Input("un-avail", "value"),
         State("un-result", "data"),
     )
-    def on_figs(_c, d):
+    def on_avail(avail, d):
         if not d:
-            return (no_update,) * 5
-        f = unc_figures
-        return f.margin_curve(d), f.shares_pie(d), f.scatter(d), f.distribution(d), f.inputs(d)
+            return (no_update,) * 3
+        a = float(avail) if avail is not None else None
+        return avail_out(d, a), unc_figures.margin_curve(d, a), unc_figures.cliff_map(d, a)
+
+    @app.callback(
+        Output("un-fig-tornado", "figure"),
+        Input("un-step", "value"),
+        State("un-result", "data"),
+    )
+    def on_step(step, d):
+        return unc_figures.tornado(d, float(step or 0.05)) if d else no_update
 
     @app.callback(
         Output("un-fig-prof", "figure"),
         Input("un-sl-cl", "value"),
         Input("un-sl-cd", "value"),
         Input("un-sl-t", "value"),
+        Input("un-avail", "value"),
         State("un-result", "data"),
     )
-    def on_profiler(kcl, kcd, kt, d):
+    def on_profiler(kcl, kcd, kt, avail, d):
         if not d:
             return no_update
         sel = {"k_CL": kcl or 1.0, "k_CD": kcd or 1.0, "k_T": kt or 1.0}
-        return unc_figures.profiler(d, sel)
+        return unc_figures.profiler(d, sel, float(avail) if avail is not None else None)
 
     @app.callback(
         Output("un-sl-cl", "value"),
@@ -586,28 +587,15 @@ def register(app, aircraft_options) -> None:
         return 1.0, 1.0, 1.0
 
     @app.callback(
-        Output("un-other", "data"),
-        Input("un-other-btn", "n_clicks"),
-        State("un-result", "data"),
-        prevent_initial_call=True,
-    )
-    def on_other(n, d):
-        if not n or not d:
-            return no_update
-        s = dict(d["settings"])
-        s["method"] = "mc" if s["method"] == "lhs" else "lhs"
-        return compute.uncertainty(d["cfg_json"], json.dumps(s))
-
-    @app.callback(
         Output("un-fig-conv", "figure"),
-        Input("un-other", "data"),
+        Output("un-fig-inputs", "figure"),
         Input("un-results", "children"),
         State("un-result", "data"),
     )
-    def on_conv(other, _c, d):
+    def on_checks(_c, d):
         if not d:
-            return no_update
-        return unc_figures.convergence(d, other)
+            return no_update, no_update
+        return unc_figures.convergence(d), unc_figures.inputs(d)
 
     @app.callback(
         Output("un-dl-csv", "data"),
