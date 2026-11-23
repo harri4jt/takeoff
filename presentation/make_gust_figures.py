@@ -1,4 +1,5 @@
-"""Figures for the 11/25/26 update (gust analysis): presentation/fig_gu_*.svg.
+"""Figures for the 11/25/26 update (gust_slides.html: the plan) and the detailed gust deck
+(gust_slides_detail.html, material for the final presentation): presentation/fig_gu_*.svg.
 
     python presentation/make_gust_figures.py
 
@@ -179,6 +180,33 @@ def fig_dryden() -> None:
               f"L_w {hh} ft")  # fmt: skip
 
 
+def fig_dryden_simple() -> None:
+    """Plan deck: strength and length against height, moderate turbulence, 0-1,000 ft."""
+    h = np.linspace(10, 1000, 400)
+    base = 0.177 + 0.000823 * h
+    sw = 3.0 * np.ones_like(h)
+    su, lu = sw / base**0.4, h / base**1.2
+    fig, (a, b) = plt.subplots(1, 2, figsize=(7.0, 4.3), sharey=True, constrained_layout=True)
+    a.plot(su, h, color=BLUE, lw=2.6, label="along the runway, σ$_u$")
+    a.plot(sw, h, color=ORANGE, lw=2.6, label="vertical, σ$_w$")
+    a.set(xlabel="strength σ [kt]", ylabel="height above ground h [ft]", xlim=(0, 7.5))
+    a.set_title("how strong", loc="left")
+    b.plot(lu, h, color=BLUE, lw=2.6, label="L$_u$")
+    b.plot(h, h, color=ORANGE, lw=2.6, label="L$_w$ = h")
+    b.set(xlabel="length L [ft]", xlim=(0, 1100))
+    b.set_title("how big", loc="left")
+    for ax in (a, b):
+        ax.axhspan(0, 100, color=MUTED, alpha=0.10, lw=0)
+        ax.axhspan(0, 50, color=ORANGE, alpha=0.10, lw=0)
+        ax.set_ylim(0, 1000)
+    a.text(0.2, 108, "below ~100 ft: extrapolated", fontsize=10.5, color=MUTED, va="bottom")
+    b.text(1080, 8, "takeoff & landing: 0–50 ft", fontsize=10.5, color=INK, va="bottom", ha="right")
+    a.legend(fontsize=11, loc="upper right", frameon=True, framealpha=0.95, edgecolor="none")
+    b.legend(fontsize=11, loc="upper left")
+    fig.savefig(OUT / "fig_gu_dryden_simple.svg")
+    plt.close(fig)
+
+
 # ------------------------------------------------------------------------------------
 # slide 4: the update rule, piece by piece
 # ------------------------------------------------------------------------------------
@@ -355,6 +383,7 @@ def main() -> None:
     fig_decay()
     print('\nDryden, moderate:')
     fig_dryden()
+    fig_dryden_simple()
     fig_run(data)
     print("\nwing averaging, moderate:")
     fig_wing()
