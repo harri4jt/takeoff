@@ -68,6 +68,34 @@ def probability_ok(d: dict, runway_ft: float) -> float:
     return float(np.mean(x <= runway_ft)) if len(x) else math.nan
 
 
+def wilson(p, n: int, z: float = 1.96):
+    """95 % Wilson interval for a share p of n draws (works on arrays)."""
+    p = np.asarray(p, float)
+    den = 1 + z * z / n
+    mid = (p + z * z / (2 * n)) / den
+    half = z * np.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den
+    return np.clip(mid - half, 0, 1), np.clip(mid + half, 0, 1)
+
+
+def fmt_p(p: float) -> str:
+    """A share as a percentage; never '100 %' or '0 %' from a finite number of draws."""
+    p = float(p)
+    if p >= 0.995:
+        return ">99 %"
+    if p <= 0.005:
+        return "<1 %"
+    return f"{100 * p:.0f} %"
+
+
+def _curve_color(d: dict) -> str:
+    if d["main_output"] == "takeoff_field_ft" or "runway_required_ft" not in curve_keys(d):
+        lead = "takeoff_field_ft" if "takeoff_field_ft" in d["values"] else d["main_output"]
+        to, rr = values(d, lead), values(d, d["main_output"])
+        if np.array_equal(to, rr):
+            return COLORS["takeoff_field_ft"]
+    return C1
+
+
 def curve_keys(d: dict) -> list[str]:
     """Takeoff and landing curves; plus 'runway required' only when neither always governs."""
     keys = [k for k in ("takeoff_field_ft", "landing_runway_ft") if k in d["values"]]
@@ -79,9 +107,67 @@ def curve_keys(d: dict) -> list[str]:
 
 
 # ------------------------------------------------------------------------------------
+# 0. the headline: the chance each candidate runway is enough
+# ------------------------------------------------------------------------------------
+def odds_curve(d: dict, runways: list[float]) -> go.Figure:
+    key = d["main_output"]
+    x = values(d, key)
+    n = len(x)
+    nom = d["nominal"][key]
+    fin = np.sort(x[np.isfinite(x)])
+    f = 1 - len(fin) / n if n else 0.0
+    lo_x = min(float(fin[0]) if len(fin) else nom, nom)
+    hi_x = max([float(fin[-1]) if len(fin) else nom] + list(runways))
+    span = max(hi_x - lo_x, 500.0)
+    xs = np.linspace(lo_x - 0.04 * span, hi_x + 0.16 * span, 500)  # room for labels
+    p = np.searchsorted(fin, xs, side="right") / n
+    lo, hi = wilson(p, n)
+    c = _curve_color(d)
+    fig = go.Figure()
+    fig.add_scatter(x=list(xs) + list(xs[::-1]), y=list(100 * hi) + list(100 * lo[::-1]),
+                    fill="toself", fillcolor=_rgba(c, 0.14), line={"width": 0},
+                    hoverinfo="skip", name="sampling 95 % CI")  # fmt: skip
+    fig.add_scatter(x=xs, y=100 * p, mode="lines", line={"color": c, "width": 3},
+                    name=OUT_LABEL[key], showlegend=False,
+                    hovertemplate="%{x:,.0f} ft: enough in %{y:.0f} % of draws"
+                    "<extra></extra>")  # fmt: skip
+    fig.add_vline(x=nom, line={"color": MUTED, "width": 1, "dash": "dot"})
+    fig.add_annotation(x=nom, y=1, yref="paper", text=f"nominal {nom:,.0f}", showarrow=False,
+                       xanchor="right", yanchor="top", xshift=-4,
+                       font={"size": 11, "color": MUTED})  # fmt: skip
+    if f > 0:
+        fig.add_hline(y=100 * (1 - f), line={"color": BFL_C, "width": 1.5, "dash": "dash"})
+        fig.add_annotation(x=0, xref="paper", y=100 * (1 - f), yanchor="bottom", xanchor="left",
+                           xshift=4,
+                           showarrow=False, font={"color": BFL_C, "size": 12},
+                           text=f"<b>never above {fmt_p(1 - f)}</b>: {100 * f:.0f} % of draws "
+                           "cannot take off")  # fmt: skip
+    for r in runways:
+        pr = float(np.mean(x <= r))
+        fig.add_shape(type="line", x0=r, x1=r, y0=0, y1=100 * pr,
+                      line={"color": INK, "width": 1.5, "dash": "dot"})  # fmt: skip
+        fig.add_scatter(x=[r], y=[100 * pr], mode="markers+text", showlegend=False,
+                        marker={"size": 13, "color": INK, "line": {"color": "white", "width": 2}},
+                        text=[f"<b>{fmt_p(pr)}</b>  {r:,.0f} ft"],
+                        textposition="bottom right",
+                        textfont={"size": 14, "color": INK}, cliponaxis=False,
+                        hovertemplate=f"{r:,.0f} ft: enough in {100 * pr:.1f} % of draws"
+                        "<extra></extra>")  # fmt: skip
+    fig.update_xaxes(title="runway length [ft]", tickformat=",")
+    fig.update_yaxes(title="chance it is enough", ticksuffix=" %", range=[0, 104], dtick=20)
+    if runways:
+        title = " · ".join(f"{r:,.0f} ft: {fmt_p(np.mean(x <= r))}" for r in runways)
+    else:
+        title = "Chance a runway is enough"
+    fig = _layout(fig, title, _subtitle(d), 380)
+    fig.update_layout(legend={"y": -0.2, "x": 1, "xanchor": "right"}, hovermode="closest")
+    return fig
+
+
+# ------------------------------------------------------------------------------------
 # 1. the answer: extra runway against confidence
 # ------------------------------------------------------------------------------------
-def margin_curve(d: dict, avail: float | None = None) -> go.Figure:
+def margin_curve(d: dict) -> go.Figure:
     keys = curve_keys(d)
     n = len(d["errors"])
     p_max = min(0.999, 1.0 - 5.0 / max(n, 6))
@@ -128,17 +214,6 @@ def margin_curve(d: dict, avail: float | None = None) -> go.Figure:
                            text=f"<b>no runway is enough</b><br>{100 * f:.0f} % of draws: "
                            "no takeoff")  # fmt: skip
     nom_main = d["nominal"][d["main_output"]]
-    if avail is not None and math.isfinite(avail):
-        p_ok = probability_ok(d, avail)
-        fig.add_hline(y=avail - nom_main, line={"color": INK, "width": 1.5, "dash": "dash"})
-        if 0.5 <= p_ok <= p_max:
-            fig.add_scatter(x=[_ND.inv_cdf(p_ok)], y=[avail - nom_main], mode="markers",
-                            marker={"size": 13, "color": INK, "symbol": "star"},
-                            showlegend=False, hoverinfo="skip")  # fmt: skip
-        fig.add_annotation(x=0, xref="paper", y=avail - nom_main, xanchor="left", yanchor="bottom",
-                           showarrow=False, font={"color": INK, "size": 12},
-                           text=f"<b>your runway {avail:,.0f} ft</b> · enough "
-                           f"{100 * p_ok:.0f} %")  # fmt: skip
     fig.add_hline(y=0, line={"color": MUTED, "width": 1, "dash": "dot"})
     ticks = [p for p in COVER_TICKS if p <= p_max + 1e-9]
     fig.update_xaxes(tickvals=[_ND.inv_cdf(p) for p in ticks],
@@ -238,7 +313,7 @@ def tornado(d: dict, step: float = 0.05) -> go.Figure:
 # ------------------------------------------------------------------------------------
 # 3. the profiler: runway against each multiplier, the others held at the slider values
 # ------------------------------------------------------------------------------------
-def profiler(d: dict, sel: dict[str, float], avail: float | None = None) -> go.Figure:
+def profiler(d: dict, sel: dict[str, float], runways: list[float] | None = None) -> go.Figure:
     surf, fail = d.get("surface") or {}, d.get("failure_model") or {}
     if not surf:
         return empty("Too few draws solved to fit a response surface")
@@ -279,12 +354,14 @@ def profiler(d: dict, sel: dict[str, float], avail: float | None = None) -> go.F
         fig.update_xaxes(tickformat=".2f", row=1, col=j)
     allv = np.concatenate([v for v in ys if len(v)] + [[nom]])
     lo, hi = float(allv.min()), float(allv.max())
-    if avail is not None and math.isfinite(avail) and avail < hi + 0.3 * (hi - lo):
-        hi = max(hi, avail)
-        fig.add_hline(y=avail, line={"color": INK, "width": 1.5, "dash": "dash"})
-        fig.add_annotation(x=1, xref="x3 domain", y=avail, yanchor="top", xanchor="right",
-                           text="your runway", showarrow=False,
-                           font={"size": 11, "color": INK})  # fmt: skip
+    top = hi + 0.3 * (hi - lo)
+    for r in runways or []:
+        if r < top:
+            hi = max(hi, r)
+            fig.add_hline(y=r, line={"color": INK, "width": 1.3, "dash": "dash"})
+            fig.add_annotation(x=1, xref="x3 domain", y=r, yanchor="bottom", xanchor="right",
+                               text=f"{r:,.0f} ft", showarrow=False,
+                               font={"size": 11, "color": INK})  # fmt: skip
     pad = 0.06 * (hi - lo + 1)
     fig.update_yaxes(range=[lo - pad, hi + pad], title="runway [ft]", tickformat=",", col=1)
     fig.add_hline(y=nom, line={"color": MUTED, "width": 1, "dash": "dot"})
@@ -302,7 +379,8 @@ def profiler(d: dict, sel: dict[str, float], avail: float | None = None) -> go.F
     if p_here >= 0.5:
         title = "No takeoff at this combination"
     else:
-        title = f"{here:,.0f} ft  ({here - nom:+,.0f} ft)"
+        delta = "nominal" if abs(here - nom) < 0.5 else f"{here - nom:+,.0f} ft"
+        title = f"{here:,.0f} ft  ({delta})"
     point = " · ".join(f"{FACTOR_LABEL[k]} ×{sel[k]:.3f}" for k in order)
     sub = f"{point} · fit to the draws, ±{surf['loo_rms_ft']:.0f} ft"
     fig = _layout(fig, title, sub, 330)
@@ -322,7 +400,7 @@ def map_factors(d: dict) -> list[str]:
     return sorted(cand[:2], key=list(FACTOR_C).index)
 
 
-def cliff_map(d: dict, avail: float | None = None) -> go.Figure:
+def cliff_map(d: dict, runways: list[float] | None = None) -> go.Figure:
     surf, fail = d.get("surface") or {}, d.get("failure_model") or {}
     pair = map_factors(d)
     if not surf or len(pair) < 2:
@@ -372,14 +450,15 @@ def cliff_map(d: dict, avail: float | None = None) -> go.Figure:
         title = f"The no-takeoff cliff is {dist[ia]:.1f}σ from nominal"
     else:
         title = f"No cliff within ±3σ of {FACTOR_LABEL[a]} and {FACTOR_LABEL[b]}"
-    if avail is not None and math.isfinite(avail) and np.nanmin(Zm) < avail < np.nanmax(Zm):
+    shown = [r for r in runways or [] if np.nanmin(Zm) < r < np.nanmax(Zm)]
+    for i, r in enumerate(shown):
         fig.add_contour(x=100 * ga, y=100 * gb, z=Zm, showscale=False, hoverinfo="skip",
-                        contours={"start": avail, "end": avail, "coloring": "lines",
+                        contours={"start": r, "end": r, "coloring": "lines",
                                   "showlabels": True, "labelformat": ",.0f",
                                   "labelfont": {"size": 12, "color": INK}},
-                        colorscale=[[0, INK], [1, INK]],
-                        line={"width": 3}, name="your runway",
-                        showlegend=True)  # fmt: skip
+                        colorscale=[[0, INK], [1, INK]], line={"width": 2.6},
+                        name="your runways", legendgroup="rw",
+                        showlegend=i == 0)  # fmt: skip
     t = np.linspace(0, 2 * math.pi, 120)
     for p, dash in ((0.5, "dot"), (0.95, "dash")):
         rr = math.sqrt(-2 * math.log(1 - p))
@@ -507,7 +586,8 @@ def sigma_curves(s_cl: float, s_cd: float, s_t: float) -> go.Figure:
 
 
 __all__ = [
-    "sigma_curves", "profiler", "tornado", "tornado_title", "cliff_map", "margin_curve",
+    "odds_curve", "wilson", "fmt_p", "sigma_curves", "profiler", "tornado", "tornado_title",
+    "cliff_map", "margin_curve",
     "convergence", "inputs", "values", "probability_ok", "curve_keys", "map_factors",
     "OUT_LABEL", "FACTOR_LABEL",
 ]  # fmt: skip

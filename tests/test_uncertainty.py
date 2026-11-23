@@ -130,12 +130,18 @@ def test_uncertainty_page_end_to_end():
     assert len(d["oat"]) == 12  # three tables, ±5 % and ±10 %
     page = json.dumps(call(client, app, "un-results.children", {("un-result", "data"): d},
                            ["un-result.data"]), ensure_ascii=False)  # fmt: skip
-    assert "Plan for 95 %" in page and "Method checks" in page
-    av = {("un-avail", "value"): 10_000, ("un-result", "data"): d}
-    o = call(client, app, "un-avail-out.children", av, ["un-avail.value"])
-    assert "of draws fit" in json.dumps(o["un-avail-out"]["children"])
-    assert "95 % confidence" in json.dumps(o["un-fig-margin"]["figure"]["layout"]["title"])
+    assert "Plan for 95 %" in page and "Method checks" in page and "un-rw-3" in page
+    rw = {("un-rw-1", "value"): 10_000, ("un-rw-2", "value"): None,
+          ("un-rw-3", "value"): 12_000, ("un-result", "data"): d}  # fmt: skip
+    o = call(client, app, "un-fig-odds.figure", rw, ["un-rw-1.value"])
+    assert o["un-rw-2-p"]["children"] == [] and "%" in json.dumps(o["un-rw-1-p"]["children"])
+    title = json.dumps(o["un-fig-odds"]["figure"]["layout"]["title"])
+    assert "10,000 ft" in title and "12,000 ft" in title
     assert "cliff" in json.dumps(o["un-fig-map"]["figure"]["layout"]["title"])
+    st = call(client, app, "un-fig-margin.figure", {("un-results", "children"): [],
+              ("un-result", "data"): d}, ["un-results.children"])  # fmt: skip
+    assert "95 % confidence" in json.dumps(st["un-fig-margin"]["figure"]["layout"]["title"])
+    assert "Sampling error" in json.dumps(st["un-fig-conv"]["figure"]["layout"]["title"])
     tv = {("un-step", "value"): 0.05, ("un-result", "data"): d}
     tor = call(client, app, "un-fig-tornado.figure", tv, ["un-step.value"])
     tor = tor["un-fig-tornado"]["figure"]
@@ -144,12 +150,10 @@ def test_uncertainty_page_end_to_end():
                 ("un-result", "data"): d}, ["un-cover.value"])  # fmt: skip
     assert "Plan for 99 %" in json.dumps(plan)
     prof = call(client, app, "un-fig-prof.figure", {("un-sl-cl", "value"): 1.0,
-                ("un-sl-cd", "value"): 0.9, ("un-sl-t", "value"): 1.0, ("un-avail", "value"): None,
+                ("un-sl-cd", "value"): 0.9, ("un-sl-t", "value"): 1.0, ("un-rw-1", "value"): 9000,
+                ("un-rw-2", "value"): None, ("un-rw-3", "value"): None,
                 ("un-result", "data"): d}, ["un-sl-cd.value"])["un-fig-prof"]["figure"]  # fmt: skip
     assert "drag ×0.900" in json.dumps(prof["layout"]["title"], ensure_ascii=False)
-    checks = call(client, app, "un-fig-conv.figure", {("un-results", "children"): [],
-                  ("un-result", "data"): d}, ["un-results.children"])  # fmt: skip
-    assert "Sampling error" in json.dumps(checks["un-fig-conv"]["figure"]["layout"]["title"])
     sig = call(client, app, "un-fig-sigmas.figure", {("un-cl", "value"): 2, ("un-cd", "value"): 8,
                ("un-t", "value"): 0}, ["un-cl.value"])  # fmt: skip
     assert len(sig["un-fig-sigmas"]["figure"]["data"]) == 3 and sig["un-sig-box"]["open"] is True

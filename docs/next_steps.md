@@ -496,3 +496,8 @@ credit, wet runway option, flare model detail (constant-g vs Raymer's flare radi
       the cliff in σ). Pie, scatter, histogram and the MC comparison removed; input check and
       sampling error collapsed under "Method checks"; setup plot folds away after Run; terse
       titles and labels, PNG export named `data_uncertainty_*`.
+- [x] Round 10d: runways come in a few real lengths, so the answer card takes up to three
+      candidate runways (defaults: nominal rounded up to 1,000 ft, +1,000, +2,000) and shows
+      the chance each is enough (Wilson sampling range) beside an **odds chart** (chance of
+      fitting vs runway length, candidates marked, ceiling when some draws cannot take off).
+      The candidates are drawn on the profiler and as contours on the cliff map.

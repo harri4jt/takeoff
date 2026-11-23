@@ -472,11 +472,17 @@ details.adv[open] > summary::before { content: "▾ "; }
 .un-sig { width: 154px; }
 .un-sliders { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 10px 0 4px; }
 .un-slider label { font-weight: 600; font-size: 13px; }
-.un-tiles { grid-template-columns: repeat(3, 1fr); margin-top: 10px; }
-@media (max-width: 900px) { .un-tiles { grid-template-columns: 1fr; } }
+.un-answer-grid { display: grid; grid-template-columns: 290px 1fr; gap: 14px; margin-top: 10px; align-items: start; }
+@media (max-width: 900px) { .un-answer-grid { grid-template-columns: 1fr; } }
+.un-tiles { display: flex; flex-direction: column; gap: 10px; }
+.un-tiles .gu-card { padding: 10px 14px; }
+.un-tiles .gu-card .m-value { font-size: 26px; }
+.un-rw-row { display: grid; grid-template-columns: 104px 18px 1fr; align-items: center; gap: 6px; margin-top: 7px; }
+.un-rw-row .num-input, .un-rw-row .dash-input-container { width: 104px; font-weight: 600; }
+.un-rw-row .unit { color: var(--muted); font-size: 13px; }
+.un-rw-odds { display: flex; align-items: baseline; gap: 8px; justify-content: flex-end; }
+.un-rw-p { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .un-plan { border-color: var(--accent, #2a78d6); box-shadow: inset 0 0 0 1px var(--accent, #2a78d6); }
-.un-tiles .m-label { justify-content: space-between; }
-.un-avail.num-input, .un-tiles .dash-input-container { width: 116px; font-weight: 600; }
 .un-verdict { display: flex; align-items: center; gap: 10px; margin: 12px 0 8px; padding: 9px 14px;
   border-radius: 10px; font-size: 15px; font-weight: 600; }
 .un-verdict .icon { width: 24px; height: 24px; border-radius: 50%; display: inline-flex;

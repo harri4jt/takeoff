@@ -215,9 +215,27 @@ def layout() -> html.Div:
 STEPS = ((0.05, "±5 %"), (0.10, "±10 %"))
 
 
-def default_runway(d: dict) -> int:
-    """A starting value for 'your runway': nominal + 1,000 ft, rounded up to 100 ft."""
-    return int(math.ceil((d["nominal"][d["main_output"]] + 1000) / 100) * 100)
+RUNWAY_IDS = ("un-rw-1", "un-rw-2", "un-rw-3")
+
+
+def default_runways(d: dict) -> list[int]:
+    """Starting candidates: the nominal rounded up to 1,000 ft, then +1,000 and +2,000."""
+    base = int(math.ceil(d["nominal"][d["main_output"]] / 1000) * 1000)
+    return [base, base + 1000, base + 2000]
+
+
+def runway_list(vals) -> list[float]:
+    """The candidate runways that are filled in, shortest first, without repeats."""
+    return sorted({float(v) for v in vals if v is not None and float(v) > 0})
+
+
+def runway_odds(d: dict, rw) -> list:
+    if rw is None or not d:
+        return []
+    p = unc_figures.probability_ok(d, float(rw))
+    lo, hi = unc_figures.wilson(p, len(d["errors"]))
+    return [html.Span(unc_figures.fmt_p(p), className="un-rw-p"),
+            html.Span(f"{100 * lo:.0f}–{100 * hi:.0f} %", className="hint")]  # fmt: skip
 
 
 def plan_tile(d: dict, p: float) -> list:
@@ -237,19 +255,6 @@ def plan_tile(d: dict, p: float) -> list:
         html.Div(f"{est:,.0f} ft", className="m-value"),
         html.Div(f"{est - nom:+,.0f} ft · {100 * (est / nom - 1):+.0f} %", className="gu-delta"),
         html.Div(f"sampling range {ci}", className="hint"),
-    ]
-
-
-def avail_out(d: dict, avail) -> list:
-    if avail is None or not d:
-        return [html.Div("—", className="m-value")]
-    p = unc_figures.probability_ok(d, float(avail))
-    nom = d["nominal"][d["main_output"]]
-    return [
-        html.Div(f"{100 * p:.0f} %", className="m-value"),
-        html.Div(
-            f"of draws fit · {float(avail) - nom:+,.0f} ft over nominal", className="gu-delta"
-        ),
     ]
 
 
@@ -302,39 +307,56 @@ def answer(d: dict, p: float) -> list:
             ],
         ),
         html.Div(
-            className="gu-cards un-tiles",
+            className="un-answer-grid",
             children=[
                 html.Div(
-                    className="gu-card",
-                    children=[
-                        html.Div("Nominal", className="m-label"),
-                        html.Div(f"{nom:,.0f} ft", className="m-value"),
-                        html.Div("tables as they are", className="gu-delta"),
-                    ],
-                ),  # fmt: skip
-                html.Div(id="un-plan", className="gu-card un-plan", children=plan_tile(d, p)),
-                html.Div(
-                    className="gu-card",
+                    className="un-tiles",
                     children=[
                         html.Div(
-                            [
-                                "Your runway",
-                                dcc.Input(
-                                    id="un-avail",
-                                    type="number",
-                                    value=default_runway(d),
-                                    step=100,
-                                    debounce=True,
-                                    className="num-input un-avail",
-                                ),
+                            className="gu-card",
+                            children=[
+                                html.Div("Nominal", className="m-label"),
+                                html.Div(f"{nom:,.0f} ft", className="m-value"),
+                                html.Div("tables as they are", className="gu-delta"),
                             ],
-                            className="m-label",
                         ),
-                        html.Div(id="un-avail-out", children=avail_out(d, default_runway(d))),
+                        html.Div(
+                            id="un-plan", className="gu-card un-plan", children=plan_tile(d, p)
+                        ),
+                        html.Div(
+                            className="gu-card un-rw",
+                            children=[
+                                html.Div("Runways you could use", className="m-label"),
+                                *[
+                                    html.Div(
+                                        className="un-rw-row",
+                                        children=[
+                                            dcc.Input(
+                                                id=rid,
+                                                type="number",
+                                                value=v,
+                                                step=100,
+                                                min=0,
+                                                debounce=True,
+                                                className="num-input",
+                                            ),
+                                            html.Span("ft", className="unit"),
+                                            html.Div(
+                                                id=rid + "-p",
+                                                className="un-rw-odds",
+                                                children=runway_odds(d, v),
+                                            ),
+                                        ],
+                                    )
+                                    for rid, v in zip(RUNWAY_IDS, default_runways(d), strict=True)
+                                ],
+                            ],
+                        ),
                     ],
-                ),  # fmt: skip
+                ),
+                _graph("un-fig-odds", "odds"),
             ],
-        ),
+        ),  # fmt: skip
         html.Div(
             className=f"un-verdict {level}",
             children=[html.Span(icon, className="icon"), html.Span(text)],
@@ -542,17 +564,18 @@ def register(app, aircraft_options) -> None:
         return plan_tile(d, float(p)) if d else no_update
 
     @app.callback(
-        Output("un-avail-out", "children"),
-        Output("un-fig-margin", "figure"),
+        *[Output(rid + "-p", "children") for rid in RUNWAY_IDS],
+        Output("un-fig-odds", "figure"),
         Output("un-fig-map", "figure"),
-        Input("un-avail", "value"),
+        *[Input(rid, "value") for rid in RUNWAY_IDS],
         State("un-result", "data"),
     )
-    def on_avail(avail, d):
+    def on_runways(r1, r2, r3, d):
         if not d:
-            return (no_update,) * 3
-        a = float(avail) if avail is not None else None
-        return avail_out(d, a), unc_figures.margin_curve(d, a), unc_figures.cliff_map(d, a)
+            return (no_update,) * 5
+        rws = runway_list([r1, r2, r3])
+        return (*[runway_odds(d, r) for r in (r1, r2, r3)], unc_figures.odds_curve(d, rws),
+                unc_figures.cliff_map(d, rws))  # fmt: skip
 
     @app.callback(
         Output("un-fig-tornado", "figure"),
@@ -567,14 +590,14 @@ def register(app, aircraft_options) -> None:
         Input("un-sl-cl", "value"),
         Input("un-sl-cd", "value"),
         Input("un-sl-t", "value"),
-        Input("un-avail", "value"),
+        *[Input(rid, "value") for rid in RUNWAY_IDS],
         State("un-result", "data"),
     )
-    def on_profiler(kcl, kcd, kt, avail, d):
+    def on_profiler(kcl, kcd, kt, r1, r2, r3, d):
         if not d:
             return no_update
         sel = {"k_CL": kcl or 1.0, "k_CD": kcd or 1.0, "k_T": kt or 1.0}
-        return unc_figures.profiler(d, sel, float(avail) if avail is not None else None)
+        return unc_figures.profiler(d, sel, runway_list([r1, r2, r3]))
 
     @app.callback(
         Output("un-sl-cl", "value"),
@@ -587,15 +610,17 @@ def register(app, aircraft_options) -> None:
         return 1.0, 1.0, 1.0
 
     @app.callback(
+        Output("un-fig-margin", "figure"),
         Output("un-fig-conv", "figure"),
         Output("un-fig-inputs", "figure"),
         Input("un-results", "children"),
         State("un-result", "data"),
     )
-    def on_checks(_c, d):
+    def on_static(_c, d):
         if not d:
-            return no_update, no_update
-        return unc_figures.convergence(d), unc_figures.inputs(d)
+            return no_update, no_update, no_update
+        f = unc_figures
+        return f.margin_curve(d), f.convergence(d), f.inputs(d)
 
     @app.callback(
         Output("un-dl-csv", "data"),
