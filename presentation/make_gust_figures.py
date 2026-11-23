@@ -588,14 +588,14 @@ def fig_history() -> None:
     """Plan deck: what the generator produces at the reference case."""
     g = gust_signal(W20_REF, H_REF, 150.0, t_end_s=10.0, dt_s=0.01, method="heun", seed=21)
     sig, tc = g["sigma_u"], g["T_u"]
-    fig, ax = plt.subplots(figsize=(11.6, 2.9), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(11.6, 2.35), constrained_layout=True)
     ax.axhspan(-sig, sig, color=GRID, alpha=0.9, lw=0)
     ax.plot(g["t"], g["u"][:, 0], color=BLUE, lw=1.6)
     ax.text(10.05, sig, f"+σ = {sig:.1f} kt", va="center", color=MUTED, fontsize=11)
     ax.text(10.05, -sig, "−σ", va="center", color=MUTED, fontsize=11)
-    ax.set(xlabel="time [s]", ylabel="gust [kt]", xlim=(0, 10))
-    ax.set_title(f"output: one gust history, a number every 0.01 s  (moderate, 20 ft, 150 kt: "
-                 f"σ = {sig:.1f} kt, T = {tc:.2f} s)", loc="left", fontsize=12.5)  # fmt: skip
+    ax.set(xlabel="time [s]", ylabel="gust u [kt]", xlim=(0, 10))
+    ax.set_title(f"one gust history: moderate turbulence, 20 ft, 150 kt (σ = {sig:.1f} kt, "
+                 f"T = {tc:.2f} s), a value every 0.01 s", loc="left", fontsize=12)  # fmt: skip
     fig.savefig(OUT / "fig_gu_history.svg")
     plt.close(fig)
 

@@ -115,45 +115,118 @@
   table.res td.b { font-weight: 700; }
   .lim li { margin: 6px 0; }
 </style>
+<style>
+  .sde { text-align: center; margin: 6px 0 14px; }
+  .sde .row { font-family: "DejaVu Serif", serif; display: flex; justify-content: center; align-items: flex-start; gap: 10px; }
+  .sde .gen { font-size: 21px; color: var(--muted); margin-bottom: 14px; }
+  .sde .ours { font-size: 34px; }
+  .sde .tag { font-family: "Noto Sans", sans-serif; font-size: 13px; font-weight: 700; color: var(--muted);
+              width: 120px; text-align: right; padding-top: 0.5em; }
+  .sde .ours .tag { padding-top: 0.9em; }
+  .sde .p { display: inline-block; text-align: center; padding: 0 6px 2px; }
+  .sde .drift { border-bottom: 3px solid var(--blue); }
+  .sde .diff { border-bottom: 3px solid var(--orange); }
+  .sde .lab { display: block; font-family: "Noto Sans", sans-serif; font-size: 13px; font-weight: 600; margin-top: 3px; }
+  .sde .drift .lab { color: #1f5fae; } .sde .diff .lab { color: #b4501d; }
+  .sde .ours .lab { font-size: 14px; }
+  .src3 { display: grid; grid-template-columns: 1.35fr 0.8fr 1fr; gap: 14px; }
+  .src3 .box { font-size: 14.5px; line-height: 1.4; padding: 10px 14px; }
+  .src3 .box h4 { margin: 0 0 4px; font-size: 15.5px; }
+  .src3 .m { font-family: "DejaVu Serif", serif; font-size: 15px; line-height: 1.6; }
+  .eom { display: grid; grid-template-columns: 1fr 1.25fr; gap: 16px; margin-top: 4px; }
+  .eom .box { padding: 12px 16px; }
+  .eom h4 { margin: 0 0 6px; font-size: 16.5px; } .eom h4 span { font-weight: 400; font-size: 13.5px; color: var(--muted); }
+  .eom .m { font-family: "DejaVu Serif", serif; font-size: 17px; line-height: 1.85; }
+  .gu { color: var(--orange); font-weight: 700; }
+  .eom .note { font-size: 13.5px; color: var(--muted); line-height: 1.4; margin-top: 4px; }
+</style>
 </head>
 <body>
 
 
 <section class="slide">
   <h2>Gust model</h2>
-  <div class="lead" style="font-size: 18px;">Model currently accounts for steady wind, but what about random gusts that can occur?</div>
-  <div class="flow" style="margin: 18px 0 22px;">
-    <div class="box"><h4><span class="n">1</span>Dryden model</h4>Mean wind at 20 ft (W<sub>20</sub>) and height h →
-      gust <b>strength σ</b> and <b>length L</b><div class="m" style="margin-top: 8px; font-size: 16px;">σ<sub>w</sub> = 0.1 W<sub>20</sub>, &nbsp;L<sub>w</sub> = h</div></div>
-    <div class="box"><h4><span class="n">2</span>Fly through it</h4>The air pattern is frozen; at speed V a gust lasts
-      <div class="m" style="margin-top: 8px; font-size: 18px;">T = L / V</div></div>
-    <div class="box"><h4><span class="n">3</span>An SDE</h4>Fades over T, kicked by noise, size σ
-      (Ornstein–Uhlenbeck):<div class="m" style="margin-top: 8px; font-size: 16px;">dg = −(g/T) dt + σ√(2/T) dW</div></div>
-    <div class="box"><h4><span class="n">4</span>Step it</h4>Euler–Maruyama / Heun, Δt = 0.01 s, Z<sub>n</sub> ~ N(0, 1):
-      <div class="m" style="margin-top: 8px; font-size: 15px;">g<sub>n+1</sub> = g<sub>n</sub> − (g<sub>n</sub>/T)Δt + σ√(2Δt/T) Z<sub>n</sub></div></div>
+  <div class="lead" style="font-size: 18px;">Modeling random gusts during takeoff</div>
+  <div class="sde">
+    <div class="row gen"><span class="tag">any SDE</span>
+      <span>dX =</span>
+      <span class="p drift">a(X, t) dt<span class="lab">drift: the ODE part</span></span><span>+</span>
+      <span class="p diff">b(X, t) dW<span class="lab">diffusion: random kicks</span></span>
+    </div>
+    <div class="row ours"><span class="tag">our gust</span>
+      <span class="p">dg =<span class="lab" style="color: var(--muted);">g: u<sub>g</sub> or w<sub>g</sub></span></span>
+      <span class="p drift">− (g / T) dt<span class="lab">pulls the gust back to 0, memory T</span></span><span>+</span>
+      <span class="p diff">σ √(2 / T) dW<span class="lab">random kick, keeps the size at σ</span></span>
+    </div>
   </div>
-  <img class="fig" src="fig_gu_history.svg" alt="one generated gust history">
+  <div class="src3">
+    <div class="box"><h4>σ and L: the Dryden model</h4>From the mean wind at 20 ft (W<sub>20</sub>) and height h, for each
+      direction (u along the runway, w vertical):
+      <div class="m">σ<sub>w</sub> = 0.1 W<sub>20</sub>, &nbsp; σ<sub>u</sub> = σ<sub>w</sub> / (0.177 + 0.000823 h)<sup>0.4</sup><br>
+        L<sub>w</sub> = h, &nbsp; L<sub>u</sub> = h / (0.177 + 0.000823 h)<sup>1.2</sup></div></div>
+    <div class="box"><h4>T = L / V</h4>The time to fly through one gust of length L at airspeed V: the gust's
+      <b>memory</b>. Recomputed every step.</div>
+    <div class="box"><h4>dW: Brownian motion</h4>Over a step, ΔW = √Δt · Z, with Z ~ N(0, 1). Stepped with
+      Euler–Maruyama / Heun, Δt = 0.01 s:
+      <div class="m">g<sub>n+1</sub> = g<sub>n</sub> − (g<sub>n</sub>/T) Δt + σ√(2/T) √Δt Z<sub>n</sub></div></div>
+  </div>
+  <img class="fig" src="fig_gu_history.svg" alt="one generated gust history" style="margin-top: 10px;">
   <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>1</span></div>
 </section>
-
+<section class="slide">
+  <h2>Gusts in the equations of motion</h2>
+  <div class="lead" style="font-size: 17px;">Two new states, u<sub>g</sub> (along the runway, + headwind) and
+    w<sub>g</sub> (vertical, + up). They enter only through the air the wing sees: <span class="gu">orange</span>.</div>
+  <div class="eom">
+    <div class="box"><h4>Ground roll <span>state [x, V], V = ground speed</span></h4>
+      <div class="m">
+        V<sub>a</sub> = V + V<sub>wind</sub> + <span class="gu">u<sub>g</sub></span><br>
+        α = θ + <span class="gu">w<sub>g</sub></span> / V<sub>a</sub><br>
+        m V̇ = T − D − μ (mg − L), &nbsp; ẋ = V
+      </div>
+      <div class="note">L and D from ½ρV<sub>a</sub>² S C<sub>L</sub>(α), C<sub>D</sub>(α): a gust changes the airspeed
+        and the angle of attack, and with them every force.</div>
+    </div>
+    <div class="box"><h4>Airborne <span>state [x, h, u, w], ground velocity (u, w)</span></h4>
+      <div class="m">
+        air-relative velocity: v<sub>a</sub> = (u + V<sub>wind</sub> + <span class="gu">u<sub>g</sub></span>, &nbsp;w − <span class="gu">w<sub>g</sub></span>)<br>
+        γ<sub>a</sub> = angle of v<sub>a</sub>, &nbsp; α = θ − γ<sub>a</sub><br>
+        m (u̇, ẇ) = T + L + D + mg, &nbsp; ẋ = u, ḣ = w
+      </div>
+      <div class="note">Newton for the ground velocity; lift ⟂ v<sub>a</sub>, drag along −v<sub>a</sub>, both from
+        |v<sub>a</sub>| and α.</div>
+    </div>
+  </div>
+  <div class="two" style="grid-template-columns: 1fr 450px; gap: 22px; margin-top: 14px; align-items: start;">
+    <div>
+      <div class="key" style="font-size: 16px;"><b>Why relative to the ground now:</b> the 11/20 equations (relative to the
+        air) needed the wind's derivative u̇<sub>w</sub>. A random gust has <b>no derivative</b>: it is built from
+        Brownian kicks. Written for the ground velocity, only the gust's value appears.</div>
+      <div class="box" style="font-size: 15px; line-height: 1.45; padding: 10px 16px; margin-top: 12px;"><b>In the numerical solution</b>
+        <ul class="tight" style="font-size: 15px; margin-top: 4px;">
+          <li>y = [x, h, u, w, u<sub>g</sub>, w<sub>g</sub>]: one SDE system, a Heun step every 0.01 s</li>
+          <li>RK4 / RK45 don't apply: their order needs a smooth right-hand side</li>
+          <li>The crew flies the calm-day V<sub>EF</sub>, VR, reading airspeed with a 1 s lag</li>
+        </ul></div>
+    </div>
+    <div>
+      <img class="fig" src="fig_gu_run.svg" alt="one gusty takeoff, airspeed felt and acted on">
+      <div class="cap" style="font-size: 13px;">One gusty takeoff: grey, the airspeed the wing feels; black, what the
+        crew acts on. Dots: engine failure and rotation.</div>
+    </div>
+  </div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>2</span></div>
+</section>
 <section class="slide">
   <h2>Then: many gusty takeoffs → a runway with a confidence</h2>
-  <div class="two" style="grid-template-columns: 1fr 1fr 1fr; gap: 22px; margin-top: 18px;">
-    <div class="box" style="padding: 16px 18px;">
-      <div class="colhead">Fly</div>
-      <div class="t15" style="font-size: 16.5px;">
-        <p>The gust enters the airspeed and the angle of attack:</p>
-        <div class="eqs" style="font-size: 16.5px;">V<sub>air</sub> = V + u<sub>g</sub><br>α ≈ α₀ + w<sub>g</sub> / V</div>
-        <p style="margin-top: 10px;">The crew flies the calm-day V1 and VR, reading airspeed with a 1 s lag.</p>
-      </div>
-    </div>
+  <div class="two" style="grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 18px;">
     <div class="box" style="padding: 16px 18px;">
       <div class="colhead">Repeat</div>
       <div class="t15" style="font-size: 16.5px;">
-        <p>500 takeoffs, new random gusts each. Sort the runway lengths: the one that covers 95 % (P95), with a
-          confidence interval from order statistics.</p>
+        <p>500 takeoffs on the calm-day schedule, new random gusts each. Sort the runway lengths: the one that covers 95 % (P95),
+          with a confidence interval from order statistics.</p>
       </div>
-      <img class="fig" src="fig_gu_sketch.svg" alt="sketch: N runs give a spread; P95 marked">
+      <img class="fig" src="fig_gu_sketch.svg" alt="sketch: N runs give a spread; P95 marked" style="width: 70%; margin: 0 auto;">
     </div>
     <div class="box" style="padding: 16px 18px;">
       <div class="colhead">Check</div>
@@ -167,7 +240,7 @@
   </div>
   <div class="key" style="margin-top: 22px; font-size: 18px;">Final presentation: the extra runway that covers 90 / 95 / 99 % of gusty days,
     light to severe turbulence, 747-100 and SR-71.</div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>2</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>3</span></div>
 </section>
 
 </body>
