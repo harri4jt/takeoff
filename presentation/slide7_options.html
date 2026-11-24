@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BFL – 11/25/26 update</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  :root {
+    --ink: #0f1d2b; --muted: #4a5868; --line: #d7dee6; --soft: #f3f7fb;
+    --blue: #2a78d6; --orange: #eb6834; --green: #1baf7a; --red: #d7263d; --faa: #1f9d55;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Noto Sans", "DejaVu Sans", sans-serif; color: var(--ink); }
+  .slide { width: 1280px; height: 720px; position: relative; overflow: hidden; background: white;
+           padding: 40px 56px; page-break-after: always; break-after: page; }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+  h2 { margin: 0 0 16px; font-size: 32px; letter-spacing: -0.3px; }
+  h3 { margin: 0 0 8px; font-size: 16px; color: var(--muted); }
+  .foot { position: absolute; left: 56px; right: 56px; bottom: 16px; font-size: 12px; color: #8a96a3;
+          display: flex; justify-content: space-between; }
+  sub, sup { font-size: 70%; }
+  .m { font-family: "DejaVu Serif", serif; }
+  .box { background: var(--soft); border-radius: 12px; padding: 12px 18px; }
+  .note { font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+  .new { color: var(--orange); font-weight: 600; }
+  ul.tight { margin: 4px 0 0; padding-left: 18px; font-size: 15px; line-height: 1.45; }
+  ul.tight li { margin: 3px 0; }
+
+  /* ---------- title (same as the 11/13 deck) */
+  .title { background: linear-gradient(180deg, #4f8fd1 0%, #8ec1ea 55%, #dceefa 100%); color: white; padding: 0; }
+  .title .cloud { position: absolute; background: rgba(255,255,255,0.8); border-radius: 60px; height: 56px; filter: blur(1px); }
+  .title .cloud::before, .title .cloud::after { content: ""; position: absolute; background: inherit; border-radius: 50%; }
+  .title .cloud::before { width: 90px; height: 84px; left: 34px; top: -42px; }
+  .title .cloud::after  { width: 70px; height: 60px; left: 110px; top: -26px; }
+  .title-text { position: absolute; left: 80px; top: 150px; right: 80px; }
+  .title-text .course { font-size: 18px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+  .title-text h1 { font-size: 58px; line-height: 1.08; margin: 14px 0 16px; text-shadow: 0 2px 12px rgba(16,45,80,0.25); }
+  .title-text .tag { font-size: 23px; max-width: 900px; line-height: 1.35; }
+  .authors { position: absolute; left: 80px; bottom: 160px; font-size: 26px; font-weight: 600; color: #0f2c4c; }
+  .runway { position: absolute; left: 0; right: 0; bottom: 0; height: 96px; background: #a7c98a; }
+  .runway .rw { position: absolute; left: 80px; right: -20px; top: 26px; height: 44px; background: #3b3f46; }
+  .runway .dash { position: absolute; left: 140px; right: 0; top: 47px; border-top: 3px dashed white; }
+  .runway .keys { position: absolute; left: 92px; top: 31px; width: 34px; height: 34px;
+    background: repeating-linear-gradient(180deg, white 0 4px, transparent 4px 7px); }
+
+  /* ---------- slide 2: the tailwind problem */
+  .tw-top { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: center; }
+  .nums { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  .nums th { text-align: right; font-size: 12px; color: var(--muted); border-bottom: 2px solid var(--line); padding: 4px 6px; }
+  .nums th:first-child, .nums td:first-child { text-align: left; }
+  .nums td { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: right; white-space: nowrap; }
+  .nums td.b { color: var(--blue); font-weight: 700; } .nums td.o { color: var(--orange); font-weight: 700; } .nums td.g { color: #1f9d55; font-weight: 700; }
+  .tw-bot { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 10px; }
+
+  /* ---------- slide 3: gust equations */
+  .g-top { display: grid; grid-template-columns: 1fr 1.35fr; gap: 18px; }
+  .g-top .m { font-size: 16px; line-height: 1.85; white-space: nowrap; }
+  .g-top h4 { margin: 0 0 2px; font-size: 15.5px; }
+  .g-top h4 span { font-weight: 400; color: var(--muted); font-size: 13px; }
+  .g-bot { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 16px; margin-top: 12px; }
+  .vars { width: 100%; border-collapse: collapse; font-size: 12.8px; }
+  .vars td { padding: 1.5px 4px; vertical-align: top; line-height: 1.3; }
+  .vars td:first-child { font-family: "DejaVu Serif", serif; white-space: nowrap; width: 58px; }
+  .vars tr.sec td { font-weight: 700; color: var(--muted); padding-top: 5px; font-family: inherit; }
+  .zero td { color: var(--muted); }
+  .flow { display: flex; flex-direction: column; gap: 7px; margin-top: 4px; }
+  .flow .st { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: center; font-size: 14.5px; line-height: 1.3; }
+  .flow .n { width: 24px; height: 24px; border-radius: 50%; background: var(--blue); color: white; font-weight: 700;
+             font-size: 13px; text-align: center; line-height: 24px; }
+
+  /* ---------- 747 baseline slides */
+  .b-grid { display: grid; grid-template-columns: 430px 1fr; gap: 24px; align-items: start; }
+  .photo { position: relative; border-radius: 12px; overflow: hidden; }
+  .photo img { display: block; width: 100%; }
+  .photo .cred { position: absolute; right: 8px; bottom: 6px; font-size: 10.5px; color: rgba(255,255,255,0.85); }
+  .baseline { margin-top: 14px; border-left: 5px solid var(--blue); background: #eaf2fc; border-radius: 8px;
+              padding: 10px 14px; font-size: 16px; line-height: 1.45; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+  .kpi { background: var(--soft); border-radius: 10px; padding: 8px 10px; text-align: center; }
+  .kpi b { display: block; font-size: 22px; color: var(--ink); }
+  .kpi span { font-size: 12.5px; color: var(--muted); }
+  .s-grid { display: grid; grid-template-columns: 330px 1fr; gap: 20px; }
+  .scan { border: 1.5px solid var(--line); border-radius: 10px; padding: 6px; background: white; }
+  .scan img { display: block; width: 100%; }
+  .scan .cap { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.35; }
+  .arrow { text-align: center; font-size: 14px; color: var(--blue); font-weight: 700; margin: 2px 0; }
+  .src-head { background: var(--soft); border-radius: 10px; padding: 8px 16px; font-size: 14.5px; line-height: 1.4; margin-bottom: 12px; }
+  .src-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .src-col { display: flex; flex-direction: column; align-items: center; }
+  .src-col h4 { margin: 0 0 6px; font-size: 18px; align-self: flex-start; }
+  .scan2 { height: 222px; width: 100%; display: flex; align-items: center; justify-content: center;
+           border: 1.5px solid var(--line); border-radius: 10px; background: white; padding: 6px; }
+  .scan2 img { max-height: 100%; max-width: 100%; display: block; }
+  .cap2 { font-size: 12px; color: var(--muted); margin-top: 4px; text-align: center; }
+  .down { font-size: 14px; color: var(--blue); font-weight: 700; margin: 2px 0; }
+  .plot2 { height: 205px; width: auto; max-width: 100%; display: block; }
+  .sde { text-align: center; margin: 6px 0 14px; }
+  .sde .row { font-family: "DejaVu Serif", serif; display: flex; justify-content: center; align-items: flex-start; gap: 10px; }
+  .sde .gen { font-size: 21px; color: var(--muted); margin-bottom: 14px; }
+  .sde .ours { font-size: 34px; }
+  .sde .tag { font-family: "Noto Sans", sans-serif; font-size: 13px; font-weight: 700; color: var(--muted);
+              width: 120px; text-align: right; padding-top: 0.5em; }
+  .sde .ours .tag { padding-top: 0.9em; }
+  .sde .p { display: inline-block; text-align: center; padding: 0 6px 2px; }
+  .sde .drift { border-bottom: 3px solid var(--blue); }
+  .sde .diff { border-bottom: 3px solid var(--orange); }
+  .sde .lab { display: block; font-family: "Noto Sans", sans-serif; font-size: 13px; font-weight: 600; margin-top: 3px; }
+  .sde .drift .lab { color: #1f5fae; } .sde .diff .lab { color: #b4501d; }
+  .sde .ours .lab { font-size: 14px; }
+  .src3 { display: grid; grid-template-columns: 1.35fr 0.8fr 1fr; gap: 14px; }
+  .src3 .box { font-size: 14.5px; line-height: 1.4; padding: 10px 14px; }
+  .src3 .box h4 { margin: 0 0 4px; font-size: 15.5px; }
+  .src3 .m { font-family: "DejaVu Serif", serif; font-size: 15px; line-height: 1.6; }
+  .eom { display: grid; grid-template-columns: 1fr 1.25fr; gap: 16px; margin-top: 4px; }
+  .eom .box { padding: 12px 16px; }
+  .eom h4 { margin: 0 0 6px; font-size: 16.5px; } .eom h4 span { font-weight: 400; font-size: 13.5px; color: var(--muted); }
+  .eom .m { font-family: "DejaVu Serif", serif; font-size: 17px; line-height: 1.85; }
+  .gu { color: var(--orange); font-weight: 700; }
+  .eom .note { font-size: 13.5px; color: var(--muted); line-height: 1.4; margin-top: 4px; }
+  .src3.four { grid-template-columns: 1.3fr 0.8fr 1fr 1fr; }
+  .sr-src { font-size: 13.5px; color: var(--muted); text-align: center; margin: 6px 0 2px; }
+
+  .eqx { font-family: "DejaVu Serif", serif; font-size: 19px; line-height: 1.7; white-space: nowrap; }
+  .opt { position: absolute; right: 56px; top: 40px; font-size: 13px; font-weight: 700; color: var(--muted);
+         border: 1.5px solid var(--line); border-radius: 6px; padding: 2px 10px; }
+  .dr { color: #1f5fae; } .df { color: #b4501d; }
+  /* A: pipeline table */
+  .pipe { display: grid; grid-template-columns: 44px 180px 560px 1fr; gap: 0; margin-top: 12px; align-items: stretch; }
+  .pipe > div { padding: 22px 10px; border-bottom: 1px solid var(--line); }
+  .pipe .n { text-align: center; } .pipe .n span { width: 30px; height: 30px; border-radius: 50%; background: var(--blue);
+         color: white; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+  .pipe .nm { font-weight: 700; font-size: 16.5px; }
+  .pipe .nm small { display: block; font-weight: 400; color: var(--muted); font-size: 13px; }
+  .pipe .mean { font-size: 14.5px; color: var(--muted); line-height: 1.4; }
+  .pipe .hl-row { background: #f3f7fb; }
+  /* B: aligned equations */
+  .align { display: grid; grid-template-columns: 150px 70px 230px 30px 250px; justify-content: center; row-gap: 6px;
+           align-items: center; margin: 14px 0 6px; }
+  .align .lab { font-size: 14px; font-weight: 700; color: var(--muted); text-align: right; padding-right: 14px; }
+  .align .c { text-align: center; } .align .bd { border-bottom: 3px solid; padding-bottom: 2px; }
+  .align .sub { font-size: 13px; font-weight: 600; text-align: center; }
+  .cards3 { display: grid; grid-template-columns: 1.4fr 0.8fr 1fr; gap: 14px; margin-top: 16px; }
+  .cards2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; margin-top: 14px; }
+  .card { background: var(--soft); border-radius: 12px; padding: 12px 16px; font-size: 14.5px; line-height: 1.45; }
+  .card h4 { margin: 0 0 6px; font-size: 16px; }
+  /* C: two columns */
+  .mn { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 10px; }
+  .mn h3 { margin: 0 0 8px; font-size: 19px; } .mn .stack { display: flex; flex-direction: column; gap: 0; }
+  .mn .card { margin: 0; } .mn .down { text-align: center; color: var(--muted); font-size: 20px; line-height: 1.1; margin: 2px 0; }
+</style>
+</head>
+<body>
+<section class="slide">
+  <h2>Plan: random gusts as an SDE</h2><div class="opt">A · pipeline</div>
+  <div class="lead" style="font-size: 17px;">Turbulence is random: model each gust g (u along the runway, w vertical) as an SDE,
+    then sample many takeoffs.</div>
+  <div class="pipe">
+    <div class="n"><span>1</span></div><div class="nm">Gust statistics<small>Dryden model</small></div>
+    <div class="eqx">σ<sub>w</sub> = 0.1 W<sub>20</sub>, &nbsp;&nbsp; σ<sub>u</sub> = σ<sub>w</sub> / (0.177 + 0.000823 h)<sup>0.4</sup><br>L<sub>w</sub> = h, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; L<sub>u</sub> = h / (0.177 + 0.000823 h)<sup>1.2</sup></div>
+    <div class="mean">intensity σ (std. dev.) and scale length L, from the mean wind at 20 ft W<sub>20</sub> and height h</div>
+    <div class="n"><span>2</span></div><div class="nm">Gust memory</div>
+    <div class="eqx">T = L / V</div>
+    <div class="mean">time to fly through one gust at airspeed V</div>
+    <div class="n hl-row"><span>3</span></div><div class="nm hl-row">Gust SDE<small>Ornstein–Uhlenbeck</small></div>
+    <div class="eqx hl-row">dg = <span class="dr">−(g / T) dt</span> + <span class="df">σ √(2/T) dW</span></div>
+    <div class="mean hl-row"><span><span class="dr"><b>drift</b></span>: pull back to 0 &nbsp;·&nbsp; <span class="df"><b>diffusion</b></span>: random kick.
+      Form of any SDE: dX = a dt + b dW</span></div>
+    <div class="n"><span>4</span></div><div class="nm">Time stepping<small>Euler–Maruyama / Heun</small></div>
+    <div class="eqx">g<sub>n+1</sub> = g<sub>n</sub> − (g<sub>n</sub>/T) Δt + σ √(2/T) √Δt Z<sub>n</sub></div>
+    <div class="mean">ΔW = √Δt · Z, &nbsp;Z ~ N(0, 1), &nbsp;Δt = 0.01 s</div>
+    <div class="n"><span>5</span></div><div class="nm">Monte Carlo</div>
+    <div class="eqx">P(runway enough) ≈ (runs that fit) / N</div>
+    <div class="mean">many takeoffs, new random gusts each</div>
+  </div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>7</span></div>
+</section>
+
+<section class="slide">
+  <h2>Plan: random gusts as an SDE</h2><div class="opt">B · equation first</div>
+  <div class="align eqx">
+    <div class="lab">any SDE</div><div class="c">dX =</div><div class="c bd" style="border-color: var(--blue);">a(X, t) dt</div><div class="c">+</div><div class="c bd" style="border-color: var(--orange);">b(X, t) dW</div>
+    <div class="lab">our gust<br><span style="font-weight: 400;">Ornstein–Uhlenbeck</span></div><div class="c">dg =</div><div class="c bd dr" style="border-color: var(--blue);">−(g / T) dt</div><div class="c">+</div><div class="c bd df" style="border-color: var(--orange);">σ √(2/T) dW</div>
+    <div></div><div></div><div class="sub dr">drift: pulls the gust back to 0</div><div></div><div class="sub df">diffusion: random kick of size σ</div>
+  </div>
+  <div class="cards3">
+    <div class="card"><h4>σ, L: Dryden model</h4>From the mean wind at 20 ft (W<sub>20</sub>) and height h:
+      <div class="eqx">σ<sub>w</sub> = 0.1 W<sub>20</sub>, &nbsp;L<sub>w</sub> = h<br>σ<sub>u</sub> = σ<sub>w</sub> / (0.177 + 0.000823 h)<sup>0.4</sup><br>L<sub>u</sub> = h / (0.177 + 0.000823 h)<sup>1.2</sup></div></div>
+    <div class="card"><h4>T = L / V</h4>The gust's memory: time to fly through one gust at airspeed V.</div>
+    <div class="card"><h4>dW: Brownian motion</h4>Over a step:<div class="eqx">ΔW = √Δt · Z, &nbsp;Z ~ N(0, 1)</div></div>
+  </div>
+  <div class="cards2">
+    <div class="card"><h4>Step it: Euler–Maruyama / Heun, Δt = 0.01 s</h4><div class="eqx">g<sub>n+1</sub> = g<sub>n</sub> − (g<sub>n</sub>/T) Δt + σ √(2/T) √Δt Z<sub>n</sub></div></div>
+    <div class="card"><h4>Monte Carlo</h4>Many takeoffs, new random gusts each: the share that fit a runway is the
+      chance it is enough.</div>
+  </div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>7</span></div>
+</section>
+
+<section class="slide">
+  <h2>Plan: random gusts as an SDE</h2><div class="opt">C · model | numerics</div>
+  <div class="mn">
+    <div>
+      <h3>Model: what a gust is</h3>
+      <div class="stack">
+        <div class="card"><h4>Inputs</h4>mean wind at 20 ft W<sub>20</sub>, height h, airspeed V</div>
+        <div class="down">↓ Dryden</div>
+        <div class="card"><h4>Intensity σ and scale length L</h4><div class="eqx">σ<sub>w</sub> = 0.1 W<sub>20</sub>, &nbsp;L<sub>w</sub> = h<br>σ<sub>u</sub> = σ<sub>w</sub> / (0.177 + 0.000823 h)<sup>0.4</sup><br>L<sub>u</sub> = h / (0.177 + 0.000823 h)<sup>1.2</sup></div></div>
+        <div class="down">↓ fly through it</div>
+        <div class="card"><h4>Memory</h4><div class="eqx">T = L / V</div></div>
+        <div class="down">↓</div>
+        <div class="card" style="border: 2px solid var(--blue);"><h4>Gust SDE (Ornstein–Uhlenbeck)</h4><div class="eqx">dg = <span class="dr">−(g / T) dt</span> + <span class="df">σ √(2/T) dW</span></div>
+          <span class="dr">drift</span>: pull back to 0 · <span class="df">diffusion</span>: random kick</div>
+      </div>
+    </div>
+    <div>
+      <h3>Numerics: how we compute it</h3>
+      <div class="stack">
+        <div class="card"><h4>Brownian increment</h4><div class="eqx">dW → ΔW = √Δt · Z, &nbsp;Z ~ N(0, 1)</div></div>
+        <div class="down">↓</div>
+        <div class="card"><h4>Step it: Euler–Maruyama / Heun, Δt = 0.01 s</h4><div class="eqx">g<sub>n+1</sub> = g<sub>n</sub> − (g<sub>n</sub>/T) Δt + σ √(2/T) √Δt Z<sub>n</sub></div></div>
+        <div class="down">↓ with the takeoff equations</div>
+        <div class="card"><h4>One gusty takeoff</h4>gusts and aircraft stepped together → one runway length</div>
+        <div class="down">↓ repeat N times</div>
+        <div class="card" style="border: 2px solid var(--blue);"><h4>Monte Carlo</h4><div class="eqx">P(runway enough) ≈ (runs that fit) / N</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>7</span></div>
+</section>
+
+</body>
+</html>
