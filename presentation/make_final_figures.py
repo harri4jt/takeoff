@@ -54,9 +54,10 @@ def fig_unc_odds(d: dict) -> None:
         ax.plot([r], [100 * pr], "o", color=INK, ms=9, mec="white", mew=2)
         right = r < 11_500
         ax.text(r + (70 if right else 0), 100 * pr - 6 if right else 103, f"{lab}  {r:,} ft",
-                fontsize=12.5,
-                fontweight="bold", va="top" if right else "bottom", ha="left" if right else "center",
-                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85, "pad": 1})  # fmt: skip
+                fontsize=12.5, fontweight="bold", va="top" if right else "bottom",
+                ha="left" if right else "center",
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85,
+                      "pad": 1})  # fmt: skip
     ax.set(xlabel="runway length [ft]", ylabel="chance it is enough [%]", ylim=(0, 112))
     ax.set_yticks([0, 20, 40, 60, 80, 100])
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:,.0f}"))
