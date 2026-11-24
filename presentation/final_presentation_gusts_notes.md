@@ -1,11 +1,11 @@
-# 11/25 gust slides: speaker notes
+# Gust slides: speaker notes
 
 Two decks:
 
 * **261125a_update.pdf** (3 slides): the gust model and how it enters the solver,
   pitched as what will be implemented.
-* **261125_update.pdf** (9 slides): the full story, from where the gust math comes from
-  to results. Use it for the final, or as backup.
+* **final_presentation_gusts.pdf** (9 slides): the full story, from where the gust math
+  comes from to results. For the final presentation.
 
 One running example appears everywhere, so the numbers connect from slide to slide:
 **moderate turbulence, 20 ft above the runway: along-runway σ_u = 5.8 kt, L_u = 144 ft;
@@ -54,7 +54,7 @@ modelled.
 
 ---
 
-## 261125 (9 slides)
+## final_presentation_gusts (9 slides)
 
 ### 2. Updating the solver: wind as a random input
 * The two equations show where a gust enters.
@@ -79,7 +79,10 @@ modelled.
   * The bracket (0.177 + 0.000823 h) equals 1 at 1,000 ft. There u and w become equal
     (the ground no longer matters). Near the ground the along-runway gusts are about 2×
     stronger and 7× longer.
-* We pick one of the spec's three levels: light 15, moderate 30, severe 45 kt.
+* The three levels, as weather: light 15 kt is a moderate breeze (Beaufort 4), a normal
+  windy day; moderate 30 kt a near gale (7); severe 45 kt a strong gale (9), rare and near
+  the limit of normal operations. They're the spec's standard categories, not an average or
+  an absolute maximum.
 * On the runway h is held at 10 ft. The formulas come from data mostly above 100 ft, so
   near the ground they're extrapolated (it's in the limits).
 
@@ -137,8 +140,8 @@ modelled.
   * Shaded: where our takeoffs operate.
 * **Where it's used:** every gusty run steps the aircraft and the gusts together with Heun at
   Δt = 0.01 s. RK45 is still used for the calm-day takeoff, which sets V1 and VR.
-* **Takeaway:** at 0.01 s, Euler–Maruyama inflates the gust variance by up to 1.7 % and
-  Heun by 0.03 %.
+* **The table:** exact errors at three Δt/T. Ours is 0.003–0.03: Euler–Maruyama up to
+  +1.5 %, Heun −0.02 %.
 
 ### 7. Monte Carlo: many gusty takeoffs → runway vs confidence
 * The bullets say how each run is flown. P95 is read straight off the sorted runs, with

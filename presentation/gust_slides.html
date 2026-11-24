@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>BFL – 11/25/26 update: gust model</title>
+<title>BFL – final presentation: gust model</title>
 <style>
   @page { size: 1280px 720px; margin: 0; }
   :root {
@@ -133,6 +133,13 @@
   .sumtab td:first-child { color: var(--muted); font-size: 15.5px; }
   .sumtab td.m { font-family: "DejaVu Serif", serif; font-size: 19px; text-align: left; white-space: nowrap; }
   .sumtab td:last-child { text-align: left; font-size: 15.5px; }
+  .io .inp b.k { font-size: 22px !important; }
+  .io .inp div { font-size: 16.5px !important; }
+  .otab td span { display: block; font-family: "Noto Sans", sans-serif; font-size: 12.5px; color: var(--muted); }
+  .levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 34px; }
+  .lv { border-left: 5px solid var(--blue); background: #eaf2fc; border-radius: 8px; padding: 12px 16px; font-size: 15px; line-height: 1.4; }
+  .lv b { display: block; font-size: 18px; } .lv .w { display: block; font-family: "DejaVu Serif", serif; font-size: 17px; margin: 2px 0 6px; }
+  .lv .d { color: var(--muted); }
   .eqname { font-family: "Noto Sans", sans-serif; font-size: 14px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 2px; }
 </style>
 </head>
@@ -151,7 +158,7 @@
     </g>
   </svg>
   <div class="title-text">
-    <div class="course">MATH 6006 Numerical Analysis · Final Project · Update 11/25/26</div>
+    <div class="course">MATH 6006 Numerical Analysis · Final Project</div>
     <h1>Balanced Field Length:<br>gust model</h1>
     <div class="tag">Dryden turbulence as an Ornstein–Uhlenbeck SDE, stepped with Heun, sampled by Monte Carlo</div>
   </div>
@@ -161,7 +168,7 @@
 
 <!-- 2 -->
 <section class="slide">
-  <h2>Updating the solver: wind as a random input</h2>
+  <h2>Wind as a random input</h2>
   <div class="two" style="grid-template-columns: 500px 1fr; gap: 30px;">
     <div class="t15">
       <p>The takeoff ODE already accepts any wind. A gust enters in two places:</p>
@@ -169,69 +176,69 @@
         V<sub>air</sub> = V<sub>ground</sub> + V<sub>wind</sub> + <span class="hl">u<sub>g</sub>(t)</span><span class="c">airspeed</span><br>
         α ≈ θ − γ + <span class="hl">w<sub>g</sub>(t)</span> / V<sub>air</sub><span class="c">angle of attack</span>
       </div>
-      <div class="key" style="margin-top: 16px;"><b>Randomness:</b> at every time step each gust gets a random increment,
-        a step of <b>Brownian motion</b>. The takeoff ODE becomes a <b>stochastic differential equation</b> (SDE).</div>
-      <div class="key" style="margin-top: 12px;"><b>Monte Carlo:</b> each sample gives one runway length. Over many
-        samples, their distribution gives the <b>probability</b> that a given runway is enough.</div>
+      <div class="key" style="margin-top: 16px;"><b>Randomness:</b> each time step adds a <b>Brownian</b> increment to the
+        gust. The takeoff ODE becomes an <b>SDE</b>.</div>
+      <div class="key" style="margin-top: 12px;"><b>Monte Carlo:</b> one runway length per sample; many samples give
+        <b>P(runway is enough)</b>.</div>
     </div>
     <div>
       <img class="fig" src="fig_gu_days.svg" alt="three gust histories">
     </div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>2</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006</span><span>2</span></div>
 </section>
 
 <!-- 3 -->
 <section class="slide">
-  <h2>Gust intensity and scale length: the Dryden turbulence model</h2>
-  <div class="lead">Named for Hugh Dryden (NACA). Low-altitude form, below 1,000 ft (military flying-qualities spec
-    MIL-F-8785C, 1980), fitted to measured turbulence. u: along the runway, w: vertical.</div>
+  <h2>Dryden turbulence: gust intensity and scale</h2>
+  <div class="lead">NACA's Dryden model, low-altitude form (h &lt; 1,000 ft, MIL-F-8785C, 1980), fitted to measured
+    turbulence. u: along the runway, w: vertical.</div>
   <div class="io">
     <div class="box inp"><h4>Inputs</h4>
-      <div><b class="k">W<sub>20</sub></b>mean wind speed at 20 ft</div>
-      <div><b class="k">h</b>height above the ground</div>
+      <div><b class="k">W<sub>20</sub></b>mean wind at 20 ft</div>
+      <div><b class="k">h</b>height above ground</div>
     </div>
     <div class="arrow">→</div>
     <div class="box"><h4>Outputs</h4>
       <table class="otab">
-        <tr><th></th><th>intensity σ<span>standard deviation of the gust speed</span></th>
-            <th>scale length L<span>typical gust size</span></th></tr>
-        <tr><td>vertical, w</td><td>σ<sub>w</sub> = 0.1 · W<sub>20</sub></td><td>L<sub>w</sub> = h</td></tr>
-        <tr><td>along the runway, u</td><td>σ<sub>u</sub> = σ<sub>w</sub> / (0.177 + 0.000823 h)<sup>0.4</sup></td>
+        <tr><th></th><th>vertical, w</th><th>along the runway, u</th></tr>
+        <tr><td>intensity σ<span>std. dev. of gust speed</span></td><td>σ<sub>w</sub> = 0.1 · W<sub>20</sub></td>
+            <td>σ<sub>u</sub> = σ<sub>w</sub> / (0.177 + 0.000823 h)<sup>0.4</sup></td></tr>
+        <tr><td>scale length L<span>typical gust size</span></td><td>L<sub>w</sub> = h</td>
             <td>L<sub>u</sub> = h / (0.177 + 0.000823 h)<sup>1.2</sup></td></tr>
       </table>
     </div>
   </div>
-  <div class="two" style="grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 56px;">
-    <div class="key" style="font-size: 19px;">We use the spec's three turbulence levels:
-      <b>light W<sub>20</sub> = 15 kt · moderate 30 kt · severe 45 kt</b>.</div>
-    <div class="box t15" style="font-size: 16.5px; padding: 12px 18px;"><b>Running example</b> (moderate, h = 20 ft):
-      σ<sub>u</sub> = 5.8 kt, L<sub>u</sub> = 144 ft; σ<sub>w</sub> = 3.0 kt, L<sub>w</sub> = 20 ft.
-      On the runway h is held at 10 ft.</div>
+  <div class="levels">
+    <div class="lv"><b>Light</b><span class="w">W<sub>20</sub> = 15 kt</span><span class="d">moderate breeze (Beaufort 4): a
+      normal windy day, noticeable bumps</span></div>
+    <div class="lv"><b>Moderate</b><span class="w">W<sub>20</sub> = 30 kt</span><span class="d">near gale (Beaufort 7): a rough day,
+      the aircraft is pushed around</span></div>
+    <div class="lv"><b>Severe</b><span class="w">W<sub>20</sub> = 45 kt</span><span class="d">strong gale (Beaufort 9): rare, near the
+      limit of normal operations</span></div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>3</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006</span><span>3</span></div>
 </section>
 
 <!-- 4 -->
 <section class="slide">
-  <h2>The gust SDE: drift plus diffusion</h2>
-  <div class="lead"><b>T = L / V</b>: the time the aircraft, at its current airspeed, takes to pass through one gust (the
-    gust's memory). Running example at 40 kt: σ = 5.8 kt, T = 2.1 s; Δt = 0.01 s; shaded ±σ.</div>
+  <h2>Gust SDE: drift + diffusion</h2>
+  <div class="lead"><b>T = L / V</b>: time to fly through one gust at the current airspeed. Example (40 kt):
+    σ = 5.8 kt, T = 2.1 s, Δt = 0.01 s. Shaded: ±σ.</div>
   <img class="fig" src="fig_gu_build.svg" alt="drift only, diffusion only, drift plus diffusion" style="margin-top: 2px;">
   <div class="two" style="grid-template-columns: 1fr 470px; gap: 24px; margin-top: 10px; align-items: center;">
     <div class="key">Drift gives the memory (correlation e<sup>−|τ|/T</sup>); diffusion injects variance. Balanced, they
       give a <b>stationary</b> Gaussian process: mean 0, variance σ², at each time step.</div>
     <div class="fbig" style="text-align: center;"><span class="eqname">Ornstein–Uhlenbeck SDE</span>dg = −(g / T) dt + c dW</div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>4</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006</span><span>4</span></div>
 </section>
 
 <!-- 5 -->
 <section class="slide">
-  <h2>Deriving the SDE: the kick size c that keeps Var = σ²</h2>
-  <div class="lead">The Ornstein–Uhlenbeck SDE is a standard model (Ornstein &amp; Uhlenbeck, 1930), and the usual way
-    simulators generate Dryden's along-runway gust. To find c, take one Euler–Maruyama step and require the variance
-    to stay σ².</div>
+  <h2>Kick size from Var = σ²</h2>
+  <div class="lead">Standard Ornstein–Uhlenbeck model (1930), the usual way simulators generate Dryden gusts. Find c:
+    one Euler–Maruyama step, then require Var = σ².</div>
   <div class="two" style="grid-template-columns: 1fr 1fr; gap: 26px;">
     <div class="box" style="padding: 14px 18px;">
       <div class="colhead">① One Euler–Maruyama step of dg = −(g/T) dt + c dW</div>
@@ -262,42 +269,52 @@
     <div class="key">Its correlation is e<sup>−|τ|/T</sup>; the Fourier transform of that is Dryden's along-runway spectrum,
       σ²(2L/π)/(1 + (LΩ)²). The SDE <b>is</b> the Dryden model, in a form we can step in time.</div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>5</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006</span><span>5</span></div>
 </section>
 <!-- 6 -->
 <section class="slide">
-  <h2>Time stepping: Euler–Maruyama (1st order) vs Heun (2nd order)</h2>
-  <div class="two" style="grid-template-columns: 500px 1fr; gap: 26px;">
-    <div class="t15">
-      <p><b>Euler–Maruyama</b> = forward Euler + a Brownian kick:</p>
-      <div class="eqs" style="font-size: 16.5px;">g<sub>n+1</sub> = g<sub>n</sub> − (g<sub>n</sub>/T) Δt + σ√(2/T) ΔW<sub>n</sub></div>
-      <p style="margin-top: 12px;"><b>Heun</b> = the explicit trapezoidal rule (improved Euler, a 2nd-order Runge–Kutta):
-        predict g̃ with Euler–Maruyama, then average the slopes at both ends, with the <b>same</b> ΔW<sub>n</sub>:</p>
-      <div class="eqs" style="font-size: 16.5px;">g<sub>n+1</sub> = g<sub>n</sub> − ½ (g<sub>n</sub> + g̃) / T · Δt + σ√(2/T) ΔW<sub>n</sub></div>
-      <div class="key" style="margin-top: 14px;">At Δt = 0.01 s Euler–Maruyama inflates the gust variance by up to 1.7 %,
-        Heun by 0.03 %. We use Heun.</div>
-      <div class="cap" style="margin-top: 10px; font-size: 15px;"><b>Where:</b> every gusty run steps the aircraft and the
-        gusts together with Heun at a fixed Δt = 0.01 s. RK45 still solves the calm-day takeoff, which sets V1 and VR.</div>
+  <h2>Time stepping: Euler–Maruyama vs Heun</h2>
+  <div class="two" style="grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 6px;">
+    <div class="box" style="padding: 16px 20px;">
+      <div class="colhead">Euler–Maruyama</div>
+      <div class="t15" style="font-size: 16px;"><p>Forward Euler plus a Brownian kick.</p></div>
+      <div class="eqs" style="font-size: 17px;">g<sub>n+1</sub> = g<sub>n</sub> − (g<sub>n</sub>/T) Δt + σ√(2/T) ΔW<sub>n</sub></div>
+      <div class="t15" style="font-size: 16px; margin-top: 10px;"><p>Gust variance error <b>∝ Δt</b> (1st order):
+        exactly σ² / (1 − Δt/2T).</p></div>
     </div>
-    <div>
-      <img class="fig" src="fig_gu_var.svg" alt="gust variance error against dt over T">
-      <div class="cap"><b>How to read it:</b> x is the step size measured in gust memories, Δt/T; y is how wrong the
-        long-run gust variance comes out. Log–log, so slope = order: slope 1, halve Δt and the error halves; slope 2,
-        it quarters. Lines: exact formula. Dots: simulated. Shaded: our takeoffs.</div>
+    <div class="box" style="padding: 16px 20px;">
+      <div class="colhead">Heun</div>
+      <div class="t15" style="font-size: 16px;"><p>Explicit trapezoidal rule (RK2): predict with Euler–Maruyama, average the
+        two slopes, same ΔW<sub>n</sub>.</p></div>
+      <div class="eqs" style="font-size: 17px;">g̃ = g<sub>n</sub> − (g<sub>n</sub>/T) Δt + σ√(2/T) ΔW<sub>n</sub><br>
+        g<sub>n+1</sub> = g<sub>n</sub> − ½ (g<sub>n</sub> + g̃) / T · Δt + σ√(2/T) ΔW<sub>n</sub></div>
+      <div class="t15" style="font-size: 16px; margin-top: 10px;"><p>Gust variance error <b>∝ Δt²</b> (2nd order):
+        about (Δt/T)² / 4.</p></div>
     </div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>6</span></div>
+  <div class="two" style="grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px; align-items: start;">
+    <table class="res">
+      <tr><th>gust variance error (exact)</th><th>Δt/T = 0.003</th><th>0.03</th><th>0.3</th></tr>
+      <tr><td>Euler–Maruyama</td><td>+0.15 %</td><td>+1.5 %</td><td>+18 %</td></tr>
+      <tr><td>Heun</td><td class="b">−0.0002 %</td><td class="b">−0.02 %</td><td>−2.6 %</td></tr>
+    </table>
+    <div>
+      <div class="key">Our runs: Δt = 0.01 s, T = 0.3–3 s, so Δt/T = 0.003–0.03. Heun keeps the gust variance within
+        0.02 %.</div>
+      <div class="cap" style="margin-top: 10px; font-size: 15px;">Heun steps every gusty run (aircraft + gusts together).
+        RK45 still solves the calm-day takeoff that sets V1 and VR.</div>
+    </div>
+  </div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006</span><span>6</span></div>
 </section>
 
 <!-- 7 -->
 <section class="slide">
-  <h2>Monte Carlo: many gusty takeoffs → runway vs confidence</h2>
+  <h2>Monte Carlo: runway vs confidence</h2>
   <div class="two" style="grid-template-columns: 600px 1fr; gap: 28px;">
     <div>
       <img class="fig" src="fig_gu_margin.svg" alt="extra runway against share of gusty takeoffs covered">
-      <div class="cap">747-100, 1,000 runs per curve. Pick the share of gusty days to cover (x), read the extra runway
-        over calm (y). Shaded: confidence interval; it widens to the right, where fewer runs lie beyond the
-        percentile.</div>
+      <div class="cap">747-100 model, 1,000 runs per turbulence setting</div>
     </div>
     <div class="t15">
       <ul class="tight" style="font-size: 16.5px;">
@@ -310,44 +327,41 @@
         <tr><td>747-100</td><td>+210 ft</td><td class="b">+394 ft</td><td>+501 ft</td></tr>
         <tr><td>SR-71</td><td>+414 ft</td><td class="b">+1,044 ft</td><td>+2,075 ft</td></tr>
       </table>
-      <div class="key">Moderate turbulence: +394 ft (4 %) covers 95 % of 747 takeoffs. The SR-71 needs +1,044 ft (9 %):
-        with one engine out it has little thrust to spare.</div>
+      <div class="key">Moderate turbulence: +394 ft (4 %) for 95 % of 747 takeoffs. SR-71: +1,044 ft (9 %), little
+        spare engine-out thrust.</div>
     </div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>7</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006</span><span>7</span></div>
 </section>
 <!-- 8 -->
 <section class="slide">
-  <h2>Two kinds of error: sampling dominates, the time step is negligible</h2>
+  <h2>Error: sampling dominates</h2>
   <div class="two" style="grid-template-columns: 700px 1fr; gap: 24px;">
     <div>
       <img class="fig" src="fig_gu_errors.svg" alt="sampling error bands for 125, 500 and 2,000 runs and the time-step error band">
-      <div class="cap">The slide-7 curve (747-100, moderate). Blue: how far it moves if the study is redone with 125,
-        500 or 2,000 runs. Orange: the time-step error.</div>
+      <div class="cap">747-100 model, moderate turbulence</div>
     </div>
     <div>
       <div class="box" style="padding: 12px 16px; font-size: 15px; line-height: 1.45;">
         <div class="colhead" style="color: #1f5fae;">① Sampling error: finite runs</div>
-        P95 of N runs is the (0.95 N)-th sorted run. The count of runs below the true P95 is Binomial(N, 0.95), which
-        gives its interval with no assumed shape. Redoing the study confirms it:
-        <b>±87 / ±48 / ±18 ft</b> for 125 / 500 / 2,000 runs, shrinking like 1/√N.
+        P95 = the 0.95 N-th sorted run. Runs below the true P95 ~ Binomial(N, 0.95): an interval with no assumed
+        shape. Redone studies: <b>±87 / ±48 / ±18 ft</b> for 125 / 500 / 2,000 runs (∝ 1/√N).
       </div>
       <div class="box" style="padding: 12px 16px; font-size: 15px; line-height: 1.45; margin-top: 12px;">
         <div class="colhead" style="color: #b4501d;">② Time-step error: finite Δt</div>
-        Solve the same gusts at Δt = 0.04 … 0.005 s against Δt = 0.00125 s (coarse Brownian steps are sums of fine
-        ones), 16 gust paths: e(Δt) = mean |d(Δt) − d(Δt<sub>ref</sub>)|. At Δt = 0.01 s: <b>±4 ft</b>, roughly first
-        order.
+        Same gusts at Δt = 0.04 … 0.005 s vs 0.00125 s (coarse kicks = sums of fine kicks), 16 paths:
+        e(Δt) = mean |d(Δt) − d<sub>ref</sub>|. At 0.01 s: <b>±4 ft</b>, about 1st order.
       </div>
-      <div class="key" style="margin-top: 12px; font-size: 17px;">At 500 runs the sampling error is 10× the time-step
-        error: more runs help, a smaller step doesn't.</div>
+      <div class="key" style="margin-top: 12px; font-size: 17px;">At 500 runs, sampling error is 10× the time-step
+        error: add runs, not resolution.</div>
     </div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>8</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006</span><span>8</span></div>
 </section>
 
 <!-- 9 -->
 <section class="slide">
-  <h2>Summary and limits</h2>
+  <h2>Summary</h2>
   <div class="two" style="grid-template-columns: 1.15fr 1fr; gap: 28px; margin-top: 8px;">
     <div class="box" style="padding: 16px 20px;">
       <div class="colhead">The method</div>
@@ -360,8 +374,8 @@
       </table>
     </div>
     <div>
-      <div class="key" style="font-size: 21px; padding: 20px 24px;"><b>Answer:</b> in moderate turbulence, <b>+394 ft</b> covers
-        95 % of 747-100 takeoffs (4 % over calm), ±48 ft sampling, ±4 ft time step. The SR-71 needs +1,044 ft (9 %).</div>
+      <div class="key" style="font-size: 21px; padding: 20px 24px;"><b>Moderate turbulence:</b> <b>+394 ft</b> covers 95 % of
+        747-100 takeoffs (±48 ft sampling, ±4 ft time step). SR-71: +1,044 ft.</div>
       <div class="box" style="padding: 14px 20px; margin-top: 16px;">
         <div class="colhead">Limits</div>
         <ul class="tight lim" style="font-size: 18px;">
@@ -372,7 +386,7 @@
       </div>
     </div>
   </div>
-  <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>9</span></div>
+  <div class="foot"><span>Harrison &amp; Seng · MATH 6006</span><span>9</span></div>
 </section>
 
 </body>

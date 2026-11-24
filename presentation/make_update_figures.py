@@ -1,4 +1,4 @@
-"""Figures for the 11/20/26 update (presentation/fig_tailwind.svg, fig_b747_*.svg, fig_gust_shape.svg).
+"""Figures for the 11/20 and 11/25 updates (fig_tailwind/fig_wind, fig_b747_*, fig_sr71_*, fig_gust_shape).
 
     python presentation/make_update_figures.py
 
@@ -15,6 +15,7 @@ from bfl import compute_bfl, load_config
 
 OUT = Path(__file__).resolve().parent
 BLUE, ORANGE, INK, MUTED, GRID = "#2a78d6", "#eb6834", "#0f1d2b", "#6b7785", "#e3e8ee"
+GREEN = "#1f9d55"
 KT = 1.6878098571011957  # ft/s per kt
 
 plt.rcParams.update({
@@ -148,6 +149,91 @@ def fig_b747_data() -> None:
     print("wrote", OUT / "fig_b747_thrust.svg")
 
 
+def fig_wind() -> None:
+    """11/25 deck: no wind vs 15 kt headwind vs 15 kt tailwind (airspeed and ground speed)."""
+    cases = [(0.0, BLUE, "no wind"), (15.0, GREEN, "15 kt headwind"), (-15.0, ORANGE, "15 kt tailwind")]
+    runs = [(_case(hw), c, lab) for hw, c, lab in cases]
+    fig, (a, b) = plt.subplots(1, 2, figsize=(11.6, 3.9))
+    for (r, d, v), c, lab in runs:
+        a.plot(d.t_s, d.V_air_kts, color=c, lw=2.2, label=lab)
+        a.plot(v.t_s, v.V_air_kts, "o", color=c, ms=7, zorder=5)
+        b.plot(d.t_s, d.V_ground_kts, color=c, lw=2.2)
+        b.plot(v.t_s, v.V_ground_kts, "o", color=c, ms=7, zorder=5)
+    (r0, d0, _), _, _ = runs[0]
+    b.fill_between(d0.t_s, d0.V_ground_kts, color="#cfe0f5", lw=0, zorder=0)
+    a.set(title="Airspeed: V1 barely moves", xlabel="time from brake release [s]",
+          ylabel="airspeed [kt]", ylim=(-20, 200))
+    a.legend(loc="upper left", fontsize=11)
+    b.set(title="Ground speed: area = runway", xlabel="time from brake release [s]",
+          ylabel="ground speed [kt]", ylim=(0, 200))
+    b.text(30, 45, f"BFL {r0.bfl_ft:,.0f} ft", color="#1f5fae", fontweight="bold", ha="center")
+    b.set_xlim(a.get_xlim())
+    fig.tight_layout()
+    fig.savefig(OUT / "fig_wind.svg", bbox_inches="tight", transparent=True)
+    plt.close(fig)
+    for (r, _, v), _, lab in runs:
+        print(f"  {lab:16s} V1 {r.v1_kts:.0f} kt (ground {v.V_ground_kts:.0f}), BFL {r.bfl_ft:,.0f} ft "
+              f"({r.bfl_ft - r0.bfl_ft:+,.0f}, {100 * (r.bfl_ft / r0.bfl_ft - 1):+.0f} %)")
+
+
+def fig_sr71_field() -> None:
+    """11/25 deck: SR-71 field length against weight, MIL-STD-3013 (its rules) vs Part 25."""
+    ws = [100, 110, 120, 130, 140]
+    out = {}
+    for rules in ("mil3013", "part25"):
+        out[rules] = [compute_bfl(load_config("sr71", overrides={
+            "environment.weight_lbf": w * 1e3, "procedure.rules": rules})).field_length_ft
+            for w in ws]  # fmt: skip
+    fig, ax = plt.subplots(figsize=(7.0, 4.3))
+    ax.plot(ws, out["mil3013"], "s-", color=BLUE, lw=2.4, ms=6, label="MIL-STD-3013B (its rules)")
+    ax.plot(ws, out["part25"], "o--", color=MUTED, lw=1.8, ms=5, label="FAR Part 25, for comparison")
+    ax.annotate(f"{out['mil3013'][-1]:,.0f} ft", (140, out["mil3013"][-1]), (-10, -4),
+                textcoords="offset points", ha="right", va="top", color="#1f5fae",
+                fontweight="bold")  # fmt: skip
+    ax.set(xlabel="takeoff weight [1000 lb]", ylabel="field length [ft]",
+           title="SR-71A, sea level, standard day")
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:,.0f}"))
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    fig.savefig(OUT / "fig_sr71_field.svg", bbox_inches="tight", transparent=True)
+    plt.close(fig)
+    for w, m, p in zip(ws, out["mil3013"], out["part25"], strict=True):
+        print(f"  {w} klb: MIL {m:,.0f} ft, Part 25 {p:,.0f} ft")
+
+
+def fig_sr71_data() -> None:
+    """11/25 deck: the SR-71 tables (lift, estimated drag, thrust) as small panels."""
+    import pandas as pd
+
+    d = OUT.parent / "aircraft" / "sr71"
+    ge = pd.read_csv(d / "aero_ground_effect.csv", comment="#")
+    fa = pd.read_csv(d / "aero_free_air.csv", comment="#")
+    th = pd.read_csv(d / "thrust.csv", comment="#")
+    size = (3.9, 2.55)
+    for col, ylab, name in (("CL", "C$_L$", "fig_sr71_cl.svg"), ("CD", "C$_D$", "fig_sr71_cd.svg")):
+        fig, ax = plt.subplots(figsize=size)
+        for df, c, lab in ((fa, ORANGE, "free air"), (ge, BLUE, "ground effect")):
+            ax.plot(df.alpha_deg, df[col], "o-", color=c, ms=3, lw=1.8, label=lab)
+        ax.set(xlabel="pitch attitude [deg]", ylabel=ylab, xlim=(-1, 20))
+        ax.legend(loc="upper left", fontsize=10.5)
+        fig.tight_layout()
+        fig.savefig(OUT / name, bbox_inches="tight", transparent=True)
+        plt.close(fig)
+    fig, ax = plt.subplots(figsize=size)
+    temps = sorted(th.temperature_F.unique())
+    shades = ["#9cc3ee", "#5f9fe0", BLUE, "#1f5fae", "#123f78"]
+    for t, c in zip(temps, shades, strict=False):
+        g = th[th.temperature_F == t]
+        ax.plot(g.airspeed_kts, g.thrust_lbf / 1e3, color=c, lw=1.8)
+        ax.text(g.airspeed_kts.iloc[-1] + 4, g.thrust_lbf.iloc[-1] / 1e3, f"{t:.0f} °F", color=c,
+                fontsize=8.5, va="center")  # fmt: skip
+    ax.set(xlabel="true airspeed [kt]", ylabel="thrust per engine [klb]")
+    ax.set_xlim(0, 330)
+    fig.tight_layout()
+    fig.savefig(OUT / "fig_sr71_thrust.svg", bbox_inches="tight", transparent=True)
+    plt.close(fig)
+
+
 def fig_gust_shape() -> None:
     import numpy as np
 
@@ -180,3 +266,6 @@ if __name__ == "__main__":
     fig_b747_validation()
     fig_b747_data()
     fig_gust_shape()
+    fig_wind()  # 11/25 deck from here
+    fig_sr71_field()
+    fig_sr71_data()
