@@ -3,7 +3,6 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+.vscode/
 app/assets/validation/
-presentation/_gust_cache.pkl
-presentation/_gust_conv.pkl
-presentation/_unc_cache.pkl
+presentation/

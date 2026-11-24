@@ -62,7 +62,7 @@ Page numbers are the documents' own (e.g. "2.0-7"), not PDF page numbers.
 ### Simplifications
 
 - The basic CL and CD are free-air values. Ground effect is added by the Raymer method
-  (drag only, see `docs/ground_effect.md`), which is on in `aircraft.yaml`. Stabilizer
+  (drag only, see `docs/assumptions/ground_effect.md`), which is on in `aircraft.yaml`. Stabilizer
   trim drag and the Mach/aeroelastic corrections in [H&N] are left out (they are
   small at takeoff speeds).
 - Digitizing accuracy is about ±0.01 in CL, ±0.002 in CD (±0.003 at the drag
@@ -110,7 +110,7 @@ weight. Nothing was tuned to match. Sensitivities found while checking:
 Flaps 10 gives runs 7–20% longer than flaps 20 in the model. That is consistent with
 Boeing using flaps 20 except where the climb gradient requires flaps 10.
 
-## Landing (`landing:` in aircraft.yaml, see docs/landing.md)
+## Landing (`landing:` in aircraft.yaml, see docs/assumptions/landing.md)
 
 | Quantity | Value | Source |
 |---|---|---|
@@ -120,4 +120,5 @@ Boeing using flaps 20 except where the climb gradient requires flaps 10.
 
 Part 25 result (sea level, ISA): V_REF 139 kt, landing distance
 4,041 ft, **landing runway required 6,735 ft** (÷ 0.6).
-Not yet checked against Boeing's landing chart.
+Not yet checked against Boeing's landing chart; a flaps 25/30 table and that chart
+would replace the estimated landing flaps.

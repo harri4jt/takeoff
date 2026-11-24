@@ -343,7 +343,7 @@ def fig6_and_physics() -> None:
 
 
 def fig8_spline() -> None:
-    """Hand-written natural cubic spline (Thomas solve) vs scipy on the synthetic CL table."""
+    """Natural cubic spline (Thomas solve) vs scipy on the synthetic CL table."""
     path = ROOT / "tests" / "data" / "generic_widebody_synthetic" / "aero_takeoff.csv"
     df = read_csv_table(path, ["alpha_deg", "CL", "CD"])
     x, y = df["alpha_deg"].to_numpy(float), df["CL"].to_numpy(float)

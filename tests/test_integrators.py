@@ -1,4 +1,4 @@
-"""Verification of the hand-written RK4 / RK45 integrators and event location (spec 9.1)."""
+"""Verification of the RK4 / RK45 integrators and event location."""
 
 from __future__ import annotations
 

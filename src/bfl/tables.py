@@ -1,4 +1,4 @@
-"""Hand-written table interpolation and CSV loading.
+"""Table interpolation and CSV loading.
 
 * :class:`Interpolator1D` - piecewise-linear (default) or natural cubic spline
   (second derivatives from a tridiagonal system solved with the Thomas algorithm).

@@ -1,4 +1,4 @@
-"""Hand-written explicit Runge-Kutta integrators with event location.
+"""Explicit Runge-Kutta integrators with event location.
 
 * ``rk4``  - classical fixed-step 4th-order Runge-Kutta.
 * ``rk45`` - Dormand-Prince 5(4) embedded pair with adaptive step control

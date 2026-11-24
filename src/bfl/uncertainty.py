@@ -17,7 +17,7 @@ never be negative). Each draw is one full solve: the balanced field length (with
 rotation-speed optimizer), the takeoff field length and the landing. The spread of the
 answers over N draws is the runway uncertainty that the data uncertainty causes.
 
-Sampling (both hand-written):
+Sampling:
 * Monte Carlo: each factor drawn independently at random.
 * Latin hypercube: each factor's range is cut into N equally likely strata, one draw
   per stratum, and the strata are paired at random between factors. Every input is

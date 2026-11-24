@@ -1,4 +1,4 @@
-"""Hand-written 1-D minimizers: golden-section search and Brent's method.
+"""1-D minimizers: golden-section search and Brent's method.
 
 Used to pick the rotation speed that minimizes the field length
 (``procedure.optimize_vr``). The objective there is continuous but has kinks (it is

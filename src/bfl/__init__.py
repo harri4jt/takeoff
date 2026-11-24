@@ -1,7 +1,7 @@
-"""Balanced Field Length (BFL) solver - MATH 6006 numerical methods project.
+"""Conceptual-design takeoff and landing runway estimator.
 
-Numerical core (RK4, Dormand-Prince RK45, secant root finding, event location,
-interpolation) is written from scratch in this package.
+Balanced field length (FAA Part 25 or MIL-STD-3013), all-engines takeoff, landing, trade
+studies, gust and data-uncertainty analyses. Start with ``analyze`` and ``trade_study``.
 """
 
 from .analysis import Analysis, analyze

@@ -463,14 +463,9 @@ details.adv[open] > summary::before { content: "▾ "; }
 .gu-card .m-value { font-size: 28px; font-weight: 700; margin: 4px 0 2px; }
 .gu-delta { font-weight: 600; font-size: 13.5px; margin-bottom: 4px; }
 .gu-empty { padding: 30px 8px; text-align: center; }
-.un-sig { width: 154px; }
-.un-sig .num-input { width: 100%; }
-.un-setup-top { display: grid; grid-template-columns: 1fr 350px; gap: 14px; align-items: start; }
-@media (max-width: 1000px) { .un-setup-top { grid-template-columns: 1fr; } }
 .un-pm { display: flex; align-items: center; gap: 4px; font-weight: 600; }
 .un-pm .num-input, .un-pm .dash-input-container { width: 124px; }  /* Dash hides +/- below 100 px */
 .un-sig { width: 154px; }
-.un-sliders { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 10px 0 4px; }
 .un-slider label { font-weight: 600; font-size: 13px; }
 .un-answer-grid { display: grid; grid-template-columns: 290px 1fr; gap: 14px; margin-top: 10px; align-items: start; }
 @media (max-width: 900px) { .un-answer-grid { grid-template-columns: 1fr; } }
@@ -482,7 +477,6 @@ details.adv[open] > summary::before { content: "▾ "; }
 .un-rw-row .unit { color: var(--muted); font-size: 13px; }
 .un-rw-odds { display: flex; align-items: baseline; gap: 8px; justify-content: flex-end; }
 .un-rw-p { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.un-plan { border-color: var(--accent, #2a78d6); box-shadow: inset 0 0 0 1px var(--accent, #2a78d6); }
 .un-verdict { display: flex; align-items: center; gap: 10px; margin: 12px 0 8px; padding: 9px 14px;
   border-radius: 10px; font-size: 15px; font-weight: 600; }
 .un-verdict .icon { width: 24px; height: 24px; border-radius: 50%; display: inline-flex;
@@ -492,14 +486,9 @@ details.adv[open] > summary::before { content: "▾ "; }
 .un-verdict.bad { background: #fdecee; color: #8c1526; } .un-verdict.bad .icon { background: #d7263d; }
 .dl-row .un-gov { margin-left: 0; flex: 1; font-size: 13px; }
 .gu-answer-head .spacer { flex: 1; }
-.un-sig-box > summary { cursor: pointer; font-weight: 700; }
 .un-panel > summary { cursor: pointer; font-size: 18px; font-weight: 700; margin-bottom: 6px; }
 .un-panel:not([open]) > summary { margin-bottom: 0; }
 .un-panel > summary::marker { color: var(--muted); }
-.un-checks-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 14px; }
-@media (max-width: 1000px) { .un-checks-row { grid-template-columns: 1fr; } }
-.un-sig-box > summary { font-size: 14px; margin-bottom: 4px; }
-.un-setup-top:has(.un-sig-box:not([open])) { grid-template-columns: 1fr 200px; }
 .un-slider { position: relative; z-index: 5; }
 .un-slider [class*="tooltip"] { z-index: 30 !important; }
 
@@ -516,3 +505,25 @@ details.adv[open] > summary::before { content: "▾ "; }
 .gu-gen-tab th { font-size: 12px; color: var(--muted); font-weight: 600; }
 .gu-gen-tab td.warn { color: #b4501d; font-weight: 700; }
 .gu-gen-figs { grid-template-columns: 1fr 1fr; }
+.un-checks-row { display: grid; gap: 14px; }
+@media (max-width: 1100px) { .gu-gen-figs { grid-template-columns: 1fr; } }
+
+/* ---------------------------------------------------------------- analysis setup panels */
+.setup-card { background: #e9f0f8; border: 1px solid #c5d5e8; border-left: 5px solid var(--accent); }
+.setup-card h2 { margin-bottom: 2px; }
+.setup-card .trade-base { margin-bottom: 14px; }
+.setup-card .tr-over { border-top: 1px solid #c5d5e8; padding-top: 10px; margin: 12px 0 0; }
+.un-setup { display: grid; grid-template-columns: minmax(220px, 280px) minmax(220px, 250px) minmax(0, 1fr) auto;
+            gap: 14px 28px; align-items: start; }
+.un-setup-col { display: flex; flex-direction: column; gap: 12px; }
+.un-setup .gu-run { align-self: end; justify-self: end; margin: 0; min-width: 140px; }
+.un-sigmas { min-width: 0; }
+@media (max-width: 1100px) { .un-setup { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .un-setup { grid-template-columns: 1fr; } }
+.un-sig-head { font-weight: 600; font-size: 13px; margin-bottom: -4px; }
+.un-sig { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 8px; }
+.un-sig label { font-size: 13px; }
+.un-sliders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 18px;
+              align-items: center; margin: 10px 0 4px; }
+.un-panel .js-plotly-plot, .un-panel .dash-graph { min-width: 0; max-width: 100%; }
+.un-answer-grid > *, .gu-gen-figs > * { min-width: 0; }

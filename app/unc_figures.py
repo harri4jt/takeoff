@@ -2,7 +2,7 @@
 
 Written for a conceptual designer checking the runway at the end of a design pass: what
 runway, how sure, which table matters, and is the design near a cliff. Titles state the
-result, labels are short, and every figure is PNG-ready (camera icon) for slides.
+result, labels are short, and every figure is PNG-ready for slides.
 """
 
 from __future__ import annotations
@@ -446,6 +446,7 @@ def sigma_curves(s_cl: float, s_cd: float, s_t: float) -> go.Figure:
     fig.update_yaxes(title="density", rangemode="tozero")
     fig = _layout(fig, "", "", 230)
     fig.update_layout(title=None, margin={"t": 10, "b": 44, "l": 50, "r": 12},
+                      paper_bgcolor="rgba(0,0,0,0)",
                       legend={"orientation": "v", "y": 1, "x": 1.0, "xanchor": "right",
                               "bgcolor": "rgba(255,255,255,0.8)"})  # fmt: skip
     return fig

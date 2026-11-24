@@ -90,13 +90,6 @@ def layout() -> html.Div:
                 className="card",
                 children=[
                     html.H2("Trade study"),
-                    html.Div(
-                        "Field length over lift × drag multipliers. Each cell is a full "
-                        "solve (V2 rule, rule set and everything else as in the base case). "
-                        "Pick several aero or thrust tables to get one map per combination "
-                        "on a shared colour scale.",
-                        className="hint",
-                    ),
                     html.Div(id="trade-base", className="trade-base"),
                 ],
             ),
@@ -276,9 +269,7 @@ def layout() -> html.Div:
                                 ],
                             ),
                             html.Div(
-                                "Camera icon (top right of the plot) saves a PNG. "
-                                "○ = base case, × = no solution. Banded colours: green below "
-                                "the first edge, then yellow, red, …, grey above the last.",
+                                "○ base case · × no solution",
                                 className="hint",
                             ),
                             loading.loading(

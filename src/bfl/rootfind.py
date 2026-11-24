@@ -1,4 +1,4 @@
-"""Hand-written scalar root finders: plain secant and bracket-safeguarded secant.
+"""Scalar root finders: plain secant and bracket-safeguarded secant.
 
 Both record the complete iterate history (x_k, f(x_k)) so convergence can be
 plotted and the observed order of convergence estimated.

@@ -13,7 +13,7 @@ Speed:
 * Cases run in parallel processes (``workers``; 1 = serial).
 * The cases are solved in runs along the LAST varied input, outward from its middle
   value, and each case passes its optimal rotation speed to the next as a warm start
-  for the VR optimizer (see docs/rotation_speed.md). Put the input that changes the
+  for the VR optimizer (see docs/assumptions/rotation_speed.md). Put the input that changes the
   answer most smoothly last, and give it the most values.
 """
 

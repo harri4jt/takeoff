@@ -1,4 +1,4 @@
-"""Verification of the hand-written root finders (spec 9.2)."""
+"""Verification of the root finders."""
 
 from __future__ import annotations
 

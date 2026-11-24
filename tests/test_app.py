@@ -21,7 +21,7 @@ def test_app_builds_and_pages_render():
     builder.layout()
     for route in datapages.ROUTES:
         datapages.render(route)
-    for route in sorted(pages.ROUTES):
+    for route in pages.DOC_PAGES:
         pages.render(route)
 
 
@@ -106,11 +106,15 @@ def test_trade_map_and_figure():
 def test_docs_pages_and_links():
     from app import pages
 
-    for route in ("/about", "/methods", "/rules", "/runge-kutta"):
+    for route in pages.DOC_PAGES:
         pages.render(route)
-    assert pages.OLD_ROUTES["/rules"] == "/about#rules"
-    assert pages._rewrite("[x](field_length_rules.md)") == "[x](/about#rules)"
-    assert pages._rewrite("[x](methods/root_finding.md)") == "[x](/methods#root-finding)"
+    assert pages._rewrite("[x](../assumptions/rules.md)") == "[x](/assumptions#rules)"
+    assert pages._rewrite("[x](root_finding.md)") == "[x](/methods#root-finding)"
+    stems = [p.stem for _, (_, _, secs) in pages.DOC_PAGES.items() for _, _, p in secs]
+    assert len(stems) == len(set(stems)), "doc file names must be unique across pages"
+    on_disk = {p for p in (pages.DOCS).rglob("*.md")}
+    shown = {p for _, (_, _, secs) in pages.DOC_PAGES.items() for _, _, p in secs}
+    assert on_disk == shown, f"docs not shown in the app: {on_disk - shown}"
 
 
 def test_two_second_allowance_only_under_part25():
@@ -143,7 +147,7 @@ def test_landing_animation_builds():
 
 
 def test_aircraft_field_reference_is_current():
-    """docs/aircraft_data.md lists every aircraft field, as the generator would write it."""
+    """docs/about/aircraft_data.md lists every aircraft field, as the generator would write it."""
     import importlib.util
     from pathlib import Path
 
@@ -153,7 +157,7 @@ def test_aircraft_field_reference_is_current():
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    assert mod.tables() in (root / "docs" / "aircraft_data.md").read_text(), (
+    assert mod.tables() in (root / "docs" / "about" / "aircraft_data.md").read_text(), (
         "run: python tools/make_aircraft_field_docs.py"
     )
 

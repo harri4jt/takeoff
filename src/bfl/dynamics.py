@@ -1,4 +1,4 @@
-"""Equations of motion (see docs/equations.md for derivations and sign conventions).
+"""Equations of motion (see docs/methods/equations.md for derivations and sign conventions).
 
 Ground roll, state y = [x, V]   (V = ground speed along the runway, theta = alpha):
 

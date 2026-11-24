@@ -338,10 +338,6 @@ def controls() -> html.Div:
                         className="checks",
                         options=init["ground-effect.options"],
                     ),
-                    html.Div(
-                        ["Table plots: ", html.A("Aircraft builder", href="/builder")],
-                        className="hint",
-                    ),
                 ],
             ),
             collapsible(
@@ -673,11 +669,8 @@ def footer() -> html.Div:
         className="footer",
         children=html.Div(
             className="footer-inner",
-            children=(
-                "Conceptual-design takeoff estimator · started as a MATH 6006 numerical "
-                "analysis project: every integrator, root finder and interpolant is "
-                "hand-written · not for operational use"
-            ),
+            children="Takeoff & landing runway estimator for conceptual design · "
+            "not for operational use",
         ),
     )
 

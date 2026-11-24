@@ -3,7 +3,7 @@
 All speeds in this module are TRUE airspeeds in ft/s (internal units). The
 caller (``bfl.bfl``) converts the KEAS V-speeds before calling.
 
-Sequence (FAA Part 25 style, see docs/equations.md):
+Sequence (FAA Part 25 style, see docs/methods/equations.md):
 
     common : AEO roll 0 -> V_EF, engine fails, OEI recognition for t_recog -> V1
     go     : OEI roll -> VR, rotate at q_rot to theta_target, N = 0 liftoff,

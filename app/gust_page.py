@@ -2,9 +2,7 @@
 
 A side analysis, kept off the simulator and the trade study: each run here is one
 takeoff and one landing on the calm-day schedule in random Dryden gusts (bfl.gusts),
-solved with a hand-written SDE method. The page answers with a number (the runway
-that covers a chosen share of operations) and with figures made to be copied into a
-presentation (camera icon: high-resolution PNG).
+solved with an SDE method (Euler-Maruyama or stochastic Heun).
 """
 
 from __future__ import annotations
@@ -17,13 +15,12 @@ import numpy as np
 import pandas as pd
 from dash import Input, Output, State, dcc, html, no_update
 
-from bfl.gusts import INTENSITY_W20_KTS, GustSettings, dryden, quantile_ci
+from bfl.gusts import INTENSITY_W20_KTS, GustSettings, dryden
 
 from . import compute, gust_figures, loading
 from .trade import RUNWAY_PRESETS, _base_cfg, _num
 
 RUN_COUNTS = (200, 500, 1000, 2000)
-COVERAGE = (0.90, 0.95, 0.99)
 
 
 def _graph(id_: str, name: str) -> dcc.Graph:
@@ -55,22 +52,10 @@ def layout() -> html.Div:
         className="gust-page",
         children=[
             html.Div(
-                className="card",
+                className="card setup-card",
                 children=[
                     html.H2("Gust analysis"),
-                    dcc.Markdown(
-                        "How much extra runway a gusty day needs. Each run is one takeoff (engine "
-                        "failure at the critical moment) and one landing, flown on the **calm-day "
-                        "schedule** through random gusts made from the Dryden turbulence model. "
-                        "Hundreds of runs give the chance that a runway is enough.",
-                        className="hint",
-                    ),
                     html.Div(id="gu-base", className="trade-base"),
-                ],
-            ),
-            html.Div(
-                className="card gu-setup",
-                children=[
                     html.Div(
                         className="gu-bar",
                         children=[
@@ -88,31 +73,8 @@ def layout() -> html.Div:
                                 "wind at 20 ft: 15 / 30 / 45 kt",
                             ),  # fmt: skip
                             _field(
-                                "Gusts",
-                                dcc.Checklist(
-                                    id="gu-vertical",
-                                    value=["on"],
-                                    className="checks",
-                                    options=[{"label": " vertical too", "value": "on"}],
-                                ),
-                            ),  # fmt: skip
-                            _field(
-                                "Operations",
-                                dcc.Checklist(
-                                    id="gu-ops",
-                                    value=["takeoff", "landing"],
-                                    className="checks",
-                                    inline=True,
-                                    options=[
-                                        {"label": " takeoff  ", "value": "takeoff"},
-                                        {"label": " landing", "value": "landing"},
-                                    ],
-                                ),
-                            ),  # fmt: skip
-                            _field(
                                 "Runs",
                                 _seg("gu-n", 500, [(n, f"{n:,}") for n in RUN_COUNTS]),
-                                "more runs: tighter estimates, longer wait",
                             ),  # fmt: skip
                             html.Button(
                                 "Run", id="gu-run", n_clicks=0, className="btn btn-primary gu-run"
@@ -159,6 +121,19 @@ def layout() -> html.Div:
                                 className="gu-row",
                                 children=[
                                     _field(
+                                        "Operations",
+                                        dcc.Checklist(
+                                            id="gu-ops",
+                                            value=["takeoff", "landing"],
+                                            className="checks",
+                                            inline=True,
+                                            options=[
+                                                {"label": " takeoff  ", "value": "takeoff"},
+                                                {"label": " landing", "value": "landing"},
+                                            ],
+                                        ),
+                                    ),  # fmt: skip
+                                    _field(
                                         "SDE method",
                                         _seg(
                                             "gu-method",
@@ -189,13 +164,6 @@ def layout() -> html.Div:
                                         unit="kt",
                                     ),  # fmt: skip
                                 ],
-                            ),
-                            html.Div(
-                                "The crew acts on airspeed with the gust part lagged (pilot and "
-                                "instrument response). Pilots often add speed on a gusty approach "
-                                "(e.g. half the gust increment); that additive lengthens the "
-                                "landing.",
-                                className="hint",
                             ),
                         ],
                     ),
@@ -261,18 +229,6 @@ def runway_odds(d: dict, rw) -> list:
             html.Span(f"{100 * lo:.0f}–{100 * hi:.0f} %", className="hint")]  # fmt: skip
 
 
-def plan_tile(d: dict, p: float) -> list:
-    key = _main(d)
-    est, lo, hi = quantile_ci(_x(d, key), p)
-    calm = d["calm"][key]
-    return [
-        html.Div(f"Plan for {round(100 * p)} % of gusty days", className="m-label"),
-        html.Div(f"{est:,.0f} ft", className="m-value"),
-        html.Div(f"{est - calm:+,.0f} ft · {100 * (est / calm - 1):+.1f} %", className="gu-delta"),
-        html.Div(f"sampling range {lo:,.0f}–{hi:,.0f} ft", className="hint"),
-    ]
-
-
 def odds_figure(d: dict, runways: list[float]):
     key = _main(d)
     return gust_figures.odds_chart(_x(d, key), d["calm"][key], runways,
@@ -293,7 +249,7 @@ def _governs(d: dict) -> str:
     return f"Landing sets the runway in {100 * share:.0f} % of runs, takeoff in the rest."
 
 
-def answer(d: dict, p: float) -> list:
+def answer(d: dict) -> list:
     key = _main(d)
     calm = d["calm"][key]
     x = _x(d, key)
@@ -308,14 +264,6 @@ def answer(d: dict, p: float) -> list:
                      "some runs (held at the table's end, a stall plateau).")  # fmt: skip
     exceed = float(np.mean(x > calm + 0.5))
     return [
-        html.Div(
-            className="gu-answer-head",
-            children=[
-                html.Div(className="spacer"),
-                html.Span("Plan for", className="ctl-name"),
-                _seg("gu-cover", p, [(c, f"{round(100 * c)} %") for c in COVERAGE]),
-            ],
-        ),
         html.Div(
             className="un-answer-grid",
             children=[
@@ -332,9 +280,6 @@ def answer(d: dict, p: float) -> list:
                                     className="gu-delta",
                                 ),
                             ],
-                        ),
-                        html.Div(
-                            id="gu-plan", className="gu-card un-plan", children=plan_tile(d, p)
                         ),
                         html.Div(
                             className="gu-card un-rw",
@@ -436,22 +381,16 @@ def gen_table(g: dict, w20: float, h: float, v: float, dt: float, span) -> html.
     )  # fmt: skip
 
 
-def results(d: dict, p: float) -> list:
+def results(d: dict) -> list:
     traces = d["traces"]
     has = {k for v in traces.values() for k in v}
     op0 = "go" if "go" in has else "landing"
     return [
-        _panel(gust_figures.SHORT[_main(d)] + " on a gusty day", answer(d, p), id_="gu-answer"),
+        _panel(gust_figures.SHORT[_main(d)] + " on a gusty day", answer(d), id_="gu-answer"),
+        _panel("Extra runway vs share of gusty days", [_graph("gu-fig-margin", "margin")]),
         _panel(
             "How the gusts are made",
             [
-                html.Div(
-                    "Pick a height and an airspeed: Dryden gives each gust's strength and length, "
-                    "the airspeed turns the length into a memory, and the update rule makes the "
-                    "gusts. Below: one history, and a check that the gusts have the strength and "
-                    "memory Dryden asks for.",
-                    className="hint",
-                ),
                 _gen_controls(d),
                 html.Div(id="gu-gen-chain"),
                 html.Div(
@@ -462,9 +401,10 @@ def results(d: dict, p: float) -> list:
                     ],
                 ),  # fmt: skip
             ],
+            open_=False,
         ),
         _panel(
-            "One gusty run",
+            "Example gust history",
             [
                 html.Div(
                     className="gu-answer-head",
@@ -489,19 +429,14 @@ def results(d: dict, p: float) -> list:
                 ),  # fmt: skip
                 _graph("gu-fig-trace", "sample"),
             ],
+            open_=False,
         ),
-        _panel("Extra runway vs share of gusty days", [_graph("gu-fig-margin", "margin")]),
         _panel(
             "Checks",
             [
                 html.Div(_calm_check(d), className="hint"),
-                html.Div(
-                    className="un-checks-row",
-                    children=[
-                        _graph("gu-fig-var", "variance_error"),
-                        _graph("gu-fig-mc", "sampling"),
-                    ],
-                ),  # fmt: skip
+                _graph("gu-fig-var", "variance_error"),
+                _graph("gu-fig-mc", "sampling"),
                 html.Div(
                     className="gu-answer-head",
                     children=[
@@ -521,6 +456,7 @@ def results(d: dict, p: float) -> list:
                 ),  # fmt: skip
                 loading.loading(_graph("gu-fig-dt", "timestep"), "Re-solving at four time steps…"),
             ],
+            open_=False,
         ),
     ]
 
@@ -582,7 +518,6 @@ def register(app, aircraft_options) -> None:
         Input("gu-run", "n_clicks"),
         State("gu-aircraft", "value"),
         State("gu-intensity", "value"),
-        State("gu-vertical", "value"),
         State("gu-ops", "value"),
         State("gu-n", "value"),
         State("gu-weight", "value"),
@@ -598,7 +533,7 @@ def register(app, aircraft_options) -> None:
         State("current", "data"),
         prevent_initial_call=True,
     )
-    def on_run(_n, name, intensity, vertical, ops, n, weight, temp, elev, wind, cond, method,
+    def on_run(_n, name, intensity, ops, n, weight, temp, elev, wind, cond, method,
                dt, seed, lag, additive, cur):  # fmt: skip
         if not name:
             return no_update, "Pick an aircraft.", no_update
@@ -621,7 +556,7 @@ def register(app, aircraft_options) -> None:
             if upd:
                 cfg = cfg.with_updates(upd)
             s = GustSettings(
-                intensity=intensity, vertical="on" in (vertical or []), n=int(n),
+                intensity=intensity, n=int(n),
                 method=method, dt_s=float(dt), seed=int(seed or 1),
                 filter_s=float(lag if lag is not None else 1.0),
                 approach_additive_kts=float(additive or 0.0),
@@ -643,16 +578,7 @@ def register(app, aircraft_options) -> None:
                 "Set up the question above and press Run. 500 runs take about 10–20 s.",
                 className="hint gu-empty",
             )
-        return results(d, 0.95)
-
-    @app.callback(
-        Output("gu-plan", "children"),
-        Input("gu-cover", "value"),
-        State("gu-result", "data"),
-        prevent_initial_call=True,
-    )
-    def on_cover(p, d):
-        return plan_tile(d, float(p)) if d else no_update
+        return results(d)
 
     @app.callback(
         *[Output(rid + "-p", "children") for rid in RUNWAY_IDS],

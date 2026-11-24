@@ -6,7 +6,7 @@ to the internal ft-slug-s-lbf-R-rad system happens in ``bfl.model.build_model``.
 
 Speeds: every V-speed (V_S, V_mcg, V_EF, V1, VR, V_LOF, V2) is an *equivalent
 airspeed* in knots (KEAS ~= KCAS at takeoff Mach numbers), as on an airliner's
-airspeed indicator. See docs/assumptions.md.
+airspeed indicator. See docs/assumptions/takeoff_model.md.
 """
 
 from __future__ import annotations
@@ -183,7 +183,7 @@ class GroundEffectConfig(_Model):
 
     CD = CD_table - (1 - phi) * K * CL^2 with phi = 33 (h/b)^1.5 / (1 + 33 (h/b)^1.5),
     h = wing height above the runway (+ airborne height). K comes from a least-squares
-    fit CD = CD0 + K CL^2 of the takeoff table unless given. See docs/ground_effect.md.
+    fit CD = CD0 + K CL^2 of the takeoff table unless given. See docs/assumptions/ground_effect.md.
     """
 
     enabled: bool = Field(default=False, description="Raymer ground effect on the induced drag")
@@ -346,7 +346,7 @@ class EnvironmentConfig(_Model):
 
 # Values a rule set supplies when the corresponding procedure field is left at None.
 # Part 25: 14 CFR 25.107/109/113. MIL: MIL-STD-3013 (2003, 2008-A) sec. 3.2.10, with the
-# go branch to the 50 ft obstacle (expected 3013B; see docs/field_length_rules.md).
+# go branch to the 50 ft obstacle (expected 3013B; see docs/assumptions/rules.md).
 RULE_PRESETS: dict[str, dict[str, Any]] = {
     "part25": {
         "screen_height_ft": 35.0,
@@ -385,7 +385,7 @@ class ProcedureConfig(_Model):
     optimize_vr: bool = Field(
         default=True,
         description="choose the k_VR (>= the legal minimum) that minimizes the field length; "
-        "see docs/rotation_speed.md",
+        "see docs/assumptions/rotation_speed.md",
     )
     k_VR_max: float = Field(default=1.6, gt=1.0, description="upper bound of the VR search")
     rotation_rate_deg_s: float = Field(default=3.0, gt=0)

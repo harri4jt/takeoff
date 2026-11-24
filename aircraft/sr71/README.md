@@ -95,7 +95,7 @@ are at V1 = VR, because at the lowest legal VR the field does not balance (below
   204 kt over roughly a minute before it lifts off. On a 95 °F day at 140,000 lb there is
   no one-engine liftoff at all.
 - **A later rotation fixes it** (`procedure.optimize_vr`, on by default, see
-  `docs/rotation_speed.md`). Held on the runway, where the only extra drag is rolling
+  `docs/assumptions/rotation_speed.md`). Held on the runway, where the only extra drag is rolling
   friction, the aircraft accelerates well on one engine. Rotating close to lift-off speed
   avoids the slow, high-drag crawl:
 
@@ -150,7 +150,7 @@ are at V1 = VR, because at the lowest legal VR the field does not balance (below
 The manual's own takeoff-distance charts (Appendix I, Part II) were not available in
 the public scans, so there is no runway-length validation like the 747's.
 
-## Landing (`landing:` in aircraft.yaml, see docs/landing.md)
+## Landing (`landing:` in aircraft.yaml, see docs/assumptions/landing.md)
 
 No flaps (the takeoff table, in ground effect, is used), no thrust reversers; the drag
 chute is deployed at touchdown (`use_chute: true`, credited under MIL-STD-3013). The landing

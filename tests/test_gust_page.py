@@ -23,7 +23,7 @@ def test_gust_page_run_figures_and_downloads(page):
     app, client = page
     vals = {
         ("gu-run", "n_clicks"): 1, ("gu-aircraft", "value"): "b747_100",
-        ("gu-intensity", "value"): "moderate", ("gu-vertical", "value"): ["on"],
+        ("gu-intensity", "value"): "moderate",
         ("gu-ops", "value"): ["takeoff", "landing"], ("gu-n", "value"): 40,
         ("gu-weight", "value"): None, ("gu-temp", "value"): None, ("gu-elev", "value"): None,
         ("gu-wind", "value"): None, ("gu-cond", "value"): "", ("gu-method", "value"): "heun",
@@ -38,7 +38,8 @@ def test_gust_page_run_figures_and_downloads(page):
 
     page_html = json.dumps(call(client, app, "gu-results.children", {("gu-result", "data"): d},
                                 ["gu-result.data"]), ensure_ascii=False)  # fmt: skip
-    assert "Plan for 95 % of gusty days" in page_html and "How the gusts are made" in page_html
+    assert "Runways you could use" in page_html and "How the gusts are made" in page_html
+    assert "Example gust history" in page_html
     assert "main solver" in page_html  # gusts-off check against the main solver
     figs = call(client, app, "gu-fig-margin.figure", {("gu-results", "children"): [],
                 ("gu-result", "data"): d}, ["gu-results.children"])  # fmt: skip
@@ -54,9 +55,6 @@ def test_gust_page_run_figures_and_downloads(page):
     g = call(client, app, "gu-gen-chain.children", gen, ["gu-gen-v.value"])
     assert "checks out" in json.dumps(g["gu-fig-gen-check"]["figure"]["layout"]["title"])
     assert "memory T = L / V" in json.dumps(g["gu-gen-chain"]["children"], ensure_ascii=False)
-    plan = call(client, app, "gu-plan.children", {("gu-cover", "value"): 0.99,
-                ("gu-result", "data"): d}, ["gu-cover.value"])  # fmt: skip
-    assert "99 %" in json.dumps(plan)
     tr = call(client, app, "gu-fig-trace.figure", {("gu-trace-run", "value"): "1",
               ("gu-trace-op", "value"): "landing", ("gu-result", "data"): d},
               ["gu-trace-op.value"])  # fmt: skip

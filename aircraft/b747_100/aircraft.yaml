@@ -53,7 +53,7 @@ chute:
 speeds:
   V_mcg_kts: 106.0              # AFM minimum control speeds, CR-114494 p.15.0-23 (SL, 15 C)
 
-ground_effect:                  # Raymer method; on in the baseline (validation: docs/ground_effect.md)
+ground_effect:                  # Raymer method; on in the baseline (validation: docs/assumptions/ground_effect.md)
   enabled: true
   span_ft: 195.7                # 195 ft 8 in, Boeing D6-58326 sec. 2
   wing_height_ft: 16.0          # ESTIMATE: quarter-chord MAC height on the gear

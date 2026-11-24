@@ -1,9 +1,9 @@
-"""Regenerate the field tables in docs/aircraft_data.md from the configuration model.
+"""Regenerate the field tables in docs/about/aircraft_data.md from the configuration model.
 
     python tools/make_aircraft_field_docs.py
 
-Everything between the BEGIN/END markers in docs/aircraft_data.md is replaced; the
-text around it is hand-written. tests/test_app.py checks that every field is listed.
+Everything between the BEGIN/END markers in docs/about/aircraft_data.md is replaced; the
+text around it is edited by hand. tests/test_app.py checks that every field is listed.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT))
 
 from app.builder import FIELDS, GROUP_TITLES  # noqa: E402
 
-DOC = ROOT / "docs" / "aircraft_data.md"
+DOC = ROOT / "docs" / "about" / "aircraft_data.md"
 BEGIN, END = "<!-- BEGIN FIELDS (generated) -->", "<!-- END FIELDS -->"
 
 

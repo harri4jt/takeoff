@@ -13,13 +13,13 @@ simulates:
 
 The result to design to is **runway required = max(takeoff field length, landing runway
 required)**. A web app (simulator with animations, trade-study maps, aircraft builder)
-and a Python API give the same numbers. A separate **gust analysis** simulates hundreds of
+and a Python API give the same numbers. A **gust analysis** simulates hundreds of
 takeoffs and landings in random turbulence (a stochastic differential equation per run)
-and answers how much extra runway covers 95 % or 99 % of gusty days. A **data-uncertainty**
+and answers how much extra runway covers 95 % or 99 % of gusty days. An **uncertainty**
 analysis does the same for lift, drag and thrust tables known only to within a stated
 percentage, and shows which table's uncertainty matters most.
 
-![Simulator](docs/simulator.png)
+![Simulator](docs/img/simulator.png)
 
 ## Quick start
 
@@ -29,9 +29,10 @@ python -m app                  # the app at http://127.0.0.1:8050
 ```
 
 In the app: pick an aircraft and press **Run**. The ☰ menu has the **Trade study**, the
-**Aircraft builder**, the aircraft validation pages, and the documentation (**About**:
-what it answers, the data it needs, Q&A, the rules; **Methods**: how it computes and the
-evidence that it is right).
+**Gust** and **Uncertainty analysis** pages, the **Aircraft builder**, the aircraft
+validation pages, and the documentation: **About** (what it answers, the data it needs,
+Python use, Q&A), **Assumptions** (the model, the rules, the limits) and **Methods** (the
+numerics and their verification). The same pages are the markdown files in `docs/`.
 
 From a script (build the aircraft in the app first, or use one of the examples):
 
@@ -47,7 +48,7 @@ df = trade_study(load_config("b747_100"),
 ```
 
 Templates: `scripts/analyze_example.py`, `scripts/trade_study_example.py`. Details:
-`docs/python_usage.md` (also About › Using it from Python in the app).
+[docs/about/python.md](docs/about/python.md).
 
 ## Accuracy
 
@@ -60,7 +61,7 @@ Templates: `scripts/analyze_example.py`, `scripts/trade_study_example.py`. Detai
 
 The input data set the real accuracy, especially drag and the spoiler, engine-out and
 landing-flap increments. Thrust tables are sea-level (not lapsed with altitude). The
-full list: About › Assumptions.
+full list: [docs/assumptions/limits.md](docs/assumptions/limits.md).
 
 ## Aircraft
 
@@ -71,8 +72,8 @@ full list: About › Assumptions.
 
 Each folder's README lists the sources of every number. New aircraft: the app's
 **Aircraft builder**, or a folder with an `aircraft.yaml` and CSV tables
-(`docs/aircraft_data.md`). Aircraft can live anywhere: `analyze` and `load_config` take a
-folder, an `aircraft.yaml` path, or a builder `.zip`.
+([docs/about/aircraft_data.md](docs/about/aircraft_data.md)). Aircraft can live anywhere:
+`analyze` and `load_config` take a folder, an `aircraft.yaml` path, or a builder `.zip`.
 
 ## Repository
 
@@ -81,38 +82,13 @@ folder, an `aircraft.yaml` path, or a builder `.zip`.
 | `src/bfl/` | the solver: `analysis` (one-call API), `bfl` (takeoff), `landing`, `trade` (trade studies), `gusts` (gust analysis), `sde` (stochastic methods), `uncertainty` (data uncertainty), `config` (inputs and validation), physics (`atmosphere`, `aero`, `propulsion`, `dynamics`, `model`, `takeoff`, `phases`), numerics (`integrators`, `rootfind`, `optimize`, `tables`), `results`, `validation`, `plotting` |
 | `app/` | the Dash app; it calls only the public `bfl` API. `reference_aircraft.yaml` (tire-speed references, **placeholder values**) and `reference_runways.yaml` are editable |
 | `aircraft/` | the aircraft (yaml + CSV + README with sources) |
-| `docs/` | the documentation the app shows (About and Methods pages) |
-| `scripts/` | examples and the verification-figure script |
+| `docs/` | the documentation the app shows: `about/`, `assumptions/`, `methods/` |
+| `scripts/` | examples, the 747 validation script and the verification figures |
 | `tools/` | table generators for the two aircraft; `make_aircraft_field_docs.py` |
 | `tests/` | `python -m pytest` (~35 s); the validation tests also refresh the app's aircraft pages |
-
-All numerical methods (RK4, Dormand–Prince RK45, event location, secant and safeguarded
-secant, Brent's method, linear / natural cubic spline / bilinear interpolation,
-Euler–Maruyama and stochastic Heun, order-statistic confidence intervals, Latin hypercube
-sampling) are
-hand-written; scipy is used only in the tests as an independent reference. The project
-started as a numerical-methods course project.
 
 ## Open items
 
 * MIL-STD-3013**B** text not yet checked: the go branch ends at 50 ft (expected), and the
   landing approach speed (1.2 V_S) and field factor (1.0) are assumptions.
 * Tire-speed reference values in `app/reference_aircraft.yaml` are placeholders.
-* The 747's landing flaps are an estimate (flaps 20 table × multipliers).
-
-## Ideas to consider later
-
-* **Inverse solves:** the maximum takeoff weight for a given runway, or the k_CL needed
-  for a target field length (a root-find on the existing solver).
-* **Climb requirements:** engine-out climb gradients (Part 25.121 second segment, the
-  MIL equivalents), which often size the engines more than field length does.
-* **Sizing chart:** takeoff- and landing-field constraint lines on a T/W vs W/S plot.
-* **Thrust lapse with altitude:** a lapse model or an altitude column in the thrust
-  table, so high-elevation cases are not optimistic.
-* **Validation of the landing** against a Boeing landing chart, with a flaps 25/30 table.
-* **Wind shear and discrete gusts** in the gust analysis (it has steady Dryden turbulence).
-* **Packaging and a command line**, if the API is used from other projects.
-* **V1 warm start** inside each solve (about 30 % faster, results change at the V1
-  tolerance level).
-* **Wet-runway rule changes** (Part 25 wet V1 and 15 ft screen), beyond the friction.
-* The work log with every decision so far: `docs/next_steps.md`.

@@ -1,8 +1,7 @@
 """Runway environment: atmosphere state, wind model hook, slope, friction.
 
-``WindModel`` is the Phase-3 hook for stochastic gusts. Phase 1 only implements a
-steady headwind. (A time-varying wind in the airborne phase needs the air-relative
-state equations reformulated - see docs/equations.md.)
+The deterministic solver uses a steady headwind (``SteadyWind``). Gusts live in
+``bfl.gusts``, which integrates its own ground-frame equations.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Stochastic differential equations: Euler-Maruyama and stochastic Heun (hand-written).
+"""Stochastic differential equations: Euler-Maruyama and stochastic Heun.
 
 An SDE adds a random forcing to an ODE:
 

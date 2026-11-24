@@ -92,20 +92,10 @@ doubles the cost too but only shrinks the sampling error by $\sqrt 2$. At $\Delt
 the step error is a few feet while the sampling error at 500 runs is tens of feet, so
 compute is best spent on more runs, not smaller steps.
 
-## The gust model
+## The stepped gust variance
 
-Dryden low-altitude turbulence (MIL-F-8785C / MIL-HDBK-1797), for the wind speed at 20 ft
-$W_{20}$ and height $h$ (10–1000 ft):
-
-$$ \sigma_w = 0.1\,W_{20},\quad \sigma_u = \frac{\sigma_w}{(0.177 + 0.000823h)^{0.4}},\quad L_w = h,\quad L_u = \frac{h}{(0.177 + 0.000823h)^{1.2}} $$
-
-The time constant is $T = L/V$, with $V$ the airspeed relative to the turbulence (at least
-10 kt). The wing averages gusts over its span $b$: for an exponentially correlated gust
-averaged over $r = b/L$ correlation lengths the variance falls by
-$f(r) = 2(r - 1 + e^{-r})/r^2$, and keeping the spectrum at zero frequency unchanged gives
-the length scale $L/f(r)$.
-
-The aircraft equations are written in the ground frame, so the wind appears only in the
-air-relative velocity $(u + V_w + u_g,\ w - w_g)$ that sets lift, drag and angle of
-attack. The crew acts on $u + V_w + \tilde u_g$, where $\tilde u_g$ is $u_g$ through a 1 s
-first-order lag.
+For the Ornstein–Uhlenbeck gust equation (the model is under
+[Gust analysis](../assumptions/gusts.md)) the variance of the stepped process is known
+exactly: Euler–Maruyama gives $\sigma^2/(1 - \Delta t/2T)$ (first-order error); Heun's
+relative error is about $-(\Delta t/T)^2/4$ (second order). At $\Delta t = 0.01$ s that is
++1.7 % against −0.03 % at worst. The page's checks plot both formulas against simulation.

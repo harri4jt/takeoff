@@ -126,11 +126,10 @@ def test_uncertainty_page_end_to_end():
     out = call(client, app, "un-result.data", vals, ["un-run.n_clicks"])
     d = out["un-result"]["data"]
     assert out["un-status"]["children"] == "" and len(d["errors"]) == 30
-    assert out["un-sig-box"]["open"] is False  # the setup plot folds away once results show
     assert len(d["oat"]) == 12  # three tables, ±5 % and ±10 %
     page = json.dumps(call(client, app, "un-results.children", {("un-result", "data"): d},
                            ["un-result.data"]), ensure_ascii=False)  # fmt: skip
-    assert "Plan for 95 %" in page and "Method checks" in page and "un-rw-3" in page
+    assert "Multiplier profiler" in page and "Method checks" in page and "un-rw-3" in page
     rw = {("un-rw-1", "value"): 10_000, ("un-rw-2", "value"): None,
           ("un-rw-3", "value"): 12_000, ("un-result", "data"): d}  # fmt: skip
     o = call(client, app, "un-fig-odds.figure", rw, ["un-rw-1.value"])
@@ -142,9 +141,6 @@ def test_uncertainty_page_end_to_end():
               ("un-result", "data"): d}, ["un-results.children"])  # fmt: skip
     assert "95 % confidence" in json.dumps(st["un-fig-margin"]["figure"]["layout"]["title"])
     assert "Sampling error" in json.dumps(st["un-fig-conv"]["figure"]["layout"]["title"])
-    plan = call(client, app, "un-plan.children", {("un-cover", "value"): 0.99,
-                ("un-result", "data"): d}, ["un-cover.value"])  # fmt: skip
-    assert "Plan for 99 %" in json.dumps(plan)
     prof = call(client, app, "un-fig-prof.figure", {("un-sl-cl", "value"): 1.0,
                 ("un-sl-cd", "value"): 0.9, ("un-sl-t", "value"): 1.0, ("un-rw-1", "value"): 9000,
                 ("un-rw-2", "value"): None, ("un-rw-3", "value"): None,
@@ -152,7 +148,7 @@ def test_uncertainty_page_end_to_end():
     assert "drag ×0.900" in json.dumps(prof["layout"]["title"], ensure_ascii=False)
     sig = call(client, app, "un-fig-sigmas.figure", {("un-cl", "value"): 2, ("un-cd", "value"): 8,
                ("un-t", "value"): 0}, ["un-cl.value"])  # fmt: skip
-    assert len(sig["un-fig-sigmas"]["figure"]["data"]) == 3 and sig["un-sig-box"]["open"] is True
+    assert len(sig["un-fig-sigmas"]["figure"]["data"]) == 3
 
 
 def test_one_at_a_time_is_exact_and_equal_percent():

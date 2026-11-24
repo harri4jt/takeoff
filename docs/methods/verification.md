@@ -33,7 +33,7 @@ The slope of log(error) vs log(h) is 3.92 (theory: 4).
 The observed order is about 1.6 (theory: golden ratio, 1.618). The safeguard rescues a
 case where plain secant fails.
 
-## 4. Our integrators against scipy (Van der Pol)
+## 4. The integrators against scipy (Van der Pol)
 
 ![scipy](../../output/verification/4_rk_vs_scipy.png)
 
@@ -43,14 +43,14 @@ case where plain secant fails.
 
 With constant thrust, CL and CD, the ground-roll ODE $m\,dV/dt = A - BV^2$ can be
 solved by hand: $x(V) = \frac{m}{2B}\ln\frac{A}{A - BV^2}$ (derivation in
-[Physics & equations](../equations.md), §7). The full simulator, with all its segments and
+[Equations of motion](equations.md), §7). The full simulator, with all its segments and
 events, reproduces it to a relative error of about $10^{-9}$.
 
 ## 6. The BFL crossing (test aircraft)
 
 ![BFL](../../output/verification/6_bfl_crossing.png)
 
-## 8. Natural cubic spline against scipy
+## 7. Natural cubic spline against scipy
 
 ![spline](../../output/verification/8_spline_vs_scipy.png)
 

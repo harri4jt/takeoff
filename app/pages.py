@@ -16,61 +16,58 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 VERIFICATION_DIR = ROOT / "output" / "verification"
 
-# Two documentation pages. Each is a list of sections: (anchor, index title, markdown file).
+A, M, D = DOCS / "about", DOCS / "methods", DOCS / "assumptions"
+
+# Three documentation pages. Each is a list of sections: (anchor, index title, markdown file).
 DOC_PAGES: dict[str, tuple[str, str, list[tuple[str, str, Path]]]] = {
     "/about": (
         "About",
-        "What the tool answers, what it needs, how to use it, and what it assumes.",
+        "What the tool answers, the data it needs, and how to run it from Python.",
         [
-            ("overview", "Overview", DOCS / "overview.md"),
-            ("faq", "Questions and answers", DOCS / "faq.md"),
-            ("aircraft-data", "Aircraft data (files, tables, every field)",
-             DOCS / "aircraft_data.md"),
-            ("python", "Using it from Python (scripts, trade studies)",
-             DOCS / "python_usage.md"),
-            ("rules", "Field-length rules: Part 25 vs MIL-STD-3013",
-             DOCS / "field_length_rules.md"),
-            ("rotation-speed", "Rotation speed and VR optimization",
-             DOCS / "rotation_speed.md"),
-            ("landing", "Landing distance", DOCS / "landing.md"),
-            ("gusts", "Gust analysis (extra runway for gusty days)", DOCS / "gusts.md"),
-            ("uncertainty", "Data uncertainty (lift, drag, thrust tables)",
-             DOCS / "uncertainty.md"),
-            ("ground-effect", "Ground effect (Raymer)", DOCS / "ground_effect.md"),
-            ("assumptions", "Assumptions & V-speed glossary", DOCS / "assumptions.md"),
+            ("overview", "Overview", A / "overview.md"),
+            ("aircraft-data", "Aircraft data", A / "aircraft_data.md"),
+            ("python", "Using it from Python", A / "python.md"),
+            ("faq", "Questions and answers", A / "faq.md"),
+        ],
+    ),
+    "/assumptions": (
+        "Assumptions",
+        "What is modelled, which rules apply, and what is left out.",
+        [
+            ("takeoff-model", "Takeoff model and V-speeds", D / "takeoff_model.md"),
+            ("rules", "Field-length rules: Part 25 vs MIL-STD-3013", D / "rules.md"),
+            ("rotation-speed", "Rotation speed", D / "rotation_speed.md"),
+            ("landing", "Landing", D / "landing.md"),
+            ("ground-effect", "Ground effect (Raymer)", D / "ground_effect.md"),
+            ("gusts", "Gust analysis", D / "gusts.md"),
+            ("uncertainty", "Uncertainty analysis", D / "uncertainty.md"),
+            ("limits", "Limits: what is not modelled", D / "limits.md"),
         ],
     ),
     "/methods": (
         "Methods",
-        "How the numbers are computed (all methods hand-written) and the evidence that "
-        "they are right.",
+        "How the numbers are computed, and the evidence that they are right.",
         [
-            ("how-it-works", "How the solver works", DOCS / "methods" / "overview.md"),
-            ("physics", "Physics & equations", DOCS / "equations.md"),
-            ("runge-kutta", "Runge–Kutta integrators", DOCS / "methods" / "runge_kutta.md"),
-            ("events", "Event location", DOCS / "methods" / "event_location.md"),
-            ("root-finding", "Root finding (secant)", DOCS / "methods" / "root_finding.md"),
-            ("interpolation", "Interpolation & splines",
-             DOCS / "methods" / "interpolation.md"),
-            ("sde", "Stochastic methods (gust analysis)", DOCS / "methods" / "sde.md"),
-            ("sampling", "Sampling: Monte Carlo and Latin hypercube",
-             DOCS / "methods" / "sampling.md"),
-            ("verification", "Verification and validation",
-             DOCS / "methods" / "verification.md"),
+            ("how-it-works", "How the solver works", M / "solver.md"),
+            ("equations", "Equations of motion", M / "equations.md"),
+            ("runge-kutta", "Runge–Kutta integrators", M / "runge_kutta.md"),
+            ("events", "Event location", M / "event_location.md"),
+            ("root-finding", "Root finding (secant)", M / "root_finding.md"),
+            ("optimization", "Optimization (Brent)", M / "optimization.md"),
+            ("interpolation", "Interpolation & splines", M / "interpolation.md"),
+            ("sde", "Stochastic methods", M / "sde.md"),
+            ("sampling", "Sampling and response surfaces", M / "sampling.md"),
+            ("verification", "Verification and validation", M / "verification.md"),
         ],
     ),
 }  # fmt: skip
-# old one-page-per-file routes and markdown file stems -> page#section
-SECTION_ROUTE = {
-    anchor: f"{route}#{anchor}" for route, (_, _, secs) in DOC_PAGES.items() for anchor, *_ in secs
-}
+ORDER = list(DOC_PAGES)
+# markdown file stem -> page#section (links between the files become app links)
 ROUTE_BY_STEM = {
     path.stem: f"{route}#{anchor}"
     for route, (_, _, secs) in DOC_PAGES.items()
     for anchor, _, path in secs
 }
-OLD_ROUTES = {f"/{a}": r for a, r in SECTION_ROUTE.items()}
-ROUTES = set(DOC_PAGES) | set(OLD_ROUTES)
 
 _IMG = re.compile(r"\]\((?:\.\./)*output/verification/")
 _MDLINK = re.compile(r"\]\((?:[\w./]*/)?([\w-]+)\.md(#[\w-]*)?\)")
@@ -89,13 +86,13 @@ def _rewrite(text: str) -> str:
 
 
 def render(pathname: str) -> html.Div:
-    route = OLD_ROUTES.get(pathname, pathname).split("#")[0]
+    route = pathname.split("#")[0]
     if route not in DOC_PAGES:
         return html.Div(
             className="doc",
             children=[html.H1("Page not found"), dcc.Link("Back to the simulator", href="/")],
         )
-    title, blurb, sections = DOC_PAGES[route]
+    title, _, sections = DOC_PAGES[route]
     index = html.Ol(
         className="doc-index",
         children=[html.Li(html.A(t, href=f"#{a}")) for a, t, _ in sections],
@@ -127,19 +124,24 @@ def render(pathname: str) -> html.Div:
                 ],
             )
         )
-    other = "/methods" if route == "/about" else "/about"
+    k = ORDER.index(route)
+    prev_ = ORDER[k - 1] if k > 0 else "/"
+    next_ = ORDER[k + 1] if k + 1 < len(ORDER) else "/"
     return html.Div(
         className="doc",
         children=[
             html.H1(title, id="doc-top"),
-            html.P(blurb, className="hint"),
             index,
             *body,
             html.Div(
                 className="doc-nav",
                 children=[
-                    dcc.Link("← Simulator", href="/"),
-                    dcc.Link(f"{DOC_PAGES[other][0]} →", href=other),
+                    dcc.Link(
+                        f"← {DOC_PAGES[prev_][0] if prev_ != '/' else 'Simulator'}", href=prev_
+                    ),
+                    dcc.Link(
+                        f"{DOC_PAGES[next_][0] if next_ != '/' else 'Simulator'} →", href=next_
+                    ),
                 ],
             ),
         ],
@@ -154,7 +156,7 @@ def menu_links() -> list:
         dcc.Link("Simulator", href="/"),
         dcc.Link("Trade study", href="/trade"),
         dcc.Link("Gust analysis", href="/gusts"),
-        dcc.Link("Data uncertainty", href="/uncertainty"),
+        dcc.Link("Uncertainty analysis", href="/uncertainty"),
         dcc.Link("Aircraft builder", href="/builder"),
         html.Div("Aircraft data & validation", className="nav-head"),
         *[dcc.Link(p["menu"], href=p["route"]) for p in DATA_PAGES.values()],

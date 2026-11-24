@@ -16,7 +16,8 @@ multiplied by phi(h/b) = 33 (h/b)^1.5 / (1 + 33 (h/b)^1.5), i.e.
     CD -= (1 - phi) * K * CL^2,
 
 with K from a least-squares fit CD = CD0 + K CL^2 of the (scaled) table. phi -> 1 far
-from the ground; on the runway (h/b ~ 0.1-0.2) it is ~0.5-0.75. See docs/ground_effect.md.
+from the ground; on the runway (h/b ~ 0.1-0.2) it is ~0.5-0.75.
+See docs/assumptions/ground_effect.md.
 """
 
 from __future__ import annotations

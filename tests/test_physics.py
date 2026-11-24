@@ -1,4 +1,4 @@
-"""Physics verification (spec 9.3): analytic ground roll, balance, monotonicity,
+"""Physics verification: analytic ground roll, balance, monotonicity,
 directional sanity, step-size independence, touchback guard."""
 
 from __future__ import annotations

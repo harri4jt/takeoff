@@ -1,11 +1,10 @@
-"""Data uncertainty page: how much runway to plan when the lift, drag and thrust tables
-are only known to within some percentage (bfl.uncertainty).
+"""Uncertainty analysis page: how much runway to plan when the lift, drag and thrust
+tables are only known to within some percentage (bfl.uncertainty).
 
 A side analysis like the gust page: nothing here feeds the simulator or the trade study.
-Written for a conceptual designer's end-of-pass runway check: the runway to plan for at
-90/95/99 % confidence, the chance a given runway is enough, which tables matter for an
-equal error (exact one-at-a-time solves), how far the design is from a no-takeoff cliff,
-and sliders over a response surface fitted to the draws. Method checks sit collapsed.
+Open by default: the chance each candidate runway is enough, and the extra runway against
+confidence. Collapsed: the multiplier profiler (sliders over a response surface fitted to
+the draws), the feasibility map and the method checks.
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ import numpy as np
 import pandas as pd
 from dash import Input, Output, State, dcc, html, no_update
 
-from bfl.uncertainty import UncertaintySettings, quantile_ci_inf
+from bfl.uncertainty import UncertaintySettings
 
 from . import compute, loading, unc_figures
 from .gust_page import _field, _seg
@@ -33,16 +32,15 @@ def _graph(id_: str, name: str) -> dcc.Graph:
         "format": "png", "scale": 3, "filename": f"data_uncertainty_{name}"}})  # fmt: skip
 
 
-COVERAGE = (0.90, 0.95, 0.99)
 TABLES = (("un-cl", "Lift (CL)", "sigma_CL"), ("un-cd", "Drag (CD)", "sigma_CD"),
           ("un-t", "Thrust", "sigma_T"))  # fmt: skip
 
 
 def _sigma_input(id_: str, label: str, value: float) -> html.Div:
     return html.Div(
-        className="tr-field un-sig",
+        className="un-sig",
         children=[
-            html.Label([label, html.Span(" 1σ", className="sym")]),
+            html.Label(label),
             html.Div(
                 className="un-pm",
                 children=[
@@ -68,27 +66,15 @@ def layout() -> html.Div:
         className="gust-page",
         children=[
             html.Div(
-                className="card",
+                className="card setup-card",
                 children=[
-                    html.H2("Data uncertainty"),
-                    dcc.Markdown(
-                        "Lift, drag and thrust data are estimates. Say how far off each might be "
-                        "(1σ, %); each draw scales the tables at random and runs a full solve. "
-                        "Out come the runway to plan for, the odds for the runways you could "
-                        "use, and whether the design is near a cliff.",
-                        className="hint",
-                    ),
+                    html.H2("Uncertainty analysis"),
                     html.Div(id="un-base", className="trade-base"),
-                ],
-            ),
-            html.Div(
-                className="card gu-setup",
-                children=[
                     html.Div(
-                        className="un-setup-top",
+                        className="un-setup",
                         children=[
                             html.Div(
-                                className="gu-bar",
+                                className="un-setup-col",
                                 children=[
                                     _field(
                                         "Aircraft",
@@ -96,42 +82,34 @@ def layout() -> html.Div:
                                             id="un-aircraft", clearable=False, searchable=False
                                         ),
                                     ),  # fmt: skip
-                                    *[_sigma_input(i, lab, 5.0) for i, lab, _ in TABLES],
-                                    _field(
-                                        "Operations",
-                                        dcc.Checklist(
-                                            id="un-landing",
-                                            value=["on"],
-                                            className="checks",
-                                            options=[{"label": " include landing", "value": "on"}],
-                                        ),
-                                    ),  # fmt: skip
                                     _field(
                                         "Draws",
                                         _seg("un-n", 500, [(n, f"{n:,}") for n in RUN_COUNTS]),
                                     ),
-                                    html.Button(
-                                        "Run",
-                                        id="un-run",
-                                        n_clicks=0,
-                                        className="btn btn-primary gu-run",
-                                    ),  # fmt: skip
-                                ],
-                            ),
-                            html.Details(
-                                id="un-sig-box",
-                                open=True,
-                                className="un-sig-box",
-                                children=[
-                                    html.Summary("What will be drawn"),
-                                    dcc.Graph(
-                                        id="un-fig-sigmas",
-                                        className="un-sigmas",
-                                        figure=unc_figures.sigma_curves(5.0, 5.0, 5.0),
-                                        config={"displayModeBar": False},
+                                    dcc.Checklist(
+                                        id="un-landing",
+                                        value=["on"],
+                                        className="checks",
+                                        options=[{"label": " include landing", "value": "on"}],
                                     ),
                                 ],
-                            ),  # fmt: skip
+                            ),
+                            html.Div(
+                                className="un-setup-col",
+                                children=[
+                                    html.Label("Table error, 1σ", className="un-sig-head"),
+                                    *[_sigma_input(i, lab, 5.0) for i, lab, _ in TABLES],
+                                ],
+                            ),
+                            dcc.Graph(
+                                id="un-fig-sigmas",
+                                className="un-sigmas",
+                                figure=unc_figures.sigma_curves(5.0, 5.0, 5.0),
+                                config={"displayModeBar": False},
+                            ),
+                            html.Button(
+                                "Run", id="un-run", n_clicks=0, className="btn btn-primary gu-run"
+                            ),
                         ],
                     ),
                     html.Details(
@@ -185,14 +163,6 @@ def layout() -> html.Div:
                                     _num("un-trunc", "Cut draws at ±", 3.0, 0.5, "", unit="σ"),
                                 ],
                             ),
-                            html.Div(
-                                "Draws are independent normal factors on each table, centred on "
-                                "1 (the tables as they are), cut at ±3σ. Latin hypercube covers "
-                                "each input evenly: it makes the average answer almost exact "
-                                "(about 20× steadier here), but the 95 % point depends on rare "
-                                "combinations and still needs many draws.",
-                                className="hint",
-                            ),
                         ],
                     ),
                     html.Div(id="un-status", className="hint"),
@@ -237,26 +207,6 @@ def runway_odds(d: dict, rw) -> list:
             html.Span(f"{100 * lo:.0f}–{100 * hi:.0f} %", className="hint")]  # fmt: skip
 
 
-def plan_tile(d: dict, p: float) -> list:
-    key = d["main_output"]
-    x = unc_figures.values(d, key)
-    nom = d["nominal"][key]
-    est, lo, hi = quantile_ci_inf(x, p)
-    pct = round(100 * p)
-    if not math.isfinite(est):
-        return [html.Div(f"Plan for {pct} %", className="m-label"),
-                html.Div("no runway", className="m-value"),
-                html.Div(f"only {100 * float(np.mean(np.isfinite(x))):.0f} % of draws take off",
-                         className="gu-delta")]  # fmt: skip
-    ci = f"{lo:,.0f}–{hi:,.0f} ft" if math.isfinite(hi) else f"{lo:,.0f} ft – no limit"
-    return [
-        html.Div(f"Plan for {pct} %", className="m-label"),
-        html.Div(f"{est:,.0f} ft", className="m-value"),
-        html.Div(f"{est - nom:+,.0f} ft · {100 * (est / nom - 1):+.0f} %", className="gu-delta"),
-        html.Div(f"sampling range {ci}", className="hint"),
-    ]
-
-
 def verdict(d: dict) -> tuple[str, str]:
     """('ok' | 'warn' | 'bad', one sentence): is the design near a cliff?"""
     f = d["failure_rate"]
@@ -290,20 +240,12 @@ def _governs(d: dict) -> str:
     return f"Landing sets the runway in {100 * share:.0f} % of draws, takeoff in the rest."
 
 
-def answer(d: dict, p: float) -> list:
+def answer(d: dict) -> list:
     key = d["main_output"]
     nom = d["nominal"][key]
     level, text = verdict(d)
     icon = {"ok": "✓", "warn": "!", "bad": "⚠"}[level]
     return [
-        html.Div(
-            className="gu-answer-head",
-            children=[
-                html.Div(className="spacer"),
-                html.Span("Confidence", className="ctl-name"),
-                _seg("un-cover", p, [(c, f"{round(100 * c)} %") for c in COVERAGE]),
-            ],
-        ),
         html.Div(
             className="un-answer-grid",
             children=[
@@ -317,9 +259,6 @@ def answer(d: dict, p: float) -> list:
                                 html.Div(f"{nom:,.0f} ft", className="m-value"),
                                 html.Div("tables as they are", className="gu-delta"),
                             ],
-                        ),
-                        html.Div(
-                            id="un-plan", className="gu-card un-plan", children=plan_tile(d, p)
                         ),
                         html.Div(
                             className="gu-card un-rw",
@@ -378,25 +317,15 @@ def _panel(title: str, body: list, cls: str = "", open_: bool = True, id_=None) 
                         children=[html.Summary(title), *body], **kw)  # fmt: skip
 
 
-def results(d: dict, p: float) -> list:
+def results(d: dict) -> list:
     return [
-        _panel(unc_figures.OUT_LABEL[d["main_output"]], answer(d, p), id_="un-answer"),
+        _panel(unc_figures.OUT_LABEL[d["main_output"]], answer(d), id_="un-answer"),
         _panel("Extra runway vs confidence", [_graph("un-fig-margin", "confidence")]),
-        _panel("What if the tables are off by…", _profiler_body(d)),
-        _panel("Cliff map", [_graph("un-fig-map", "map")]),
+        _panel("Multiplier profiler", _profiler_body(d), open_=False),
+        _panel("Feasibility map", [_graph("un-fig-map", "map")], open_=False),
         _panel(
             "Method checks",
-            [
-                html.Div(
-                    "The draws follow the stated distributions, and the 95 % answer has settled "
-                    "(its sampling error shrinks like 1/√N; more draws if it matters).",
-                    className="hint",
-                ),
-                html.Div(
-                    className="un-checks-row",
-                    children=[_graph("un-fig-conv", "sampling"), _graph("un-fig-inputs", "inputs")],
-                ),
-            ],
+            [_graph("un-fig-conv", "sampling"), _graph("un-fig-inputs", "inputs")],
             open_=False,
         ),
     ]
@@ -423,15 +352,9 @@ def _profiler_body(d: dict) -> list:
                            tooltip={"placement": "top", "always_visible": False}),
             ],
         ))  # fmt: skip
+    reset = html.Button("Reset to 1", id="un-sl-reset", n_clicks=0, className="btn")
     return [
-        html.Div(
-            className="gu-answer-head",
-            children=[
-                html.Div(className="spacer"),
-                html.Button("Reset to 1", id="un-sl-reset", n_clicks=0, className="btn"),
-            ],
-        ),
-        html.Div(sliders, className="un-sliders"),
+        html.Div([*sliders, reset], className="un-sliders"),
         _graph("un-fig-prof", "profiler"),
     ]
 
@@ -475,20 +398,17 @@ def register(app, aircraft_options) -> None:
 
     @app.callback(
         Output("un-fig-sigmas", "figure"),
-        Output("un-sig-box", "open", allow_duplicate=True),
         Input("un-cl", "value"),
         Input("un-cd", "value"),
         Input("un-t", "value"),
         prevent_initial_call=True,
     )
     def on_sigmas(a, b, c):
-        fig = unc_figures.sigma_curves(float(a or 0), float(b or 0), float(c or 0))
-        return fig, True  # show what will be drawn again while the inputs change
+        return unc_figures.sigma_curves(float(a or 0), float(b or 0), float(c or 0))
 
     @app.callback(
         Output("un-result", "data"),
         Output("un-status", "children"),
-        Output("un-sig-box", "open", allow_duplicate=True),
         Input("un-run", "n_clicks"),
         State("un-aircraft", "value"),
         State("un-cl", "value"),
@@ -510,7 +430,7 @@ def register(app, aircraft_options) -> None:
     def on_run(_n, name, s_cl, s_cd, s_t, landing, n, weight, temp, elev, wind, cond, method,
                seed, trunc, cur):  # fmt: skip
         if not name:
-            return no_update, "Pick an aircraft.", no_update
+            return no_update, "Pick an aircraft."
         try:
             cfg, _ = _base_cfg(name, cur)
             upd: dict = {}
@@ -529,25 +449,16 @@ def register(app, aircraft_options) -> None:
             s = _settings(s_cl, s_cd, s_t, landing, n, method, seed, trunc)
             d = compute.uncertainty(cfg.model_dump_json(), json.dumps(asdict(s)))
             d["cfg_json"] = cfg.model_dump_json()
-            return d, "", False
+            return d, ""
         except Exception as exc:  # noqa: BLE001 - shown on the page
-            return no_update, f"Could not run: {type(exc).__name__}: {exc}", no_update
+            return no_update, f"Could not run: {type(exc).__name__}: {exc}"
 
     @app.callback(Output("un-results", "children"), Input("un-result", "data"))
     def on_result(d):
         if not d:
             return html.Div("Set how far off each table might be and press Run. 500 draws take "
                             "about 10–25 s.", className="hint gu-empty")  # fmt: skip
-        return results(d, 0.95)
-
-    @app.callback(
-        Output("un-plan", "children"),
-        Input("un-cover", "value"),
-        State("un-result", "data"),
-        prevent_initial_call=True,
-    )
-    def on_cover(p, d):
-        return plan_tile(d, float(p)) if d else no_update
+        return results(d)
 
     @app.callback(
         *[Output(rid + "-p", "children") for rid in RUNWAY_IDS],
