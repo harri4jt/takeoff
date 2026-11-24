@@ -70,7 +70,7 @@ PROBLEM_RIGHT_NEW = """<div class="panel plan q">
           <li><span class="n">1</span><div><div class="t">Solver recap: RK4, safeguarded secant</div></div></li>
           <li><span class="n">2</span><div><div class="t">Validation: Boeing 747-100</div></div></li>
           <li><span class="n">3</span><div><div class="t">Gusts: an SDE, solved by Monte Carlo</div></div></li>
-          <li><span class="n">4</span><div><div class="t">Side study: uncertain data</div></div></li>
+          <li><span class="n">4</span><div><div class="t">Uncertain aero and thrust data</div></div></li>
         </ol>
       </div>
     </div>
@@ -113,27 +113,31 @@ def group3() -> str:
 
 NEW_SLIDES = """
 <section class="slide">
-  <h2>Side study: uncertain aero and thrust data</h2>
-  <div class="two" style="grid-template-columns: 640px 1fr; gap: 26px;">
+  <h2>Uncertainty modeling on aero and thrust data</h2>
+  <div class="two" style="grid-template-columns: 620px 1fr; gap: 26px;">
     <div>
       <img class="fig" src="fig_unc_odds.svg" alt="chance a runway is enough, data uncertainty">
       <div class="cap">747-100 model, 500 Latin-hypercube draws</div>
     </div>
     <div>
-      <div class="box" style="padding: 12px 16px; font-size: 15.5px; line-height: 1.45;">
-        <div class="colhead">Method: Monte Carlo again</div>
-        Lift, drag and thrust tables each scaled by k ~ N(1, 5 %), 1σ; a full solve per draw.
+      <div class="box" style="padding: 11px 16px; font-size: 15px; line-height: 1.45;">
+        <div class="colhead">Why</div>
+        In conceptual design, lift, drag and thrust come from models (handbook methods, CFD, engine decks) and carry
+        uncertainty. This puts a runway cost on it.
       </div>
-      <div class="box" style="padding: 12px 16px; font-size: 15.5px; line-height: 1.45; margin-top: 12px;">
-        <div class="colhead">Result</div>
-        95 % confidence: <b>11,044 ft</b>, +1,521 ft (+16 %) over the nominal 9,523 ft.
+      <div class="box" style="padding: 11px 16px; font-size: 15px; line-height: 1.45; margin-top: 10px;">
+        <div class="colhead">Method: Monte Carlo</div>
+        Each draw scales the lift, drag and thrust tables by random factors from normal distributions with their own
+        standard deviations (here 1σ: lift 4 %, drag 8 %, thrust 3 %), then runs a full solve.
       </div>
-      <div class="box" style="padding: 12px 16px; font-size: 15.5px; line-height: 1.45; margin-top: 12px;">
-        <div class="colhead">Same 5 % error, one table at a time</div>
-        lift ±590 ft · thrust ±620 ft · drag ±120 ft: lift and thrust matter about 5× more than drag.
+      <div class="key" style="margin-top: 10px; font-size: 15.5px; line-height: 1.45;">
+        <ul class="tight" style="font-size: 15.5px; margin: 0;">
+          <li><b>95 % confidence: 10,543 ft</b>, +1,020 ft (+11 %) over the nominal 9,523 ft.</li>
+          <li>Lift drives the spread (56 %), then thrust (34 %). Drag adds only 9 %, though it is the least certain:
+            for the same 5 % error, lift moves the runway ±590 ft, thrust ±620 ft, drag only ±120 ft.</li>
+          <li>Data uncertainty costs about 2.5× the runway of moderate gusts (+394 ft).</li>
+        </ul>
       </div>
-      <div class="key" style="margin-top: 12px; font-size: 16.5px;">At ±5 %, the data costs about 4× the runway that
-        moderate gusts do.</div>
     </div>
   </div>
   <div class="foot"><span>Harrison &amp; Seng · MATH 6006</span><span>15</span></div>
@@ -144,26 +148,32 @@ NEW_SLIDES = """
   <div class="tiles3">
     <div class="tile"><span>calm day</span><b>9,523 ft</b><small>747-100 field length, within 5 % of Boeing</small></div>
     <div class="tile"><span>moderate gusts, 95 %</span><b>+394 ft</b><small>± 48 ft sampling, ± 4 ft time step</small></div>
-    <div class="tile"><span>±5 % data, 95 %</span><b>+1,521 ft</b><small>lift and thrust matter most</small></div>
+    <div class="tile"><span>uncertain data, 95 %</span><b>+1,020 ft</b><small>1σ: lift 4 %, drag 8 %, thrust 3 %</small></div>
   </div>
-  <div class="two" style="grid-template-columns: 1.3fr 1fr; gap: 26px; margin-top: 20px;">
-    <div class="box" style="padding: 14px 20px;">
-      <div class="colhead">Numerical methods</div>
-      <table class="res sumtab">
-        <tr><td>equations of motion</td><td class="m">RK4, events located</td><td>converged well under 1 ft</td></tr>
-        <tr><td>V1 balance</td><td class="m">safeguarded secant</td><td>order ≈ 1.6, always converges</td></tr>
-        <tr><td>gusts</td><td class="m">Ornstein–Uhlenbeck SDE, Heun</td><td>2nd order in gust variance</td></tr>
-        <tr><td>runway</td><td class="m">Monte Carlo, order statistics</td><td>P95 with a confidence interval</td></tr>
-      </table>
-    </div>
-    <div class="box" style="padding: 14px 20px;">
-      <div class="colhead">Limits</div>
-      <ul class="tight lim" style="font-size: 16.5px;">
-        <li>Vertical gusts use the same SDE with L<sub>w</sub> = h (Dryden's vertical spectrum differs)</li>
-        <li>Dryden formulas extrapolated near the ground</li>
-        <li>Steady mean wind; simple pilot model (fixed schedule, 1 s lag)</li>
-      </ul>
-    </div>
+  <div class="cols3">
+    <div class="box"><div class="colhead">Numerical methods</div>
+      <ul class="tight">
+        <li>RK4 equations of motion, events located exactly</li>
+        <li>Safeguarded secant for V1 (order ≈ 1.6)</li>
+        <li>Ornstein–Uhlenbeck gust SDE, stepped with Heun</li>
+        <li>Monte Carlo, P95 from order statistics</li>
+      </ul></div>
+    <div class="box"><div class="colhead">Limits</div>
+      <ul class="tight">
+        <li>Point mass, prescribed pitch: the rotation rate is assumed</li>
+        <li>Sea-level thrust tables; constant runway friction</li>
+        <li>Brake energy and tire speed reported, not limited</li>
+        <li>Gusts: steady mean wind, vertical spectrum approximated, Dryden extrapolated near the ground</li>
+        <li>Data errors independent, each scaling a whole table</li>
+      </ul></div>
+    <div class="box"><div class="colhead">Next steps</div>
+      <ul class="tight">
+        <li><b>Pitch dynamics</b>: full aero data with pitching moment and elevator power, to check the aircraft can
+          actually rotate</li>
+        <li><b>Lateral axis</b>: crosswind, engine-out yaw, side gusts</li>
+        <li><b>Brakes and tires</b>: anti-skid, brake heating, wet-runway friction</li>
+        <li><b>Correlated data errors</b>, and rare-event sampling for P99.9</li>
+      </ul></div>
   </div>
   <div class="foot"><span>Harrison &amp; Seng · MATH 6006</span><span>16</span></div>
 </section>
@@ -175,6 +185,10 @@ TILE_CSS = """  .tiles3 { display: grid; grid-template-columns: repeat(3, 1fr); 
   .tile span { display: block; font-size: 15px; color: var(--muted); font-weight: 600; }
   .tile b { display: block; font-size: 38px; margin: 4px 0 2px; }
   .tile small { font-size: 14px; color: var(--muted); }
+  .cols3 { display: grid; grid-template-columns: 0.9fr 1fr 1.1fr; gap: 16px; margin-top: 18px; }
+  .cols3 .box { padding: 12px 16px; }
+  .cols3 ul.tight { font-size: 14.5px; line-height: 1.4; }
+  .cols3 ul.tight li { margin: 5px 0; }
 """
 
 
