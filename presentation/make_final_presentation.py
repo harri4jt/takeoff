@@ -99,19 +99,18 @@ def _keep(html: str, keep: list[int], numbers: list[int | None], edits=()) -> st
 
 PROBLEM_RIGHT_OLD = re.compile(r'<div class="panel plan">.*?</div>\s*</div>\s*</div>\s*<div class="strip"', re.S)
 PROBLEM_RIGHT_NEW = """<div class="panel plan q">
-        <h3>The question</h3>
         <ul>
           <li>Given lift, drag and thrust tables, weight and weather: find V1 and the BFL</li>
           <li>FAR Part 25 field length = max(BFL, 1.15 × all-engines distance to 35 ft)</li>
         </ul>
       </div>
       <div class="panel changes">
-        <h3>This talk</h3>
+        <h3>Outline</h3>
         <ol>
-          <li><span class="n">1</span><div><div class="t">Solver recap: RK4, safeguarded secant</div></div></li>
-          <li><span class="n">2</span><div><div class="t">Validation: Boeing 747-100</div></div></li>
-          <li><span class="n">3</span><div><div class="t">Gusts: an SDE, solved by Monte Carlo</div></div></li>
-          <li><span class="n">4</span><div><div class="t">Uncertain aero and thrust data</div></div></li>
+          <li><span class="n">1</span><div><div class="t">Problem and Solver</div></div></li>
+          <li><span class="n">2</span><div><div class="t">Boeing 747-100: validation and baseline</div></div></li>
+          <li><span class="n">3</span><div><div class="t">Gust model: SDE, solved by Monte Carlo</div></div></li>
+          <li><span class="n">4</span><div><div class="t">Data uncertainty: aero and thrust data</div></div></li>
         </ol>
       </div>
     </div>
