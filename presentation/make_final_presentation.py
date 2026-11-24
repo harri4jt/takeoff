@@ -25,6 +25,47 @@ FOOT_TEXT = "Harrison &amp; Seng · MATH 6006"
 SECTION = re.compile(r'<section class="slide[^"]*">.*?</section>', re.S)
 FOOT = re.compile(r'<div class="foot"><span>.*?</span><span>\d+</span></div>', re.S)
 
+# Sections of the talk: slide numbers, label, colour. Each slide gets a coloured top bar and a
+# small label above its title; the footer shows where the talk is.
+SECTIONS = [
+    (range(2, 6), "Problem and solver", "#2a78d6"),
+    (range(6, 8), "Baseline: 747-100", "#6b7785"),
+    (range(8, 15), "Gust model", "#eb6834"),
+    (range(15, 16), "Data uncertainty", "#1f9d55"),
+    (range(16, 17), "Summary", "#0f1d2b"),
+]
+SECTION_CSS = """  .sect-bar { position: absolute; left: 0; right: 0; top: 0; height: 6px; }
+  .sect-lab { position: absolute; left: 56px; top: 13px; font-size: 12px; font-weight: 700;
+              letter-spacing: 1.6px; text-transform: uppercase; }
+  .foot .nav b { font-weight: 700; }
+"""
+
+
+def _section(n: int) -> tuple[str, str]:
+    for pages, label, color in SECTIONS:
+        if n in pages:
+            return label, color
+    raise ValueError(f"no section for slide {n}")
+
+
+def _mark(sec: str, n: int) -> str:
+    """Top bar, section label and footer trail for slide n."""
+    label, color = _section(n)
+    head = re.match(r'<section class="slide[^"]*">', sec).group(0)
+    lab_div = "" if label == "Summary" else f'<div class="sect-lab" style="color: {color};">{label}</div>'
+    marks = f'\n  <div class="sect-bar" style="background: {color};"></div>{lab_div}'
+    trail = " · ".join(
+        f'<b style="color: {c};">{lab}</b>' if lab == label else lab
+        for _, lab, c in SECTIONS[:-1]
+    )
+    foot = (f'<div class="foot"><span>{FOOT_TEXT} &nbsp;|&nbsp; <span class="nav">{trail}</span>'
+            f"</span><span>{n}</span></div>")  # fmt: skip
+    return FOOT.sub(foot, head + marks + sec[len(head):])
+
+
+def _css(html: str) -> str:
+    return html.replace("</style>", SECTION_CSS + "</style>", 1)
+
 
 def _keep(html: str, keep: list[int], numbers: list[int | None], edits=()) -> str:
     """Keep the listed sections (in order of appearance), renumber their footers."""
@@ -46,14 +87,14 @@ def _keep(html: str, keep: list[int], numbers: list[int | None], edits=()) -> st
         sec = m.group(0)
         n = want[i]
         if n is not None:
-            sec = FOOT.sub(f'<div class="foot"><span>{FOOT_TEXT}</span><span>{n}</span></div>', sec)
+            sec = _mark(sec, n)
         out.append(i)
         return sec
 
     html = SECTION.sub(repl, html)
     if len(out) != len(keep) or len(sections) < max(keep) + 1:
         raise ValueError("section selection failed")
-    return html
+    return _css(html)
 
 
 PROBLEM_RIGHT_OLD = re.compile(r'<div class="panel plan">.*?</div>\s*</div>\s*</div>\s*<div class="strip"', re.S)
@@ -121,7 +162,7 @@ NEW_SLIDES = """
     </div>
     <div>
       <div class="box" style="padding: 11px 16px; font-size: 15px; line-height: 1.45;">
-        <div class="colhead">Why</div>
+        <div class="colhead">Purpose</div>
         In conceptual design, lift, drag and thrust come from models (handbook methods, CFD, engine decks) and carry
         uncertainty. This puts a runway cost on it.
       </div>
@@ -196,7 +237,8 @@ def group4() -> str:
     html = (OUT / "gust_slides.html").read_text().replace("</style>", TILE_CSS + "</style>", 1)
     start = html.index('<section class="slide')
     end = html.index("</body>")
-    return html[:start] + NEW_SLIDES + "\n" + html[end:]
+    html = html[:start] + NEW_SLIDES + "\n" + html[end:]
+    return _keep(html, [0, 1], [15, 16])
 
 
 def main() -> None:
