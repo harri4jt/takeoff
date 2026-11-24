@@ -120,6 +120,19 @@
   .eom .note { font-size: 13.5px; color: var(--muted); line-height: 1.4; margin-top: 4px; }
   .src3.four { grid-template-columns: 1.3fr 0.8fr 1fr 1fr; }
   .sr-src { font-size: 13.5px; color: var(--muted); text-align: center; margin: 6px 0 2px; }
+  .eqx { font-family: "DejaVu Serif", serif; font-size: 19px; line-height: 1.7; white-space: nowrap; }
+  .opt { position: absolute; right: 56px; top: 40px; font-size: 13px; font-weight: 700; color: var(--muted);
+         border: 1.5px solid var(--line); border-radius: 6px; padding: 2px 10px; }
+  .dr { color: #1f5fae; } .df { color: #b4501d; }
+  /* A: pipeline table */
+  .pipe { display: grid; grid-template-columns: 44px 180px 560px 1fr; gap: 0; margin-top: 12px; align-items: stretch; }
+  .pipe > div { padding: 22px 10px; border-bottom: 1px solid var(--line); }
+  .pipe .n { text-align: center; } .pipe .n span { width: 30px; height: 30px; border-radius: 50%; background: var(--blue);
+         color: white; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+  .pipe .nm { font-weight: 700; font-size: 16.5px; }
+  .pipe .nm small { display: block; font-weight: 400; color: var(--muted); font-size: 13px; }
+  .pipe .mean { font-size: 14.5px; color: var(--muted); line-height: 1.4; }
+  .pipe .hl-row { background: #f3f7fb; }
 </style>
 </head>
 <body>
@@ -304,33 +317,26 @@
 <!-- ============================================================ GUST PLAN -->
 <section class="slide">
   <h2>Plan: random gusts as an SDE</h2>
-  <div class="lead" style="font-size: 17px;">Turbulence is random: model each gust as a stochastic differential equation, then sample many takeoffs.</div>
-  <div class="sde">
-    <div class="row gen"><span class="tag">any SDE</span>
-      <span>dX =</span>
-      <span class="p drift">a(X, t) dt<span class="lab">drift: the ODE part</span></span><span>+</span>
-      <span class="p diff">b(X, t) dW<span class="lab">diffusion: random kicks</span></span>
-    </div>
-    <div class="row ours"><span class="tag">our gust</span>
-      <span class="p">dg =<span class="lab" style="color: var(--muted);">g: u<sub>g</sub> or w<sub>g</sub></span></span>
-      <span class="p drift">− (g / T) dt<span class="lab">pulls the gust back to 0, memory T</span></span><span>+</span>
-      <span class="p diff">σ √(2 / T) dW<span class="lab">random kick, keeps the size at σ</span></span>
-    </div>
+  <div class="lead" style="font-size: 17px;">Turbulence is random: model each gust g (u along the runway, w vertical) as an SDE,
+    then sample many takeoffs.</div>
+  <div class="pipe">
+    <div class="n"><span>1</span></div><div class="nm">Gust statistics<small>Dryden model</small></div>
+    <div class="eqx">σ<sub>w</sub> = 0.1 W<sub>20</sub>, &nbsp;&nbsp; σ<sub>u</sub> = σ<sub>w</sub> / (0.177 + 0.000823 h)<sup>0.4</sup><br>L<sub>w</sub> = h, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; L<sub>u</sub> = h / (0.177 + 0.000823 h)<sup>1.2</sup></div>
+    <div class="mean">intensity σ (std. dev.) and scale length L, from the mean wind at 20 ft W<sub>20</sub> and height h</div>
+    <div class="n"><span>2</span></div><div class="nm">Gust memory</div>
+    <div class="eqx">T = L / V</div>
+    <div class="mean">time to fly through one gust at airspeed V</div>
+    <div class="n hl-row"><span>3</span></div><div class="nm hl-row">Gust SDE<small>Ornstein–Uhlenbeck</small></div>
+    <div class="eqx hl-row">dg = <span class="dr">−(g / T) dt</span> + <span class="df">σ √(2/T) dW</span></div>
+    <div class="mean hl-row"><span><span class="dr"><b>drift</b></span>: pull back to 0 &nbsp;·&nbsp; <span class="df"><b>diffusion</b></span>: random kick.
+      Form of any SDE: dX = a dt + b dW</span></div>
+    <div class="n"><span>4</span></div><div class="nm">Time stepping<small>Euler–Maruyama / Heun</small></div>
+    <div class="eqx">g<sub>n+1</sub> = g<sub>n</sub> − (g<sub>n</sub>/T) Δt + σ √(2/T) √Δt Z<sub>n</sub></div>
+    <div class="mean">ΔW = √Δt · Z, &nbsp;Z ~ N(0, 1), &nbsp;Δt = 0.01 s</div>
+    <div class="n"><span>5</span></div><div class="nm">Monte Carlo</div>
+    <div class="eqx">P(runway enough) ≈ (runs that fit) / N</div>
+    <div class="mean">many takeoffs, new random gusts each</div>
   </div>
-  <div class="src3 four">
-    <div class="box"><h4>σ, L: Dryden model</h4>From the mean wind at 20 ft (W<sub>20</sub>) and height h
-      (u: along the runway, w: vertical):
-      <div class="m">σ<sub>w</sub> = 0.1 W<sub>20</sub>, &nbsp; σ<sub>u</sub> = σ<sub>w</sub> / (0.177 + 0.000823 h)<sup>0.4</sup><br>
-        L<sub>w</sub> = h, &nbsp; L<sub>u</sub> = h / (0.177 + 0.000823 h)<sup>1.2</sup></div></div>
-    <div class="box"><h4>T = L / V</h4>The time to fly through one gust of length L at airspeed V: the gust's
-      <b>memory</b>. Recomputed every step.</div>
-    <div class="box"><h4>dW: Brownian motion</h4>Over a step, ΔW = √Δt · Z, with Z ~ N(0, 1). Stepped with
-      Euler–Maruyama / Heun, Δt = 0.01 s:
-      <div class="m">g<sub>n+1</sub> = g<sub>n</sub> − (g<sub>n</sub>/T) Δt + σ√(2/T) √Δt Z<sub>n</sub></div></div>
-    <div class="box"><h4>Monte Carlo</h4>Many takeoffs, new random gusts each: the share that fit a runway is the
-      chance it is enough.</div>
-  </div>
-  <img class="fig" src="fig_gu_history.svg" alt="example gust history" style="margin: 8px auto 0; height: 150px; width: auto;">
   <div class="foot"><span>Harrison &amp; Seng · MATH 6006 · 11/25/26 update</span><span>7</span></div>
 </section>
 
